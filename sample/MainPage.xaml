@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Controls;assembly=Controls"
+             x:Class="sample.MainPage"
+             Title="ImageView Demo">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16,24" Spacing="0">
+
+            <!-- Cabeçalho -->
+            <Label Text="ImageView"
+                   Style="{StaticResource Headline}"
+                   Margin="0,0,0,4" />
+            
+            <Label Text="Toque em qualquer imagem para abrir em fullscreen com zoom"
+                   HorizontalTextAlignment="Center"
+                   FontSize="13"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                   Margin="0,0,0,24" />
+
+            <!-- ── 1. URL · CenterCrop ──────────────────────────────── -->
+            <Label Text="URL · CenterCrop · MaxZoom 6×"
+                   FontAttributes="Bold"
+                   FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                   Margin="2,0,0,6" />
+            
+            <controls:ImageView
+                Source="https://picsum.photos/seed/maui1/800/500"
+                IsUrl="True"
+                Placeholder="dotnet_bot"
+                AspectMode="CenterCrop"
+                EnableFullscreen="True"
+                MaxZoom="6"
+                HeightRequest="220"
+                ImageLoaded="OnImageLoaded"
+                ImageFailed="OnImageFailed" />
+
+            <!-- ── 2. URL · AspectFit ───────────────────────────────── -->
+            <Label Text="URL · AspectFit · MaxZoom 8×"
+                   FontAttributes="Bold"
+                   FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                   Margin="2,20,0,6" />
+            
+            <controls:ImageView
+                Source="https://picsum.photos/seed/maui2/400/700"
+                IsUrl="True"
+                Placeholder="dotnet_bot"
+                AspectMode="AspectFit"
+                EnableFullscreen="True"
+                MaxZoom="8"
+                HeightRequest="220"
+                BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray950}}"
+                ImageLoaded="OnImageLoaded"
+                ImageFailed="OnImageFailed" />
+
+            <!-- ── 3. Imagem local ─────────────────────────────────── -->
+            <Label Text="Imagem local · CenterCrop · MaxZoom 4×"
+                   FontAttributes="Bold"
+                   FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                   Margin="2,20,0,6" />
+            
+            <controls:ImageView
+                Source="dotnet_bot"
+                IsUrl="False"
+                AspectMode="CenterCrop"
+                EnableFullscreen="True"
+                MaxZoom="4"
+                HeightRequest="180"
+                ImageLoaded="OnImageLoaded"
+                ImageFailed="OnImageFailed" />
+
+            <!-- ── 4. URL inválida — placeholder + fullscreen off ──── -->
+            <Label Text="URL inválida · Placeholder ativo · Fullscreen desabilitado"
+                   FontAttributes="Bold"
+                   FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                   Margin="2,20,0,6" />
+            
+            <controls:ImageView
+                Source="https://url-invalida.local/sem-imagem.jpg"
+                IsUrl="True"
+                Placeholder="dotnet_bot"
+                AspectMode="CenterCrop"
+                EnableFullscreen="False"
+                HeightRequest="140"
+                ImageLoaded="OnImageLoaded"
+                ImageFailed="OnImageFailed" />
+
+            <!-- ── Log de eventos ──────────────────────────────────── -->
+            <Border Margin="0,24,0,0"
+                    Padding="14,10"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray950}}"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}">
+                
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="LOG DE EVENTOS"
+                           FontAttributes="Bold"
+                           FontSize="11"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}" />
+                    <Label x:Name="StatusLabel"
+                           Text="—"
+                           FontSize="12"
+                           LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
+            <BoxView HeightRequest="32" Color="Transparent" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Controls/Controls.csproj" />
+  <Project Path="sample/sample.csproj" />
+</Solution>
