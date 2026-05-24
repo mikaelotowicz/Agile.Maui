@@ -1,4 +1,6 @@
 // Controls/ZoomImageView.cs
+using System.Windows.Input;
+
 namespace Controls;
 
 /// <summary>
@@ -34,6 +36,12 @@ public class ImageView : View
         BindableProperty.Create(
             nameof(AspectMode), typeof(ZoomImageAspect), typeof(ImageView),
             ZoomImageAspect.CenterCrop);
+
+    public static readonly BindableProperty ImageLoadedCommandProperty =
+        BindableProperty.Create(nameof(ImageLoadedCommand), typeof(ICommand), typeof(ImageView), null);
+
+    public static readonly BindableProperty ImageFailedCommandProperty =
+        BindableProperty.Create(nameof(ImageFailedCommand), typeof(ICommand), typeof(ImageView), null);
 
     /// <summary>Nome do drawable local ou URL completa.</summary>
     public string? Source
@@ -77,14 +85,28 @@ public class ImageView : View
         set => SetValue(AspectModeProperty, value);
     }
 
+    public ICommand? ImageLoadedCommand { get => (ICommand?)GetValue(ImageLoadedCommandProperty); set => SetValue(ImageLoadedCommandProperty, value); }
+    public ICommand? ImageFailedCommand { get => (ICommand?)GetValue(ImageFailedCommandProperty); set => SetValue(ImageFailedCommandProperty, value); }
+
     /// <summary>Disparado quando a imagem carrega com sucesso.</summary>
     public event EventHandler? ImageLoaded;
 
     /// <summary>Disparado quando o carregamento falha ou Source nao e encontrado.</summary>
     public event EventHandler? ImageFailed;
 
-    internal void RaiseImageLoaded() => ImageLoaded?.Invoke(this, EventArgs.Empty);
-    internal void RaiseImageFailed() => ImageFailed?.Invoke(this, EventArgs.Empty);
+    internal void RaiseImageLoaded()
+    {
+        ImageLoaded?.Invoke(this, EventArgs.Empty);
+        if (ImageLoadedCommand?.CanExecute(null) == true)
+            ImageLoadedCommand.Execute(null);
+    }
+
+    internal void RaiseImageFailed()
+    {
+        ImageFailed?.Invoke(this, EventArgs.Empty);
+        if (ImageFailedCommand?.CanExecute(null) == true)
+            ImageFailedCommand.Execute(null);
+    }
 }
 
 /// <summary>Modo de exibição da imagem no thumbnail.</summary>

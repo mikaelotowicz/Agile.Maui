@@ -29,8 +29,18 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.ColumnCount)]                            = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => h.RefreshLayout(),
+            [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.RefreshLayout(),
+            [nameof(VirtualizedCollectionView.EmptyView)]                              = (h, _) => h.UpdateEmptyView(),
+            [nameof(VirtualizedCollectionView.EmptyViewTemplate)]                      = (h, _) => h.UpdateEmptyView(),
             [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => { },
             [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => { },
+            [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
+        };
+
+    public static readonly CommandMapper<VirtualizedCollectionView, VirtualizedCollectionViewHandler> Commands =
+        new(ViewCommandMapper)
+        {
+            [nameof(VirtualizedCollectionView.ScrollTo)] = MapScrollTo,
         };
 
     private static readonly NSString CellId = new("VrMauiCell");
@@ -38,8 +48,9 @@ public sealed class VirtualizedCollectionViewHandler
     private VrDataSource?             _dataSource;
     private VrCollectionDelegate?     _delegate;
     private INotifyCollectionChanged? _collectionChangedSource;
+    private UIView?                   _emptyNativeView;
 
-    public VirtualizedCollectionViewHandler() : base(Mapper) { }
+    public VirtualizedCollectionViewHandler() : base(Mapper, Commands) { }
 
     protected override UICollectionView CreatePlatformView()
     {
@@ -120,9 +131,10 @@ public sealed class VirtualizedCollectionViewHandler
             group = NSCollectionLayoutGroup.CreateVertical(groupSize, items);
         }
 
-        group.InterItemSpacing = NSCollectionLayoutSpacing.CreateFixed(0);
+        var spacing = (nfloat)(VirtualView?.ItemSpacing ?? 0);
+        group.InterItemSpacing = NSCollectionLayoutSpacing.CreateFixed(spacing);
         var section = NSCollectionLayoutSection.Create(group);
-        section.InterGroupSpacing = 0;
+        section.InterGroupSpacing = spacing;
 
         var config = new UICollectionViewCompositionalLayoutConfiguration
         {
@@ -158,6 +170,7 @@ public sealed class VirtualizedCollectionViewHandler
         PlatformView.ReloadData();
 
         SubscribeCollection(VirtualView.ItemsSource);
+        UpdateEmptyVisibility(items.Count == 0);
     }
 
     private void SubscribeCollection(IEnumerable? source)
@@ -224,8 +237,9 @@ public sealed class VirtualizedCollectionViewHandler
                 default:
                     // Reset ou outros: re-snapshot completo da fonte.
                     ReloadItems();
-                    break;
+                    return; // ReloadItems já chama UpdateEmptyVisibility
             }
+            UpdateEmptyVisibility(_dataSource.Items.Count == 0);
         });
     }
 
@@ -244,6 +258,56 @@ public sealed class VirtualizedCollectionViewHandler
 
         if (total > 0 && total - 1 - lastVisible <= threshold)
             VirtualView?.RaiseRemainingItemsThresholdReached();
+    }
+
+    // ── EmptyView ─────────────────────────────────────────────────────────────
+
+    private void UpdateEmptyView()
+    {
+        _emptyNativeView = BuildEmptyNativeView();
+        UpdateEmptyVisibility(_dataSource is null || _dataSource.Items.Count == 0);
+    }
+
+    private void UpdateEmptyVisibility(bool isEmpty)
+    {
+        if (PlatformView is null) return;
+        PlatformView.BackgroundView = isEmpty ? _emptyNativeView : null;
+    }
+
+    private UIView? BuildEmptyNativeView()
+    {
+        var emptyView     = VirtualView?.EmptyView;
+        var emptyTemplate = VirtualView?.EmptyViewTemplate;
+
+        if (emptyView is null && emptyTemplate is null) return null;
+
+        if (emptyTemplate is not null)
+        {
+            var content = (View)emptyTemplate.CreateContent();
+            if (emptyView is not null) content.BindingContext = emptyView;
+            return content.ToPlatform(MauiContext!);
+        }
+
+        if (emptyView is View mauiView)
+            return mauiView.ToPlatform(MauiContext!);
+
+        var text = emptyView is string s ? s : emptyView?.ToString() ?? string.Empty;
+        return new UILabel { Text = text, TextAlignment = UITextAlignment.Center, TextColor = UIColor.SecondaryLabel };
+    }
+
+    // ── ScrollTo ──────────────────────────────────────────────────────────────
+
+    private static void MapScrollTo(
+        VirtualizedCollectionViewHandler handler,
+        VirtualizedCollectionView        view,
+        object?                          arg)
+    {
+        if (arg is not VirtualizedCollectionView.ScrollToRequest req) return;
+        if (handler.PlatformView is null || handler._dataSource is null) return;
+        if ((uint)req.Index >= (uint)handler._dataSource.Items.Count) return;
+
+        var indexPath = NSIndexPath.FromItemSection(req.Index, 0);
+        handler.PlatformView.ScrollToItem(indexPath, UICollectionViewScrollPosition.Top, req.Animated);
     }
 
     private static NSIndexPath[] IndexPaths(int start, int count)

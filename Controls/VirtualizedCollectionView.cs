@@ -1,21 +1,15 @@
 // Controls/VirtualizedCollectionView.cs
 using System.Collections;
 using System.Windows.Input;
-using Microsoft.Maui.Layouts;
 
 namespace Controls;
 
 public enum VirtualizedOrientation { Vertical, Horizontal }
 
-/// <summary>
-/// Layout container — herdar de Layout (em vez de View) é necessário para que
-/// as views de item criadas pelo DataTemplate tenham um Parent MAUI e participem
-/// do ciclo Measure/Arrange top-down. Sem Parent, as views são órfãs e o
-/// ContentPanel.CrossPlatformMeasure retorna valores incorretos no Windows.
-/// No Android e iOS o RecyclerView/UICollectionView gerenciam o layout
-/// diretamente; Children estará sempre vazio nessas plataformas.
-/// </summary>
-public class VirtualizedCollectionView : Layout
+// ContentView como base: no Windows, Content = CollectionView nativo do MAUI e nenhum
+// handler customizado é necessário. No Android/iOS os handlers criam RecyclerView /
+// UICollectionView nativos e ignoram o Content.
+public class VirtualizedCollectionView : ContentView
 {
     public static readonly BindableProperty ItemsSourceProperty =
         BindableProperty.Create(nameof(ItemsSource), typeof(IEnumerable),
@@ -46,53 +40,88 @@ public class VirtualizedCollectionView : Layout
         BindableProperty.Create(nameof(RemainingItemsThresholdReachedCommand), typeof(ICommand),
             typeof(VirtualizedCollectionView), null);
 
-    /// <summary>Fonte de dados. Suporta IEnumerable e INotifyCollectionChanged.</summary>
+    public static readonly BindableProperty ScrolledCommandProperty =
+        BindableProperty.Create(nameof(ScrolledCommand), typeof(ICommand),
+            typeof(VirtualizedCollectionView), null);
+
+    public static readonly BindableProperty EmptyViewProperty =
+        BindableProperty.Create(nameof(EmptyView), typeof(object),
+            typeof(VirtualizedCollectionView), null);
+
+    public static readonly BindableProperty EmptyViewTemplateProperty =
+        BindableProperty.Create(nameof(EmptyViewTemplate), typeof(DataTemplate),
+            typeof(VirtualizedCollectionView), null);
+
+    public static readonly BindableProperty ItemSpacingProperty =
+        BindableProperty.Create(nameof(ItemSpacing), typeof(double),
+            typeof(VirtualizedCollectionView), 0.0,
+            validateValue: (_, v) => (double)v >= 0);
+
     public IEnumerable? ItemsSource
     {
         get => (IEnumerable?)GetValue(ItemsSourceProperty);
         set => SetValue(ItemsSourceProperty, value);
     }
 
-    /// <summary>DataTemplate usado para renderizar cada item.</summary>
     public DataTemplate? ItemTemplate
     {
         get => (DataTemplate?)GetValue(ItemTemplateProperty);
         set => SetValue(ItemTemplateProperty, value);
     }
 
-    /// <summary>Altura fixa do item em DIPs. -1 = wrap_content (mais lento).</summary>
+    /// <summary>Altura fixa do item em DIPs. -1 = wrap_content. Ignorado no Windows.</summary>
     public double ItemHeight
     {
         get => (double)GetValue(ItemHeightProperty);
         set => SetValue(ItemHeightProperty, value);
     }
 
-    /// <summary>Número de colunas (≥1). 1 = lista linear, &gt;1 = grade.</summary>
     public int ColumnCount
     {
         get => (int)GetValue(ColumnCountProperty);
         set => SetValue(ColumnCountProperty, value);
     }
 
-    /// <summary>Direção do scroll.</summary>
     public VirtualizedOrientation Orientation
     {
         get => (VirtualizedOrientation)GetValue(OrientationProperty);
         set => SetValue(OrientationProperty, value);
     }
 
-    /// <summary>Quantos itens antes do fim disparam RemainingItemsThresholdReached. -1 = desabilitado.</summary>
     public int RemainingItemsThreshold
     {
         get => (int)GetValue(RemainingItemsThresholdProperty);
         set => SetValue(RemainingItemsThresholdProperty, value);
     }
 
-    /// <summary>Comando executado quando o threshold de itens restantes é atingido.</summary>
     public ICommand? RemainingItemsThresholdReachedCommand
     {
         get => (ICommand?)GetValue(RemainingItemsThresholdReachedCommandProperty);
         set => SetValue(RemainingItemsThresholdReachedCommandProperty, value);
+    }
+
+    public ICommand? ScrolledCommand
+    {
+        get => (ICommand?)GetValue(ScrolledCommandProperty);
+        set => SetValue(ScrolledCommandProperty, value);
+    }
+
+    public object? EmptyView
+    {
+        get => GetValue(EmptyViewProperty);
+        set => SetValue(EmptyViewProperty, value);
+    }
+
+    public DataTemplate? EmptyViewTemplate
+    {
+        get => (DataTemplate?)GetValue(EmptyViewTemplateProperty);
+        set => SetValue(EmptyViewTemplateProperty, value);
+    }
+
+    public double ItemSpacing
+    {
+        get => (double)GetValue(ItemSpacingProperty);
+        set => SetValue(ItemSpacingProperty, value);
     }
 
     public event EventHandler? RemainingItemsThresholdReached;
@@ -105,49 +134,65 @@ public class VirtualizedCollectionView : Layout
             RemainingItemsThresholdReachedCommand.Execute(null);
     }
 
-    internal void RaiseScrolled(double scrollX, double scrollY) =>
-        Scrolled?.Invoke(this, new VirtualizedScrolledEventArgs(scrollX, scrollY));
-
-    // ── Helpers para o handler Windows ──────────────────────────────────────
-
-    /// <summary>
-    /// Adiciona uma view como filho lógico. Isso define view.Parent = this,
-    /// permitindo que o ciclo de layout do MAUI alcance a view.
-    /// Chamado apenas pelo handler Windows — Android/iOS usam cells nativas.
-    /// </summary>
-    internal void AddMauiChild(IView view)   => Add((View)view);
-
-    /// <summary>Remove um filho lógico adicionado via AddMauiChild.</summary>
-    internal void RemoveMauiChild(IView view) => Remove((View)view);
-
-    /// <summary>
-    /// Layout manager passthrough: o handler Windows posiciona os items
-    /// diretamente no WinUI StackPanel; o MAUI layout manager não interfere.
-    /// </summary>
-    protected override ILayoutManager CreateLayoutManager() =>
-        new VrPassthroughLayoutManager(this);
-}
-
-file sealed class VrPassthroughLayoutManager : ILayoutManager
-{
-    // Cache da última medida finita. Quando o Grid re-mede com infinity durante
-    // re-layouts incrementais (causados por mudanças de Label.Text no scroll),
-    // devolve o tamanho anteriormente alocado em vez de 0, evitando que o Grid
-    // recalcule alturas das rows Auto acima desta view de forma incorreta.
-    private Size _cache;
-
-    public VrPassthroughLayoutManager(VirtualizedCollectionView _) { }
-
-    public Size Measure(double widthConstraint, double heightConstraint)
+    internal void RaiseScrolled(double scrollX, double scrollY)
     {
-        var w = double.IsInfinity(widthConstraint)  ? _cache.Width  : widthConstraint;
-        var h = double.IsInfinity(heightConstraint) ? _cache.Height : heightConstraint;
-        if (!double.IsInfinity(widthConstraint) && !double.IsInfinity(heightConstraint))
-            _cache = new(w, h);
-        return new(w, h);
+        var args = new VirtualizedScrolledEventArgs(scrollX, scrollY);
+        Scrolled?.Invoke(this, args);
+        if (ScrolledCommand?.CanExecute(args) == true)
+            ScrolledCommand.Execute(args);
     }
 
-    public Size ArrangeChildren(Rect bounds) => bounds.Size;
+    // ── Windows: CollectionView nativo do MAUI como Content ───────────────────
+    // No Android/iOS os handlers sobrescrevem CreatePlatformView e ignoram Content.
+
+#if WINDOWS
+    private readonly CollectionView _cv;
+
+    public VirtualizedCollectionView()
+    {
+        _cv = new CollectionView();
+        Content = _cv;
+        _cv.RemainingItemsThresholdReached += (_, _) => RaiseRemainingItemsThresholdReached();
+        _cv.Scrolled += (_, e) => RaiseScrolled(e.HorizontalOffset, e.VerticalOffset);
+    }
+
+    protected override void OnPropertyChanged(string? propertyName = null)
+    {
+        base.OnPropertyChanged(propertyName);
+        switch (propertyName)
+        {
+            case nameof(ItemsSource):             _cv.ItemsSource             = ItemsSource;             break;
+            case nameof(ItemTemplate):            _cv.ItemTemplate            = ItemTemplate;            break;
+            case nameof(EmptyView):               _cv.EmptyView               = EmptyView;               break;
+            case nameof(EmptyViewTemplate):       _cv.EmptyViewTemplate       = EmptyViewTemplate;       break;
+            case nameof(RemainingItemsThreshold): _cv.RemainingItemsThreshold = RemainingItemsThreshold; break;
+            case nameof(ColumnCount):
+            case nameof(Orientation):
+            case nameof(ItemSpacing):             SyncLayout();                                          break;
+        }
+    }
+
+    private void SyncLayout()
+    {
+        var orientation = Orientation == VirtualizedOrientation.Vertical
+            ? ItemsLayoutOrientation.Vertical
+            : ItemsLayoutOrientation.Horizontal;
+        double spacing = ItemSpacing;
+        _cv.ItemsLayout = ColumnCount > 1
+            ? new GridItemsLayout(ColumnCount, orientation)
+                { HorizontalItemSpacing = spacing, VerticalItemSpacing = spacing }
+            : new LinearItemsLayout(orientation)
+                { ItemSpacing = spacing };
+    }
+
+    public void ScrollTo(int index, bool animated = true) =>
+        _cv.ScrollTo(index, animate: animated);
+#else
+    public void ScrollTo(int index, bool animated = true) =>
+        Handler?.Invoke(nameof(ScrollTo), new ScrollToRequest(index, animated));
+#endif
+
+    public readonly record struct ScrollToRequest(int Index, bool Animated);
 }
 
 public sealed class VirtualizedScrolledEventArgs : EventArgs

@@ -32,9 +32,10 @@ public sealed class FullscreenGalleryFragment : DialogFragment
     private int        _startIndex;
     private Action<int>? _onIndexChanged;
 
-    private AndroidX.ViewPager2.Widget.ViewPager2? _viewPager;
-    private TextView?                              _indicator;
-    private FrameLayout?                           _root;
+    private AndroidX.ViewPager2.Widget.ViewPager2?              _viewPager;
+    private TextView?                                           _indicator;
+    private FrameLayout?                                        _root;
+    private AndroidX.ViewPager2.Widget.ViewPager2.OnPageChangeCallback? _pageCallback;
 
     public FullscreenGalleryFragment(
         string[]  images,
@@ -93,12 +94,12 @@ public sealed class FullscreenGalleryFragment : DialogFragment
             isZoomed => _viewPager.UserInputEnabled = !isZoomed);
         _viewPager.Adapter = adapter;
 
-        var callback = new GalleryPageCallback(index =>
+        _pageCallback = new GalleryPageCallback(index =>
         {
             UpdateIndicator(index);
             _onIndexChanged?.Invoke(index);
         });
-        _viewPager.RegisterOnPageChangeCallback(callback);
+        _viewPager.RegisterOnPageChangeCallback(_pageCallback);
 
         if (_startIndex > 0 && _images?.Length > _startIndex)
             _viewPager.SetCurrentItem(_startIndex, false);
@@ -107,6 +108,19 @@ public sealed class FullscreenGalleryFragment : DialogFragment
         AddIndicator();
 
         return _root;
+    }
+
+    public override void OnDestroyView()
+    {
+        if (_pageCallback is not null)
+        {
+            _viewPager?.UnregisterOnPageChangeCallback(_pageCallback);
+            _pageCallback = null;
+        }
+        _onIndexChanged = null;
+        if (_viewPager is not null)
+            _viewPager.Adapter = null;
+        base.OnDestroyView();
     }
 
     public override void OnSaveInstanceState(Bundle outState)
@@ -261,10 +275,24 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
         return new GalleryPageViewHolder(container, imageView, progress);
     }
 
+    public override void OnViewRecycled(Java.Lang.Object holder)
+    {
+        if (holder is GalleryPageViewHolder vh)
+        {
+            vh.BindToken++;
+            try { Glide.With(vh.ImageView).Clear(vh.ImageView); } catch { }
+            vh.ImageView.SetImageDrawable(null);
+            vh.ImageView.SetOnTouchListener(null);
+            vh.Progress.Visibility = ViewStates.Gone;
+        }
+        base.OnViewRecycled(holder);
+    }
+
     public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
     {
         if (holder is not GalleryPageViewHolder vh) return;
 
+        var token  = ++vh.BindToken;
         var source = _images[position];
 
         // Clear previous request
@@ -287,8 +315,10 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
 
         void OnReady()
         {
+            if (vh.BindToken != token) return;
             vh.ImageView.Post(() =>
             {
+                if (vh.BindToken != token) return;
                 zoomHandler.InitMatrix();
                 vh.ImageView.Visibility = ViewStates.Visible;
                 MainThread.BeginInvokeOnMainThread(
@@ -298,8 +328,10 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
 
         void OnFail()
         {
+            if (vh.BindToken != token) return;
             MainThread.BeginInvokeOnMainThread(() =>
             {
+                if (vh.BindToken != token) return;
                 vh.ImageView.Visibility = ViewStates.Visible;
                 vh.Progress.Visibility  = ViewStates.Gone;
             });
@@ -341,8 +373,9 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
 
 internal sealed class GalleryPageViewHolder : RecyclerView.ViewHolder
 {
-    public global::Android.Widget.ImageView ImageView { get; }
-    public AndroidProgressBar               Progress  { get; }
+    public global::Android.Widget.ImageView ImageView  { get; }
+    public AndroidProgressBar               Progress   { get; }
+    internal int                            BindToken;
 
     public GalleryPageViewHolder(
         AndroidView                          root,

@@ -38,7 +38,8 @@ public static class MauiAppBuilderExtensions
 #if WINDOWS
             handlers.AddHandler<ImageView, ImageViewHandler>();
             handlers.AddHandler<GalleryView, GalleryViewHandler>();
-            handlers.AddHandler<VirtualizedCollectionView, VirtualizedCollectionViewHandler>();
+            // VirtualizedCollectionView não precisa de handler customizado no Windows:
+            // herda de ContentView e usa CollectionView do MAUI como Content.
 #endif
         });
 

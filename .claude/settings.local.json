@@ -1,7 +1,5 @@
 {
-  "language": "portuguese",
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
       "Bash(git:*)",
       "Bash(npm:*)",
@@ -22,13 +20,19 @@
       "Bash(curl:*)",
       "Bash(chmod:*)",
       "Read(*)",
-      "Write(*)"
+      "Write(*)",
+      "Bash(dotnet build *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\BackupVersatil\\\\Lib Maui\\\\Agile.Maui\\\\Platforms\\\\Windows\" -Force)",
+      "Bash(Select-Object -Property Name, FullName)",
+      "Bash(Format-List)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
       "Bash(sudo:*)",
       "Bash(dd:*)",
       "Bash(mkfs:*)"
-    ]
-  }
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "language": "portuguese"
 }

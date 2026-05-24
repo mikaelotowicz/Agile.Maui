@@ -14,68 +14,66 @@ using AView    = Android.Views.View;
 namespace Controls.Platforms.Android;
 
 public sealed class VirtualizedCollectionViewHandler
-    : ViewHandler<VirtualizedCollectionView, RecyclerView>
+    : ViewHandler<VirtualizedCollectionView, VrContainerView>
 {
     public static readonly PropertyMapper<VirtualizedCollectionView, VirtualizedCollectionViewHandler> Mapper =
         new(ViewMapper)
         {
-            [nameof(VirtualizedCollectionView.ItemsSource)]  = (h, _) => h.ReloadItems(),
-            [nameof(VirtualizedCollectionView.ItemTemplate)] = (h, _) => h.ReloadItems(),
-            [nameof(VirtualizedCollectionView.ItemHeight)]   = (h, _) => h.ReloadItems(),
-            [nameof(VirtualizedCollectionView.ColumnCount)]  = (h, _) => h.ApplyLayoutManager(),
-            [nameof(VirtualizedCollectionView.Orientation)]  = (h, _) => h.ApplyLayoutManager(),
-            [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]               = (h, _) => { },
-            [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)] = (h, _) => { },
+            [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ReloadItems(),
+            [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ReloadItems(),
+            [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.ReloadItems(),
+            [nameof(VirtualizedCollectionView.ColumnCount)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); },
+            [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); },
+            [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.ApplyItemSpacing(),
+            [nameof(VirtualizedCollectionView.EmptyView)]                              = (h, _) => h.UpdateEmptyView(),
+            [nameof(VirtualizedCollectionView.EmptyViewTemplate)]                      = (h, _) => h.UpdateEmptyView(),
+            [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => { },
+            [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => { },
+            [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
         };
 
-    // internal porque o tipo do campo não pode ser file-scoped
-    private VrAdapter?                 _adapter;
-    private VrScrollListener?          _scrollListener;
-    private INotifyCollectionChanged?  _collectionChangedSource;
+    public static readonly CommandMapper<VirtualizedCollectionView, VirtualizedCollectionViewHandler> Commands =
+        new(ViewHandler.ViewCommandMapper)
+        {
+            [nameof(VirtualizedCollectionView.ScrollTo)] = MapScrollTo,
+        };
 
-    public VirtualizedCollectionViewHandler() : base(Mapper) { }
+    private VrAdapter?                  _adapter;
+    private VrScrollListener?           _scrollListener;
+    private VrSpacingDecoration?        _spacingDecoration;
+    private INotifyCollectionChanged?   _collectionChangedSource;
 
-    protected override RecyclerView CreatePlatformView()
-    {
-        var rv = new ClippedRecyclerView(Context);
-        rv.HasFixedSize = false;
-        rv.SetItemAnimator(null);          // sem animações → scroll mais suave
-        rv.SetItemViewCacheSize(20);       // cache offscreen (padrão = 2)
-        rv.GetRecycledViewPool().SetMaxRecycledViews(0, 30);
-        // Impede propagação de scroll para o CoordinatorLayout do Shell,
-        // evitando que o layout da página se desloque e sobreponha o SearchBar.
-        rv.NestedScrollingEnabled = false;
-        rv.SetClipChildren(true);
-        rv.SetClipToPadding(true);
-        return rv;
-    }
+    public VirtualizedCollectionViewHandler() : base(Mapper, Commands) { }
 
-    protected override void ConnectHandler(RecyclerView platformView)
+    protected override VrContainerView CreatePlatformView() => new(Context);
+
+    protected override void ConnectHandler(VrContainerView platformView)
     {
         base.ConnectHandler(platformView);
-        // Reforça após ViewMapper do MAUI para garantir que não seja sobrescrito.
-        platformView.NestedScrollingEnabled = false;
-        platformView.SetClipChildren(true);
-        platformView.SetClipToPadding(true);
+        platformView.Rv.NestedScrollingEnabled = false;
+        platformView.Rv.SetClipChildren(true);
+        platformView.Rv.SetClipToPadding(true);
         ApplyLayoutManager();
+        ApplyItemSpacing();
+        UpdateEmptyView();
         ReloadItems();
 
         _scrollListener = new VrScrollListener(OnScrolled);
-        platformView.AddOnScrollListener(_scrollListener);
+        platformView.Rv.AddOnScrollListener(_scrollListener);
     }
 
-    protected override void DisconnectHandler(RecyclerView platformView)
+    protected override void DisconnectHandler(VrContainerView platformView)
     {
         if (_scrollListener is not null)
         {
-            platformView.RemoveOnScrollListener(_scrollListener);
+            platformView.Rv.RemoveOnScrollListener(_scrollListener);
             _scrollListener = null;
         }
         UnsubscribeCollection();
         _adapter?.Dispose();
         _adapter = null;
-        platformView.SetAdapter(null);
-        platformView.SetLayoutManager(null);
+        platformView.Rv.SetAdapter(null);
+        platformView.Rv.SetLayoutManager(null);
         base.DisconnectHandler(platformView);
     }
 
@@ -101,9 +99,65 @@ public sealed class VirtualizedCollectionViewHandler
             llm = grid;
         }
 
-        PlatformView.SetLayoutManager(llm);
+        PlatformView.Rv.SetLayoutManager(llm);
         if (_adapter is not null)
-            PlatformView.SetAdapter(_adapter);
+            PlatformView.Rv.SetAdapter(_adapter);
+    }
+
+    private void ApplyItemSpacing()
+    {
+        if (PlatformView is null) return;
+        if (_spacingDecoration is not null)
+        {
+            PlatformView.Rv.RemoveItemDecoration(_spacingDecoration);
+            _spacingDecoration = null;
+        }
+        var spacingPx = (int)Context.ToPixels(VirtualView.ItemSpacing);
+        if (spacingPx <= 0) return;
+        _spacingDecoration = new VrSpacingDecoration(
+            spacingPx,
+            VirtualView.ColumnCount,
+            VirtualView.Orientation == VirtualizedOrientation.Horizontal);
+        PlatformView.Rv.AddItemDecoration(_spacingDecoration);
+    }
+
+    private void UpdateEmptyView()
+    {
+        if (PlatformView is null) return;
+        PlatformView.SetEmptyView(BuildEmptyNativeView());
+        PlatformView.UpdateEmptyVisibility(_adapter is null || _adapter.ItemCount == 0);
+    }
+
+    private AView? BuildEmptyNativeView()
+    {
+        var src = VirtualView.EmptyView;
+        if (src is null || MauiContext is null) return null;
+
+        if (src is string s)
+            return MakeEmptyLabel(s);
+
+        if (src is MauiView v)
+            return v.ToPlatform(MauiContext);
+
+        if (VirtualView.EmptyViewTemplate is { } t)
+        {
+            var tv = (MauiView)t.CreateContent();
+            tv.BindingContext = src;
+            return tv.ToPlatform(MauiContext);
+        }
+
+        return MakeEmptyLabel(src.ToString() ?? string.Empty);
+    }
+
+    private global::Android.Widget.TextView MakeEmptyLabel(string text)
+    {
+        var tv = new global::Android.Widget.TextView(Context)
+        {
+            Text    = text,
+            Gravity = GravityFlags.Center,
+        };
+        tv.SetTextColor(global::Android.Graphics.Color.Gray);
+        return tv;
     }
 
     private void ReloadItems()
@@ -115,8 +169,9 @@ public sealed class VirtualizedCollectionViewHandler
         {
             _adapter?.Dispose();
             _adapter = null;
-            PlatformView.SetAdapter(null);
+            PlatformView.Rv.SetAdapter(null);
             UnsubscribeCollection();
+            PlatformView.UpdateEmptyVisibility(true);
             return;
         }
 
@@ -130,7 +185,7 @@ public sealed class VirtualizedCollectionViewHandler
         if (_adapter is null)
         {
             _adapter = new VrAdapter(items, template, MauiContext, heightPx);
-            PlatformView.SetAdapter(_adapter);
+            PlatformView.Rv.SetAdapter(_adapter);
         }
         else
         {
@@ -138,6 +193,7 @@ public sealed class VirtualizedCollectionViewHandler
         }
 
         SubscribeCollection(VirtualView.ItemsSource);
+        PlatformView.UpdateEmptyVisibility(items.Count == 0);
     }
 
     private void SubscribeCollection(IEnumerable? source)
@@ -182,6 +238,7 @@ public sealed class VirtualizedCollectionViewHandler
                     _adapter.UpdateItemsAsync(SnapshotItems(VirtualView.ItemsSource), _adapter.ItemHeightPx);
                     break;
             }
+            PlatformView?.UpdateEmptyVisibility(_adapter.ItemCount == 0);
         });
     }
 
@@ -189,8 +246,8 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (VirtualView is null || PlatformView is null) return;
         VirtualView.RaiseScrolled(
-            Context.FromPixels(PlatformView.ComputeHorizontalScrollOffset()),
-            Context.FromPixels(PlatformView.ComputeVerticalScrollOffset()));
+            Context.FromPixels(PlatformView.Rv.ComputeHorizontalScrollOffset()),
+            Context.FromPixels(PlatformView.Rv.ComputeVerticalScrollOffset()));
         CheckRemainingThreshold();
     }
 
@@ -198,12 +255,24 @@ public sealed class VirtualizedCollectionViewHandler
     {
         var threshold = VirtualView.RemainingItemsThreshold;
         if (threshold < 0 || _adapter is null || PlatformView is null) return;
-        var llm = PlatformView.GetLayoutManager() as LinearLayoutManager;
+        var llm = PlatformView.Rv.GetLayoutManager() as LinearLayoutManager;
         if (llm is null) return;
         var lastVisible = llm.FindLastVisibleItemPosition();
         var total       = _adapter.ItemCount;
         if (total > 0 && total - 1 - lastVisible <= threshold)
             VirtualView.RaiseRemainingItemsThresholdReached();
+    }
+
+    private static void MapScrollTo(
+        VirtualizedCollectionViewHandler handler,
+        VirtualizedCollectionView        view,
+        object?                          args)
+    {
+        if (args is not VirtualizedCollectionView.ScrollToRequest r || handler.PlatformView is null) return;
+        if (r.Animated)
+            handler.PlatformView.Rv.SmoothScrollToPosition(r.Index);
+        else
+            handler.PlatformView.Rv.ScrollToPosition(r.Index);
     }
 
     private static List<object> SnapshotItems(IEnumerable? source)
@@ -212,6 +281,98 @@ public sealed class VirtualizedCollectionViewHandler
         var list = new List<object>();
         foreach (var item in source) list.Add(item);
         return list;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VrContainerView — FrameLayout que envolve RecyclerView + EmptyView
+// ─────────────────────────────────────────────────────────────────────────────
+
+public sealed class VrContainerView : global::Android.Widget.FrameLayout
+{
+    internal readonly ClippedRecyclerView Rv;
+    private AView? _emptyView;
+
+    public VrContainerView(Context context) : base(context)
+    {
+        Rv = new ClippedRecyclerView(context);
+        Rv.HasFixedSize = false;
+        Rv.SetItemAnimator(null);
+        Rv.SetItemViewCacheSize(20);
+        Rv.GetRecycledViewPool().SetMaxRecycledViews(0, 30);
+        Rv.NestedScrollingEnabled = false;
+        Rv.SetClipChildren(true);
+        Rv.SetClipToPadding(true);
+
+        AddView(Rv, new LayoutParams(
+            ViewGroup.LayoutParams.MatchParent,
+            ViewGroup.LayoutParams.MatchParent));
+    }
+
+    public void SetEmptyView(AView? view)
+    {
+        if (_emptyView is not null)
+        {
+            RemoveView(_emptyView);
+            _emptyView = null;
+        }
+        if (view is not null)
+        {
+            _emptyView = view;
+            AddView(view, new LayoutParams(
+                ViewGroup.LayoutParams.MatchParent,
+                ViewGroup.LayoutParams.MatchParent)
+            { Gravity = GravityFlags.Center });
+        }
+    }
+
+    public void UpdateEmptyVisibility(bool isEmpty)
+    {
+        Rv.Visibility = isEmpty ? ViewStates.Gone : ViewStates.Visible;
+        if (_emptyView is not null)
+            _emptyView.Visibility = isEmpty ? ViewStates.Visible : ViewStates.Gone;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VrSpacingDecoration — espaçamento uniforme entre itens
+// ─────────────────────────────────────────────────────────────────────────────
+
+internal sealed class VrSpacingDecoration : RecyclerView.ItemDecoration
+{
+    private readonly int  _spacePx;
+    private readonly int  _columns;
+    private readonly bool _horizontal;
+
+    public VrSpacingDecoration(int spacePx, int columns, bool horizontal)
+    {
+        _spacePx    = spacePx;
+        _columns    = columns;
+        _horizontal = horizontal;
+    }
+
+    public override void GetItemOffsets(
+        global::Android.Graphics.Rect outRect, AView view, RecyclerView parent, RecyclerView.State state)
+    {
+        var pos = parent.GetChildAdapterPosition(view);
+        if (pos < 0) return;
+
+        if (!_horizontal)
+        {
+            // Scroll vertical: distribui espaço horizontal entre colunas (sem borda externa)
+            var col        = pos % _columns;
+            outRect.Left   = col * _spacePx / _columns;
+            outRect.Right  = _spacePx - (col + 1) * _spacePx / _columns;
+            outRect.Bottom = _spacePx;
+        }
+        else
+        {
+            // Scroll horizontal: distribui espaço vertical entre linhas
+            var row        = pos % _columns;
+            outRect.Top    = row * _spacePx / _columns;
+            outRect.Bottom = _spacePx - (row + 1) * _spacePx / _columns;
+            outRect.Right  = _spacePx;
+        }
     }
 }
 
@@ -233,9 +394,9 @@ internal sealed class VrAdapter : RecyclerView.Adapter
 
     public VrAdapter(List<object> items, DataTemplate template, IMauiContext mauiContext, int itemHeightPx)
     {
-        _items       = items;
-        _template    = template;
-        _mauiContext = mauiContext;
+        _items        = items;
+        _template     = template;
+        _mauiContext  = mauiContext;
         _itemHeightPx = itemHeightPx;
     }
 
@@ -261,7 +422,6 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     {
         if (holder is VrViewHolder h && (uint)position < (uint)_items.Count)
         {
-            // Limpa antes de rebind para que bindings não vejam contexto antigo
             h.MauiView.BindingContext = null;
             h.MauiView.BindingContext = _items[position];
         }

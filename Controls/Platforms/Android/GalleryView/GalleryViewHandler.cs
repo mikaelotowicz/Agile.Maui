@@ -25,6 +25,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
     private GalleryPageCallback? _pageCallback;
     private bool _syncingPage;
+    private bool _disposed;
 
     public GalleryViewHandler() : base(Mapper) { }
 
@@ -41,6 +42,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
     protected override void DisconnectHandler(GalleryContainerView platformView)
     {
+        _disposed = true;
         if (_pageCallback is not null)
         {
             platformView.Pager.UnregisterOnPageChangeCallback(_pageCallback);
@@ -52,7 +54,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
     private void ReloadAdapter()
     {
-        if (PlatformView is null) return;
+        if (_disposed || PlatformView is null) return;
         var pager  = PlatformView.Pager;
         var images = VirtualView.Images;
 
@@ -86,7 +88,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
     private void SyncPage()
     {
-        if (PlatformView is null || _syncingPage) return;
+        if (_disposed || PlatformView is null || _syncingPage) return;
         var images = VirtualView.Images;
         if (images is null || images.Count == 0) return;
         var idx = Math.Clamp(VirtualView.SelectedIndex, 0, images.Count - 1);
@@ -95,7 +97,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
     private void OnPageChanged(int index)
     {
-        if (VirtualView is null) return;
+        if (_disposed || VirtualView is null) return;
         _syncingPage = true;
         VirtualView.SelectedIndex = index;
         VirtualView.RaiseSelectionChanged(index);
@@ -105,7 +107,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
     private void UpdateDots()
     {
-        if (PlatformView is null) return;
+        if (_disposed || PlatformView is null) return;
         var count = VirtualView.Images?.Count ?? 0;
         var idx   = Math.Clamp(VirtualView.SelectedIndex, 0, Math.Max(0, count - 1));
         PlatformView.Dots.Update(VirtualView.ShowIndicator, count, idx);
@@ -113,6 +115,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
     private void OpenFullscreen(int startIndex)
     {
+        if (_disposed) return;
         var images = VirtualView.Images;
         if (images is null || images.Count == 0) return;
         var activity = Context.GetActivity();
@@ -129,7 +132,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             startIndex:    idx,
             onIndexChanged: index =>
             {
-                if (VirtualView is null) return;
+                if (_disposed || VirtualView is null) return;
                 VirtualView.SelectedIndex = index;
                 VirtualView.RaiseSelectionChanged(index);
                 MainThread.BeginInvokeOnMainThread(
@@ -149,10 +152,23 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
     public   readonly ViewPager2 Pager;
     internal readonly DotsView   Dots;
 
+    private float _downX;
+    private float _downY;
+
     public GalleryContainerView(global::Android.Content.Context context) : base(context)
     {
         Pager = new ViewPager2(context) { Orientation = ViewPager2.OrientationHorizontal };
-        Dots  = new DotsView(context);
+
+        var recycler = (RecyclerView)Pager.GetChildAt(0)!;
+        recycler.SetClipToPadding(true);
+        recycler.SetClipChildren(true);
+        recycler.SetPadding(0, 0, 0, 0);
+        recycler.SetItemViewCacheSize(0);
+
+        Pager.OffscreenPageLimit = 1;
+        Pager.SetPageTransformer(null);
+
+        Dots = new DotsView(context);
 
         AddView(Pager, new LayoutParams(LayoutParams.MatchParent, LayoutParams.MatchParent));
 
@@ -160,6 +176,26 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
                                   GravityFlags.Bottom | GravityFlags.CenterHorizontal);
         lp.BottomMargin = DpToPx(context, 10);
         AddView(Dots, lp);
+    }
+
+    public override bool DispatchTouchEvent(MotionEvent? ev)
+    {
+        switch (ev?.ActionMasked)
+        {
+            case MotionEventActions.Down:
+                _downX = ev.GetX();
+                _downY = ev.GetY();
+                Parent?.RequestDisallowInterceptTouchEvent(false);
+                break;
+            case MotionEventActions.Move:
+                var dx = Math.Abs(ev.GetX() - _downX);
+                var dy = Math.Abs(ev.GetY() - _downY);
+                var slop = ViewConfiguration.Get(Context!)?.ScaledTouchSlop ?? 8;
+                if (dx > dy && dx > slop)
+                    Parent?.RequestDisallowInterceptTouchEvent(true);
+                break;
+        }
+        return base.DispatchTouchEvent(ev);
     }
 
     private static int DpToPx(global::Android.Content.Context ctx, int dp) =>
@@ -253,7 +289,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         var context   = parent.Context!;
         var imageView = new global::Android.Widget.ImageView(context)
         {
-            LayoutParameters = new ViewGroup.LayoutParams(
+            LayoutParameters = new RecyclerView.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent,
                 ViewGroup.LayoutParams.MatchParent),
             Clickable = true,
@@ -270,6 +306,16 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
             if (pos >= 0) _onPageClick(pos);
         };
         return holder;
+    }
+
+    public override void OnViewRecycled(Java.Lang.Object holder)
+    {
+        if (holder is ThumbPageViewHolder vh)
+        {
+            try { Glide.With(vh.ImageView).Clear(vh.ImageView); } catch { }
+            vh.ImageView.SetImageDrawable(null);
+        }
+        base.OnViewRecycled(holder);
     }
 
     public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
