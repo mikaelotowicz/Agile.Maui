@@ -1,4 +1,4 @@
-# Agile.Maui
+# <img src="Constrols/agile.png" width="118" height="118" align="center" /> Agile.Maui
 
 .NET MAUI component library with native implementations for Android, iOS, macOS Catalyst, and Windows.
 
@@ -12,7 +12,7 @@
 
 ## Installation
 
-```
+```bash
 dotnet add package Agile.Maui
 ```
 
