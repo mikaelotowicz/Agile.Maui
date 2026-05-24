@@ -270,7 +270,8 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
         // Clear previous request
         try { Glide.With(vh.ImageView).Clear(vh.ImageView); } catch { }
         vh.ImageView.SetImageDrawable(null);
-        vh.Progress.Visibility = ViewStates.Visible;
+        vh.ImageView.Visibility = ViewStates.Invisible; // oculta até a matrix estar correta
+        vh.Progress.Visibility  = ViewStates.Visible;
 
         var mediumScale = Math.Min(2.5f, _maxZoom * 0.55f);
         var zoomHandler = new ZoomTouchHandler(
@@ -289,6 +290,7 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
             vh.ImageView.Post(() =>
             {
                 zoomHandler.InitMatrix();
+                vh.ImageView.Visibility = ViewStates.Visible;
                 MainThread.BeginInvokeOnMainThread(
                     () => vh.Progress.Visibility = ViewStates.Gone);
             });
@@ -296,8 +298,11 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
 
         void OnFail()
         {
-            MainThread.BeginInvokeOnMainThread(
-                () => vh.Progress.Visibility = ViewStates.Gone);
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                vh.ImageView.Visibility = ViewStates.Visible;
+                vh.Progress.Visibility  = ViewStates.Gone;
+            });
         }
 
         var opts = BuildOptions(context);

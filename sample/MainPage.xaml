@@ -129,6 +129,7 @@
             <controls:GalleryView
                 x:Name="UrlGallery"
                 AspectMode="CenterCrop"
+                ShowIndicator="True"
                 HeightRequest="220"
                 ImageFailed="OnGalleryImageFailed"
                 ImageLoaded="OnGalleryImageLoaded"

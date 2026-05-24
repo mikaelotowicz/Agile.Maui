@@ -17,6 +17,7 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.MaxZoom)]       = (h, _) => { },
+        [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateIndicator(),
         };
 
     public GalleryViewHandler() : base(Mapper) { }
@@ -54,6 +55,13 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
             placeholder: VirtualView.Placeholder,
             contentMode: contentMode);
         SyncPage();
+        UpdateIndicator();
+    }
+
+    private void UpdateIndicator()
+    {
+        if (PlatformView is null) return;
+        PlatformView.IndicatorVisible = VirtualView.ShowIndicator;
     }
 
     private void SyncPage()
@@ -127,6 +135,7 @@ internal sealed class ThumbGalleryView : UIView
     private bool                     _ignoreScroll;
     private int                      _pendingPage = -1;
     private int                      _currentPage;
+    private readonly UIPageControl   _pageControl;
 
     public Action<int>? OnPageChanged { get; set; }
     public Action<int>? OnPageTapped  { get; set; }
@@ -145,6 +154,16 @@ internal sealed class ThumbGalleryView : UIView
         };
         _scrollView.Delegate = new ThumbScrollDelegate(this);
         AddSubview(_scrollView);
+
+        _pageControl = new UIPageControl
+        {
+            HidesForSinglePage            = true,
+            Hidden                        = true,
+            CurrentPageIndicatorTintColor = UIColor.White,
+            PageIndicatorTintColor        = UIColor.FromWhiteAlpha(1f, 0.4f),
+            UserInteractionEnabled        = false,
+        };
+        AddSubview(_pageControl);
     }
 
     public void Configure(string[] images, bool isUrl, string? placeholder, UIViewContentMode contentMode)
@@ -164,6 +183,8 @@ internal sealed class ThumbGalleryView : UIView
         _pages.Clear();
         _pendingPage = -1;
         _currentPage = 0;
+        _pageControl.Pages       = images.Length;
+        _pageControl.CurrentPage = 0;
 
         foreach (var _ in images)
         {
@@ -203,6 +224,13 @@ internal sealed class ThumbGalleryView : UIView
 
         LoadWindow(_currentPage);
 
+        _pageControl.SizeToFit();
+        _pageControl.Frame = new CGRect(
+            (w - _pageControl.Frame.Width) / 2,
+            h - _pageControl.Frame.Height - 8,
+            _pageControl.Frame.Width,
+            _pageControl.Frame.Height);
+
         if (_pendingPage >= 0)
         {
             _ignoreScroll = true;
@@ -212,10 +240,16 @@ internal sealed class ThumbGalleryView : UIView
         }
     }
 
+    public bool IndicatorVisible
+    {
+        set => _pageControl.Hidden = !value;
+    }
+
     public void SetPage(int index, bool animated)
     {
         if (index < 0 || index >= _pages.Count) return;
-        _currentPage = index;
+        _currentPage             = index;
+        _pageControl.CurrentPage = index;
         var w = Bounds.Width;
         if (w <= 0) { _pendingPage = index; return; }
         _pendingPage  = -1;
@@ -230,7 +264,8 @@ internal sealed class ThumbGalleryView : UIView
         var w = _scrollView.Bounds.Width;
         if (w <= 0) return;
         var index = Math.Clamp((int)Math.Round(_scrollView.ContentOffset.X / w), 0, Math.Max(0, _pages.Count - 1));
-        _currentPage = index;
+        _currentPage             = index;
+        _pageControl.CurrentPage = index;
         LoadWindow(index);
         OnPageChanged?.Invoke(index);
     }

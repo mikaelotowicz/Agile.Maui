@@ -80,9 +80,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
         for (int i = 0; i < _pageCount; i++)
         {
-            var pageFrame = new CGRect(i * bounds.Width, 0, bounds.Width, bounds.Height);
-            _zoomScrollViews![i].Frame = pageFrame;
-            _imageViews![i].Frame      = pageFrame;
+            _zoomScrollViews![i].Frame = new CGRect(i * bounds.Width, 0, bounds.Width, bounds.Height);
             _spinners![i].Center       = new CGPoint(bounds.Width / 2, bounds.Height / 2);
             UpdateZoomScaleForPage(i);
         }

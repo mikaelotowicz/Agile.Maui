@@ -1,4 +1,5 @@
 // Platforms/Android/GalleryView/GalleryViewHandler.cs
+using Android.Graphics.Drawables;
 using Android.Views;
 using AndroidX.RecyclerView.Widget;
 using AndroidX.ViewPager2.Widget;
@@ -8,7 +9,7 @@ using Microsoft.Maui.Handlers;
 
 namespace Controls.Platforms.Android;
 
-public sealed class GalleryViewHandler : ViewHandler<GalleryView, ViewPager2>
+public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContainerView>
 {
     public static readonly PropertyMapper<GalleryView, GalleryViewHandler> Mapper =
         new(ViewMapper)
@@ -19,6 +20,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, ViewPager2>
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.MaxZoom)]       = (h, _) => { },
+            [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateDots(),
         };
 
     private GalleryPageCallback? _pageCallback;
@@ -26,40 +28,44 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, ViewPager2>
 
     public GalleryViewHandler() : base(Mapper) { }
 
-    protected override ViewPager2 CreatePlatformView()
-        => new(Context) { Orientation = ViewPager2.OrientationHorizontal };
+    protected override GalleryContainerView CreatePlatformView()
+        => new(Context);
 
-    protected override void ConnectHandler(ViewPager2 platformView)
+    protected override void ConnectHandler(GalleryContainerView platformView)
     {
         base.ConnectHandler(platformView);
         _pageCallback = new GalleryPageCallback(OnPageChanged);
-        platformView.RegisterOnPageChangeCallback(_pageCallback);
+        platformView.Pager.RegisterOnPageChangeCallback(_pageCallback);
         ReloadAdapter();
     }
 
-    protected override void DisconnectHandler(ViewPager2 platformView)
+    protected override void DisconnectHandler(GalleryContainerView platformView)
     {
         if (_pageCallback is not null)
         {
-            platformView.UnregisterOnPageChangeCallback(_pageCallback);
+            platformView.Pager.UnregisterOnPageChangeCallback(_pageCallback);
             _pageCallback = null;
         }
-        platformView.Adapter = null;
+        platformView.Pager.Adapter = null;
         base.DisconnectHandler(platformView);
     }
 
     private void ReloadAdapter()
     {
         if (PlatformView is null) return;
-
+        var pager  = PlatformView.Pager;
         var images = VirtualView.Images;
+
         if (images is null || images.Count == 0)
         {
-            PlatformView.Adapter = null;
+            pager.Adapter = null;
+            UpdateDots();
             return;
         }
 
-        PlatformView.Adapter = new ThumbPagerAdapter(
+        var targetIdx = Math.Clamp(VirtualView.SelectedIndex, 0, images.Count - 1);
+
+        pager.Adapter = new ThumbPagerAdapter(
             images:        images.ToArray(),
             isUrl:         VirtualView.IsUrl,
             placeholder:   VirtualView.Placeholder,
@@ -68,7 +74,14 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, ViewPager2>
             onImageLoaded: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()),
             onImageFailed: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()));
 
-        SyncPage();
+        if (targetIdx > 0)
+        {
+            var observer = new OneShotAdapterObserver(pager, targetIdx);
+            pager.Adapter.RegisterAdapterDataObserver(observer);
+            pager.Post(observer.Apply);
+        }
+
+        UpdateDots();
     }
 
     private void SyncPage()
@@ -77,7 +90,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, ViewPager2>
         var images = VirtualView.Images;
         if (images is null || images.Count == 0) return;
         var idx = Math.Clamp(VirtualView.SelectedIndex, 0, images.Count - 1);
-        PlatformView.SetCurrentItem(idx, false);
+        PlatformView.Pager.SetCurrentItem(idx, false);
     }
 
     private void OnPageChanged(int index)
@@ -87,6 +100,15 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, ViewPager2>
         VirtualView.SelectedIndex = index;
         VirtualView.RaiseSelectionChanged(index);
         _syncingPage = false;
+        UpdateDots();
+    }
+
+    private void UpdateDots()
+    {
+        if (PlatformView is null) return;
+        var count = VirtualView.Images?.Count ?? 0;
+        var idx   = Math.Clamp(VirtualView.SelectedIndex, 0, Math.Max(0, count - 1));
+        PlatformView.Dots.Update(VirtualView.ShowIndicator, count, idx);
     }
 
     private void OpenFullscreen(int startIndex)
@@ -111,10 +133,84 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, ViewPager2>
                 VirtualView.SelectedIndex = index;
                 VirtualView.RaiseSelectionChanged(index);
                 MainThread.BeginInvokeOnMainThread(
-                    () => PlatformView?.SetCurrentItem(index, false));
+                    () => PlatformView?.Pager.SetCurrentItem(index, false));
             });
 
         dialog.Show(activity.SupportFragmentManager, FullscreenGalleryFragment.Tag);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GalleryContainerView — FrameLayout que envolve ViewPager2 + DotsView
+// ─────────────────────────────────────────────────────────────────────────────
+
+public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
+{
+    public   readonly ViewPager2 Pager;
+    internal readonly DotsView   Dots;
+
+    public GalleryContainerView(global::Android.Content.Context context) : base(context)
+    {
+        Pager = new ViewPager2(context) { Orientation = ViewPager2.OrientationHorizontal };
+        Dots  = new DotsView(context);
+
+        AddView(Pager, new LayoutParams(LayoutParams.MatchParent, LayoutParams.MatchParent));
+
+        var lp = new LayoutParams(LayoutParams.WrapContent, LayoutParams.WrapContent,
+                                  GravityFlags.Bottom | GravityFlags.CenterHorizontal);
+        lp.BottomMargin = DpToPx(context, 10);
+        AddView(Dots, lp);
+    }
+
+    private static int DpToPx(global::Android.Content.Context ctx, int dp) =>
+        (int)(dp * ctx.Resources!.DisplayMetrics!.Density + 0.5f);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DotsView — indicador de páginas (bolinhas)
+// ─────────────────────────────────────────────────────────────────────────────
+
+internal sealed class DotsView : global::Android.Widget.LinearLayout
+{
+    private const int DotDp    = 7;
+    private const int MarginDp = 4;
+
+    public DotsView(global::Android.Content.Context context) : base(context)
+    {
+        Orientation = global::Android.Widget.Orientation.Horizontal;
+        SetGravity(GravityFlags.Center);
+        Visibility = ViewStates.Gone;
+    }
+
+    public void Update(bool show, int count, int selected)
+    {
+        RemoveAllViews();
+        if (!show || count <= 1) { Visibility = ViewStates.Gone; return; }
+
+        var density  = Context!.Resources!.DisplayMetrics!.Density;
+        int dotPx    = (int)(DotDp    * density + 0.5f);
+        int marginPx = (int)(MarginDp * density + 0.5f);
+
+        for (int i = 0; i < count; i++)
+        {
+            var dot = new global::Android.Views.View(Context);
+            var lp  = new global::Android.Widget.LinearLayout.LayoutParams(dotPx, dotPx);
+            lp.SetMargins(marginPx, 0, marginPx, 0);
+            dot.LayoutParameters = lp;
+            dot.Background = MakeDot(i == selected);
+            AddView(dot);
+        }
+        Visibility = ViewStates.Visible;
+    }
+
+    private static Drawable MakeDot(bool active)
+    {
+        var d = new GradientDrawable();
+        d.SetShape(ShapeType.Oval);
+        d.SetColor(active
+            ? unchecked((int)0xFFFFFFFF)
+            : unchecked((int)0x80FFFFFF));
+        return d;
     }
 }
 
@@ -228,3 +324,30 @@ internal sealed class ThumbPageViewHolder : RecyclerView.ViewHolder
         => ImageView = imageView;
 }
 
+internal sealed class OneShotAdapterObserver : RecyclerView.AdapterDataObserver
+{
+    private readonly ViewPager2 _pager;
+    private readonly int        _index;
+    private bool                _done;
+
+    public OneShotAdapterObserver(ViewPager2 pager, int index)
+    {
+        _pager = pager;
+        _index = index;
+    }
+
+    public override void OnChanged() => Apply();
+
+    public void Apply()
+    {
+        if (_done) return;
+        if (_pager.Width == 0 || _pager.Height == 0)
+        {
+            _pager.Post(Apply);
+            return;
+        }
+        _done = true;
+        _pager.Adapter?.UnregisterAdapterDataObserver(this);
+        _pager.SetCurrentItem(_index, false);
+    }
+}

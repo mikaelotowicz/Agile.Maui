@@ -24,12 +24,16 @@ public class GalleryView : View
         BindableProperty.Create(nameof(MaxZoom), typeof(float), typeof(GalleryView), 5f,
             validateValue: (_, v) => (float)v >= 1f);
 
+    public static readonly BindableProperty ShowIndicatorProperty =
+        BindableProperty.Create(nameof(ShowIndicator), typeof(bool), typeof(GalleryView), false);
+
     public IList<string>? Images { get => (IList<string>?)GetValue(ImagesProperty); set => SetValue(ImagesProperty, value); }
     public bool IsUrl { get => (bool)GetValue(IsUrlProperty); set => SetValue(IsUrlProperty, value); }
     public string? Placeholder { get => (string?)GetValue(PlaceholderProperty); set => SetValue(PlaceholderProperty, value); }
     public int SelectedIndex { get => (int)GetValue(SelectedIndexProperty); set => SetValue(SelectedIndexProperty, value); }
     public ZoomImageAspect AspectMode { get => (ZoomImageAspect)GetValue(AspectModeProperty); set => SetValue(AspectModeProperty, value); }
     public float MaxZoom { get => (float)GetValue(MaxZoomProperty); set => SetValue(MaxZoomProperty, value); }
+    public bool ShowIndicator { get => (bool)GetValue(ShowIndicatorProperty); set => SetValue(ShowIndicatorProperty, value); }
 
     public event EventHandler<GalleryIndexChangedEventArgs>? SelectionChanged;
     public event EventHandler? ImageLoaded;
