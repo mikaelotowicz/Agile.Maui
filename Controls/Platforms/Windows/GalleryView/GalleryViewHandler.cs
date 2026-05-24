@@ -1,5 +1,6 @@
 // Platforms/Windows/GalleryView/GalleryViewHandler.cs
 using Microsoft.Maui.Handlers;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WinStretch = Microsoft.UI.Xaml.Media.Stretch;
@@ -22,6 +23,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, FlipView>
         };
 
     private bool _syncingPage;
+    private readonly List<Action> _imageHandlerCleanup = [];
 
     public GalleryViewHandler() : base(Mapper) { }
 
@@ -37,8 +39,15 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, FlipView>
     protected override void DisconnectHandler(FlipView platformView)
     {
         platformView.SelectionChanged -= OnSelectionChanged;
-        platformView.Items.Clear();
+        ClearImages();
         base.DisconnectHandler(platformView);
+    }
+
+    private void ClearImages()
+    {
+        foreach (var cleanup in _imageHandlerCleanup) cleanup();
+        _imageHandlerCleanup.Clear();
+        PlatformView?.Items.Clear();
     }
 
     private void LoadImages()
@@ -46,7 +55,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, FlipView>
         if (PlatformView is null) return;
 
         PlatformView.SelectionChanged -= OnSelectionChanged;
-        PlatformView.Items.Clear();
+        ClearImages();
 
         var images = VirtualView.Images;
         if (images is null || images.Count == 0)
@@ -62,8 +71,11 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, FlipView>
         foreach (var source in images)
         {
             var img = new NativeImage { Stretch = stretch };
-            img.ImageOpened += (_, _) => VirtualView?.RaiseImageLoaded();
-            img.ImageFailed += (_, _) => { ApplyPlaceholder(img); VirtualView?.RaiseImageFailed(); };
+            RoutedEventHandler openedHandler = (_, _) => VirtualView?.RaiseImageLoaded();
+            ExceptionRoutedEventHandler failedHandler = (_, _) => { ApplyPlaceholder(img); VirtualView?.RaiseImageFailed(); };
+            img.ImageOpened += openedHandler;
+            img.ImageFailed += failedHandler;
+            _imageHandlerCleanup.Add(() => { img.ImageOpened -= openedHandler; img.ImageFailed -= failedHandler; });
 
             if (VirtualView.IsUrl)
             {

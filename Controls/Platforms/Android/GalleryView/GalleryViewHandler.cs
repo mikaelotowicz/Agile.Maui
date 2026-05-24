@@ -77,27 +77,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, ViewPager2>
         var images = VirtualView.Images;
         if (images is null || images.Count == 0) return;
         var idx = Math.Clamp(VirtualView.SelectedIndex, 0, images.Count - 1);
-
-        if (PlatformView.Width > 0)
-        {
-            // Já medido: corrige diretamente via LayoutManager
-            ScrollToPageOffset(PlatformView, idx);
-        }
-        else
-        {
-            // Ainda não medido: aguarda primeiro layout pass
-            PlatformView.ViewTreeObserver?.AddOnGlobalLayoutListener(
-                new GalleryInitLayoutListener(PlatformView, idx));
-        }
-    }
-
-    private static void ScrollToPageOffset(ViewPager2 vp, int idx)
-    {
-        if (vp.GetChildAt(0) is RecyclerView rv &&
-            rv.GetLayoutManager() is LinearLayoutManager llm)
-        {
-            llm.ScrollToPositionWithOffset(idx, 0);
-        }
+        PlatformView.SetCurrentItem(idx, false);
     }
 
     private void OnPageChanged(int index)
@@ -248,26 +228,3 @@ internal sealed class ThumbPageViewHolder : RecyclerView.ViewHolder
         => ImageView = imageView;
 }
 
-// Dispara após o primeiro layout pass e posiciona o RecyclerView no offset correto
-internal sealed class GalleryInitLayoutListener
-    : Java.Lang.Object, global::Android.Views.ViewTreeObserver.IOnGlobalLayoutListener
-{
-    private readonly ViewPager2 _viewPager;
-    private readonly int        _idx;
-
-    public GalleryInitLayoutListener(ViewPager2 viewPager, int idx)
-    {
-        _viewPager = viewPager;
-        _idx       = idx;
-    }
-
-    public void OnGlobalLayout()
-    {
-        _viewPager.ViewTreeObserver?.RemoveOnGlobalLayoutListener(this);
-        if (_viewPager.GetChildAt(0) is RecyclerView rv &&
-            rv.GetLayoutManager() is LinearLayoutManager llm)
-        {
-            llm.ScrollToPositionWithOffset(_idx, 0);
-        }
-    }
-}

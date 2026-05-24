@@ -324,6 +324,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         _itemHeightPx = newHeightPx;
 
         _diffCts?.Cancel();
+        _diffCts?.Dispose();
         _diffCts = new CancellationTokenSource();
         var token   = _diffCts.Token;
         var oldList = _items;
@@ -336,6 +337,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
                 token);
         }
         catch (OperationCanceledException) { return; }
+        catch (Exception) { return; }
         if (token.IsCancellationRequested) return;
 
         _items = newItems;
@@ -400,21 +402,6 @@ internal sealed class VrScrollListener : RecyclerView.OnScrollListener
     private readonly Action<int, int> _onScrolled;
     public VrScrollListener(Action<int, int> onScrolled) => _onScrolled = onScrolled;
     public override void OnScrolled(RecyclerView recyclerView, int dx, int dy) => _onScrolled(dx, dy);
-}
-
-// Impede que qualquer ViewGroup ancestral (ex.: ScrollView do Shell) intercepte
-// o toque antes do RecyclerView e inicie seu próprio fling na página.
-internal sealed class VrScrollBlocker : Java.Lang.Object, RecyclerView.IOnItemTouchListener
-{
-    public bool OnInterceptTouchEvent(RecyclerView rv, MotionEvent e)
-    {
-        // Bloqueia intercepção do pai em toda a sequência de toque.
-        rv.Parent?.RequestDisallowInterceptTouchEvent(true);
-        return false; // RecyclerView trata o evento normalmente.
-    }
-
-    public void OnTouchEvent(RecyclerView rv, MotionEvent e) { }
-    public void OnRequestDisallowInterceptTouchEvent(bool disallowIntercept) { }
 }
 
 // RecyclerView que força clipping ao canvas em DispatchDraw. Backup à prova de falhas:

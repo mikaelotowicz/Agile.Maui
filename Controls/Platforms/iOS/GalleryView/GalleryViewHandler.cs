@@ -125,6 +125,8 @@ internal sealed class ThumbGalleryView : UIView
     private UIViewContentMode        _contentMode = UIViewContentMode.ScaleAspectFill;
     private List<PageEntry>          _pages       = [];
     private bool                     _ignoreScroll;
+    private int                      _pendingPage = -1;
+    private int                      _currentPage;
 
     public Action<int>? OnPageChanged { get; set; }
     public Action<int>? OnPageTapped  { get; set; }
@@ -160,6 +162,8 @@ internal sealed class ThumbGalleryView : UIView
             p.ImageView.Dispose();
         }
         _pages.Clear();
+        _pendingPage = -1;
+        _currentPage = 0;
 
         foreach (var _ in images)
         {
@@ -195,18 +199,26 @@ internal sealed class ThumbGalleryView : UIView
         _scrollView.ContentSize = new CGSize(w * _pages.Count, h);
 
         for (int i = 0; i < _pages.Count; i++)
-        {
             _pages[i].ImageView.Frame = new CGRect(i * w, 0, w, h);
-            if (_pages[i].ImageView.Image is null && _pages[i].Cts is null)
-                LoadPage(i);
+
+        LoadWindow(_currentPage);
+
+        if (_pendingPage >= 0)
+        {
+            _ignoreScroll = true;
+            _scrollView.SetContentOffset(new CGPoint(_pendingPage * w, 0), false);
+            _ignoreScroll = false;
+            _pendingPage  = -1;
         }
     }
 
     public void SetPage(int index, bool animated)
     {
         if (index < 0 || index >= _pages.Count) return;
+        _currentPage = index;
         var w = Bounds.Width;
-        if (w <= 0) return;
+        if (w <= 0) { _pendingPage = index; return; }
+        _pendingPage  = -1;
         _ignoreScroll = true;
         _scrollView.SetContentOffset(new CGPoint(index * w, 0), animated);
         _ignoreScroll = false;
@@ -217,8 +229,21 @@ internal sealed class ThumbGalleryView : UIView
         if (_ignoreScroll) return;
         var w = _scrollView.Bounds.Width;
         if (w <= 0) return;
-        var index = (int)Math.Round(_scrollView.ContentOffset.X / w);
-        OnPageChanged?.Invoke(Math.Clamp(index, 0, Math.Max(0, _pages.Count - 1)));
+        var index = Math.Clamp((int)Math.Round(_scrollView.ContentOffset.X / w), 0, Math.Max(0, _pages.Count - 1));
+        _currentPage = index;
+        LoadWindow(index);
+        OnPageChanged?.Invoke(index);
+    }
+
+    private void LoadWindow(int center)
+    {
+        var lo = Math.Max(0, center - 1);
+        var hi = Math.Min(_pages.Count - 1, center + 1);
+        for (int i = lo; i <= hi; i++)
+        {
+            if (_pages[i].ImageView.Image is null && _pages[i].Cts is null)
+                LoadPage(i);
+        }
     }
 
     private void LoadPage(int index)
