@@ -11,7 +11,7 @@ using Microsoft.Maui.Platform;
 using MauiView = Microsoft.Maui.Controls.View;
 using AView    = Android.Views.View;
 
-namespace Controls.Platforms.Android;
+namespace Agile.Maui.Platforms.Android;
 
 public sealed class VirtualizedCollectionViewHandler
     : ViewHandler<VirtualizedCollectionView, VrContainerView>

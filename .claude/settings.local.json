@@ -24,7 +24,9 @@
       "Bash(dotnet build *)",
       "Bash(Get-ChildItem -Path \"D:\\\\BackupVersatil\\\\Lib Maui\\\\Agile.Maui\\\\Platforms\\\\Windows\" -Force)",
       "Bash(Select-Object -Property Name, FullName)",
-      "Bash(Format-List)"
+      "Bash(Format-List)",
+      "Bash(Get-ChildItem *)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

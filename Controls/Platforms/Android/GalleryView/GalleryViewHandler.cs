@@ -1,4 +1,5 @@
 // Platforms/Android/GalleryView/GalleryViewHandler.cs
+using System.Collections.Specialized;
 using Android.Graphics.Drawables;
 using Android.Views;
 using AndroidX.RecyclerView.Widget;
@@ -7,7 +8,7 @@ using Bumptech.Glide;
 using Bumptech.Glide.Request;
 using Microsoft.Maui.Handlers;
 
-namespace Controls.Platforms.Android;
+namespace Agile.Maui.Platforms.Android;
 
 public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContainerView>
 {
@@ -23,9 +24,10 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateDots(),
         };
 
-    private GalleryPageCallback? _pageCallback;
-    private bool _syncingPage;
-    private bool _disposed;
+    private GalleryPageCallback?         _pageCallback;
+    private INotifyCollectionChanged?    _imagesChangedSource;
+    private bool                         _syncingPage;
+    private bool                         _disposed;
 
     public GalleryViewHandler() : base(Mapper) { }
 
@@ -43,6 +45,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     protected override void DisconnectHandler(GalleryContainerView platformView)
     {
         _disposed = true;
+        UnsubscribeImages();
         if (_pageCallback is not null)
         {
             platformView.Pager.UnregisterOnPageChangeCallback(_pageCallback);
@@ -55,12 +58,15 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     private void ReloadAdapter()
     {
         if (_disposed || PlatformView is null) return;
+        UnsubscribeImages();
+
         var pager  = PlatformView.Pager;
         var images = VirtualView.Images;
 
         if (images is null || images.Count == 0)
         {
             pager.Adapter = null;
+            SubscribeImages(images);
             UpdateDots();
             return;
         }
@@ -83,7 +89,32 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             pager.Post(observer.Apply);
         }
 
+        SubscribeImages(images);
         UpdateDots();
+    }
+
+    private void SubscribeImages(IList<string>? images)
+    {
+        if (images is INotifyCollectionChanged ncc)
+        {
+            _imagesChangedSource = ncc;
+            ncc.CollectionChanged += OnImagesCollectionChanged;
+        }
+    }
+
+    private void UnsubscribeImages()
+    {
+        if (_imagesChangedSource is not null)
+        {
+            _imagesChangedSource.CollectionChanged -= OnImagesCollectionChanged;
+            _imagesChangedSource = null;
+        }
+    }
+
+    private void OnImagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (_disposed || PlatformView is null) return;
+        MainThread.BeginInvokeOnMainThread(ReloadAdapter);
     }
 
     private void SyncPage()
@@ -345,11 +376,14 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         }
     }
 
+    private const int ThumbMaxPx = 1080;
+
     private RequestOptions BuildOptions(global::Android.Content.Context context)
     {
         var o = _aspectMode == ZoomImageAspect.CenterCrop
             ? new RequestOptions().CenterCrop()
             : new RequestOptions().FitCenter();
+        o = o.Override(ThumbMaxPx, ThumbMaxPx);
         var ph = ResolveDrawable(context, _placeholder);
         if (ph != 0) o = o.Clone().Placeholder(ph).Error(ph);
         return o;

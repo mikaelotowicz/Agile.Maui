@@ -4,7 +4,7 @@ using Foundation;
 using Microsoft.Maui.Handlers;
 using UIKit;
 
-namespace Controls.Platforms.iOS;
+namespace Agile.Maui.Platforms.iOS;
 
 public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
 {
@@ -117,7 +117,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
 
             if (token.IsCancellationRequested) return;
 
-            if (response is not null && ((NSHttpUrlResponse)response).StatusCode != 200 || data is null)
+            if (response is null || ((NSHttpUrlResponse)response).StatusCode != 200 || data is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {

@@ -4,7 +4,7 @@ using CoreGraphics;
 using Foundation;
 using UIKit;
 
-namespace Controls.Platforms.iOS;
+namespace Agile.Maui.Platforms.iOS;
 
 public sealed class FullscreenGalleryViewController : UIViewController
 {
@@ -25,8 +25,9 @@ public sealed class FullscreenGalleryViewController : UIViewController
     private GalleryZoomScrollDelegate[]? _zoomDelegates;
     private CancellationTokenSource[]?  _pageCts;
 
-    private UIButton? _closeButton;
-    private UILabel?  _indicator;
+    private UIButton?                  _closeButton;
+    private UILabel?                   _indicator;
+    private GalleryPageScrollDelegate? _pageDelegate;
 
     private int _currentPage;
     private int _pageCount;
@@ -105,6 +106,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
             CancelAllLoads();
             _closeButton?.Dispose();
             _indicator?.Dispose();
+            _pageDelegate?.Dispose();
             if (_zoomScrollViews is not null)
                 foreach (var sv in _zoomScrollViews) sv.Dispose();
             if (_imageViews is not null)
@@ -129,8 +131,8 @@ public sealed class FullscreenGalleryViewController : UIViewController
             ShowsVerticalScrollIndicator   = false,
             ContentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentBehavior.Never,
         };
-        var pageDelegate = new GalleryPageScrollDelegate(this);
-        _pageScrollView.WeakDelegate = pageDelegate;
+        _pageDelegate                = new GalleryPageScrollDelegate(this);
+        _pageScrollView.WeakDelegate = _pageDelegate;
         View.AddSubview(_pageScrollView);
     }
 

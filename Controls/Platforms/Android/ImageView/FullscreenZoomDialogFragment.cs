@@ -16,7 +16,7 @@ using Color = Android.Graphics.Color;
 using AndroidView        = Android.Views.View;
 using AndroidProgressBar = Android.Widget.ProgressBar;
 
-namespace Controls.Platforms.Android;
+namespace Agile.Maui.Platforms.Android;
 
 public sealed class FullscreenZoomDialogFragment : DialogFragment
 {
@@ -37,6 +37,7 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
     private AndroidProgressBar?               _progressBar;
     private FrameLayout?                      _root;
     private ZoomTouchHandler?                 _zoomHandler;
+    private ZoomKeyCallback?                  _keyCallback;
 
     private float MediumScale => Math.Min(2.5f, _maxZoom * 0.55f);
 
@@ -136,7 +137,7 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
     public override void OnResume()
     {
         base.OnResume();
-        Dialog?.SetOnKeyListener(new ZoomKeyCallback(keyCode =>
+        _keyCallback ??= new ZoomKeyCallback(keyCode =>
         {
             if (keyCode != Keycode.Back) return false;
             if (_zoomHandler is not null && _zoomHandler.Scale > DismissScaleThreshold)
@@ -145,7 +146,8 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
                 return true;
             }
             return false;
-        }));
+        });
+        Dialog?.SetOnKeyListener(_keyCallback);
     }
 
     public override void OnDestroyView()

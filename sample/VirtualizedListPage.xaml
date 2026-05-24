@@ -3,7 +3,7 @@
     x:Class="sample.VirtualizedListPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:controls="clr-namespace:Controls;assembly=Controls"
+    xmlns:controls="clr-namespace:Agile.Maui;assembly=Agile.Maui"
     xmlns:local="clr-namespace:sample"
     Title="Lista Virtualizada"
     BackgroundColor="{AppThemeBinding Light={StaticResource White},

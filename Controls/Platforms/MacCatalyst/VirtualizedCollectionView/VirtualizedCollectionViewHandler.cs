@@ -16,7 +16,7 @@ using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 using UIKit;
 
-namespace Controls.Platforms.iOS;
+namespace Agile.Maui.Platforms.iOS;
 
 public sealed class VirtualizedCollectionViewHandler
     : ViewHandler<VirtualizedCollectionView, UICollectionView>

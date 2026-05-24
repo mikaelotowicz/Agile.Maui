@@ -1,6 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
+		<AssemblyName>Agile.Maui</AssemblyName>
+		<RootNamespace>Agile.Maui</RootNamespace>
+		<PackageId>Agile.Maui</PackageId>
+		<Version>1.0.0</Version>
+		<Authors>Micael Otowicz</Authors>
+		<Product>Agile.Maui</Product>
+		<Copyright>Copyright © 2025 Micael Otowicz</Copyright>
+		<RepositoryUrl>https://github.com/mikaelotowicz/agile.maui</RepositoryUrl>
+		<PackageProjectUrl>https://github.com/mikaelotowicz/agile.maui</PackageProjectUrl>
+		<Description>MAUI component library providing ImageView (zoom + fullscreen), GalleryView, and VirtualizedCollectionView for Android, iOS, macOS Catalyst, and Windows.</Description>
+		<PackageTags>maui;android;ios;maccatalyst;windows;image;gallery;zoom;virtualized;collection</PackageTags>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<TargetFrameworks>net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
@@ -23,10 +38,19 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+		<NeutralLanguage>pt-BR</NeutralLanguage>
+		<Title>Agile.Maui</Title>
+		<PackageIcon>agile.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="agile.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 
 

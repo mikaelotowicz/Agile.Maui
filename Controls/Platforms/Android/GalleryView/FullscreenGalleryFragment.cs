@@ -13,7 +13,7 @@ using Color = Android.Graphics.Color;
 using AndroidView        = Android.Views.View;
 using AndroidProgressBar = Android.Widget.ProgressBar;
 
-namespace Controls.Platforms.Android;
+namespace Agile.Maui.Platforms.Android;
 
 public sealed class FullscreenGalleryFragment : DialogFragment
 {
@@ -253,7 +253,7 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
 
         var container = new FrameLayout(context)
         {
-            LayoutParameters = new ViewGroup.LayoutParams(
+            LayoutParameters = new RecyclerView.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent,
                 ViewGroup.LayoutParams.MatchParent),
         };

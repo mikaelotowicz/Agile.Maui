@@ -1,4 +1,5 @@
 // Platforms/Windows/GalleryView/GalleryViewHandler.cs
+using System.Collections.Specialized;
 using Microsoft.Maui.Handlers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,7 +8,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using WinStretch = Microsoft.UI.Xaml.Media.Stretch;
 
-namespace Controls.Platforms.Windows;
+namespace Agile.Maui.Platforms.Windows;
 
 using NativeImage = Microsoft.UI.Xaml.Controls.Image;
 
@@ -25,8 +26,9 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
             [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateDots(),
         };
 
-    private bool _syncingPage;
-    private readonly List<Action> _imageHandlerCleanup = [];
+    private bool                      _syncingPage;
+    private INotifyCollectionChanged? _imagesChangedSource;
+    private readonly List<Action>     _imageHandlerCleanup = [];
 
     public GalleryViewHandler() : base(Mapper) { }
 
@@ -42,6 +44,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
     protected override void DisconnectHandler(GalleryWinContainer platformView)
     {
         platformView.Pager.SelectionChanged -= OnSelectionChanged;
+        UnsubscribeImages();
         ClearImages();
         base.DisconnectHandler(platformView);
     }
@@ -58,11 +61,13 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
         if (PlatformView is null) return;
 
         PlatformView.Pager.SelectionChanged -= OnSelectionChanged;
+        UnsubscribeImages();
         ClearImages();
 
         var images = VirtualView.Images;
         if (images is null || images.Count == 0)
         {
+            SubscribeImages(images);
             PlatformView.Pager.SelectionChanged += OnSelectionChanged;
             UpdateDots();
             return;
@@ -101,8 +106,33 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
         PlatformView.Pager.SelectedIndex = Math.Clamp(VirtualView.SelectedIndex, 0, images.Count - 1);
         _syncingPage = false;
 
+        SubscribeImages(images);
         PlatformView.Pager.SelectionChanged += OnSelectionChanged;
         UpdateDots();
+    }
+
+    private void SubscribeImages(IList<string>? images)
+    {
+        if (images is INotifyCollectionChanged ncc)
+        {
+            _imagesChangedSource = ncc;
+            ncc.CollectionChanged += OnImagesCollectionChanged;
+        }
+    }
+
+    private void UnsubscribeImages()
+    {
+        if (_imagesChangedSource is not null)
+        {
+            _imagesChangedSource.CollectionChanged -= OnImagesCollectionChanged;
+            _imagesChangedSource = null;
+        }
+    }
+
+    private void OnImagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (PlatformView is null) return;
+        LoadImages();
     }
 
     private void SyncPage()

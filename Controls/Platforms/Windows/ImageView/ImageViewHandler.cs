@@ -1,9 +1,9 @@
 // Platforms/Windows/ImageViewHandler.cs
 using Microsoft.Maui.Handlers;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Controls;
+using Agile.Maui;
 
-namespace Controls.Platforms.Windows;
+namespace Agile.Maui.Platforms.Windows;
 
 using NativeImage = Microsoft.UI.Xaml.Controls.Image;
 
@@ -44,7 +44,6 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
     private void LoadImage()
     {
         if (PlatformView is null) return;
-        ApplyStretch();
 
         if (string.IsNullOrWhiteSpace(VirtualView.Source))
         {

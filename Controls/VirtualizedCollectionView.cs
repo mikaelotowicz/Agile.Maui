@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Windows.Input;
 
-namespace Controls;
+namespace Agile.Maui;
 
 public enum VirtualizedOrientation { Vertical, Horizontal }
 

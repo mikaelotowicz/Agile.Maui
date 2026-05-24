@@ -4,9 +4,9 @@ using Bumptech.Glide;
 using Bumptech.Glide.Load.Engine;
 using Bumptech.Glide.Request;
 using Microsoft.Maui.Handlers;
-using Controls;
+using Agile.Maui;
 
-namespace Controls.Platforms.Android;
+namespace Agile.Maui.Platforms.Android;
 
 public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Widget.ImageView>
 {
@@ -22,6 +22,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
         };
 
     public ImageViewHandler() : base(Mapper) { }
+
+    private bool _disposed;
 
     protected override global::Android.Widget.ImageView CreatePlatformView()
     {
@@ -53,6 +55,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
 
     protected override void DisconnectHandler(global::Android.Widget.ImageView platformView)
     {
+        _disposed = true;
         platformView.Click -= OnImageClick;
 
         try
@@ -80,7 +83,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
 
     private void LoadImage()
     {
-        if (PlatformView is null) return;
+        if (_disposed || PlatformView is null) return;
 
         if (string.IsNullOrWhiteSpace(VirtualView.Source))
         {
@@ -93,8 +96,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
 
         var options  = BuildRequestOptions();
         var listener = new ImgGlideRequestListener(
-            onReady: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()),
-            onFail:  () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()));
+            onReady: () => { if (!_disposed) MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()); },
+            onFail:  () => { if (!_disposed) MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()); });
 
         if (VirtualView.IsUrl)
         {
@@ -154,7 +157,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
 
     private void OnImageClick(object? sender, EventArgs e)
     {
-        if (!VirtualView.EnableFullscreen) return;
+        if (_disposed || !VirtualView.EnableFullscreen) return;
         if (string.IsNullOrWhiteSpace(VirtualView.Source)) return;
 
         var activity = Context.GetActivity();

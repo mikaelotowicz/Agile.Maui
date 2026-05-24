@@ -1,11 +1,12 @@
 // Platforms/MacCatalyst/GalleryView/GalleryViewHandler.cs
 // MacCatalyst uses the same UIKit APIs as iOS — mirrors Platforms/iOS/GalleryView/GalleryViewHandler.cs
+using System.Collections.Specialized;
 using CoreGraphics;
 using Foundation;
 using Microsoft.Maui.Handlers;
 using UIKit;
 
-namespace Controls.Platforms.iOS;
+namespace Agile.Maui.Platforms.iOS;
 
 internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGalleryView>
 {
@@ -18,10 +19,13 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.MaxZoom)]       = (h, _) => { },
-        [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateIndicator(),
+            [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateIndicator(),
         };
 
     public GalleryViewHandler() : base(Mapper) { }
+
+    private bool                      _disposed;
+    private INotifyCollectionChanged? _imagesChangedSource;
 
     protected override ThumbGalleryView CreatePlatformView() => new();
 
@@ -37,6 +41,8 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
 
     protected override void DisconnectHandler(ThumbGalleryView platformView)
     {
+        _disposed = true;
+        UnsubscribeImages();
         platformView.OnPageChanged = null;
         platformView.OnPageTapped  = null;
         platformView.OnImageLoaded = null;
@@ -46,17 +52,44 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
 
     private void Reconfigure()
     {
-        if (PlatformView is null) return;
+        if (_disposed || PlatformView is null) return;
+        UnsubscribeImages();
+        var images = VirtualView.Images;
         var contentMode = VirtualView.AspectMode == ZoomImageAspect.CenterCrop
             ? UIViewContentMode.ScaleAspectFill
             : UIViewContentMode.ScaleAspectFit;
         PlatformView.Configure(
-            images:      VirtualView.Images?.ToArray() ?? [],
+            images:      images?.ToArray() ?? [],
             isUrl:       VirtualView.IsUrl,
             placeholder: VirtualView.Placeholder,
             contentMode: contentMode);
+        SubscribeImages(images);
         SyncPage();
         UpdateIndicator();
+    }
+
+    private void SubscribeImages(IList<string>? images)
+    {
+        if (images is INotifyCollectionChanged ncc)
+        {
+            _imagesChangedSource = ncc;
+            ncc.CollectionChanged += OnImagesCollectionChanged;
+        }
+    }
+
+    private void UnsubscribeImages()
+    {
+        if (_imagesChangedSource is not null)
+        {
+            _imagesChangedSource.CollectionChanged -= OnImagesCollectionChanged;
+            _imagesChangedSource = null;
+        }
+    }
+
+    private void OnImagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (_disposed || PlatformView is null) return;
+        MainThread.BeginInvokeOnMainThread(Reconfigure);
     }
 
     private void UpdateIndicator()
@@ -75,7 +108,7 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
 
     private void OnPageChanged(int index)
     {
-        if (VirtualView is null) return;
+        if (_disposed || VirtualView is null) return;
         VirtualView.SelectedIndex = index;
         VirtualView.RaiseSelectionChanged(index);
     }
@@ -98,7 +131,7 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
             startIndex:     idx,
             onIndexChanged: index =>
             {
-                if (VirtualView is null) return;
+                if (_disposed || VirtualView is null) return;
                 VirtualView.SelectedIndex = index;
                 VirtualView.RaiseSelectionChanged(index);
                 PlatformView?.SetPage(index, animated: false);
@@ -273,10 +306,20 @@ internal sealed class ThumbGalleryView : UIView
 
     private void LoadWindow(int center)
     {
-        var lo = Math.Max(0, center - 1);
-        var hi = Math.Min(_pages.Count - 1, center + 1);
-        for (int i = lo; i <= hi; i++)
+        for (int i = 0; i < _pages.Count; i++)
         {
+            if (i < center - 1 || i > center + 1)
+            {
+                var iv = _pages[i].ImageView;
+                if (iv.Image is not null || _pages[i].Cts is not null)
+                {
+                    _pages[i].Cts?.Cancel();
+                    _pages[i].Cts?.Dispose();
+                    _pages[i] = new PageEntry(iv, null);
+                    iv.Image   = null;
+                }
+                continue;
+            }
             if (_pages[i].ImageView.Image is null && _pages[i].Cts is null)
                 LoadPage(i);
         }

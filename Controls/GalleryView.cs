@@ -1,7 +1,7 @@
 // Controls/GalleryView.cs
 using System.Windows.Input;
 
-namespace Controls;
+namespace Agile.Maui;
 
 public class GalleryView : View
 {

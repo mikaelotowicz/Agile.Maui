@@ -2,26 +2,26 @@
 using Microsoft.Maui.Hosting;
 
 #if ANDROID
-using Controls.Platforms.Android;
+using Agile.Maui.Platforms.Android;
 #endif
 
 #if IOS || MACCATALYST
-using Controls.Platforms.iOS;
+using Agile.Maui.Platforms.iOS;
 #endif
 
 #if WINDOWS
-using Controls.Platforms.Windows;
+using Agile.Maui.Platforms.Windows;
 #endif
 
-namespace Controls;
+namespace Agile.Maui;
 
 public static class MauiAppBuilderExtensions
 {
     /// <summary>
-    /// Registra o ZoomImageView e seus handlers nativos.
-    /// Chamar em MauiProgram.cs: builder.UseZoomImageView()
+    /// Registra os controles Agile.Maui (ImageView, GalleryView, VirtualizedCollectionView) e seus handlers nativos.
+    /// Chamar em MauiProgram.cs: builder.UseAgileMaui()
     /// </summary>
-    public static MauiAppBuilder UseZoomImageView(this MauiAppBuilder builder)
+    public static MauiAppBuilder UseAgileMaui(this MauiAppBuilder builder)
     {
         builder.ConfigureMauiHandlers(handlers =>
         {

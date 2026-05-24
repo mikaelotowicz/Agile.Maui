@@ -1,7 +1,7 @@
 // Platforms/Android/ContextExtensions.cs
 using AndroidX.Fragment.App;
 
-namespace Controls.Platforms.Android;
+namespace Agile.Maui.Platforms.Android;
 
 internal static class ContextExtensions
 {

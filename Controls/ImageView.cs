@@ -1,7 +1,7 @@
 // Controls/ZoomImageView.cs
 using System.Windows.Input;
 
-namespace Controls;
+namespace Agile.Maui;
 
 /// <summary>
 /// Cross-platform image view com suporte a zoom fullscreen.

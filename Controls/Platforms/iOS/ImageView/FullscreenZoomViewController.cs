@@ -3,7 +3,7 @@ using CoreGraphics;
 using Foundation;
 using UIKit;
 
-namespace Controls.Platforms.iOS;
+namespace Agile.Maui.Platforms.iOS;
 
 public sealed class FullscreenZoomViewController
     : UIViewController, IUIScrollViewDelegate

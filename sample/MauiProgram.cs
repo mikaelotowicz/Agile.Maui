@@ -1,4 +1,4 @@
-using Controls;
+using Agile.Maui;
 using Microsoft.Extensions.Logging;
 
 namespace sample
@@ -10,7 +10,7 @@ namespace sample
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
-                .UseZoomImageView()
+                .UseAgileMaui()
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");

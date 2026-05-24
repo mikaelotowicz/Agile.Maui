@@ -1,6 +1,6 @@
 // sample/VirtualizedListPage.xaml.cs
 using System.Collections.ObjectModel;
-using Controls;
+using Agile.Maui;
 
 namespace sample;
 
