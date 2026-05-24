@@ -280,6 +280,7 @@ internal sealed class ZoomTouchHandler
     private readonly ScaleGestureDetector             _scaleDetector;
     private readonly GestureDetector                  _gestureDetector;
     private readonly Action                           _onDismiss;
+    private readonly Action<bool>?                    _onZoomStateChanged;
     private readonly Matrix                           _matrix = new();
     private readonly float                            _mediumScale;
     private readonly float                            _maxScale;
@@ -295,14 +296,16 @@ internal sealed class ZoomTouchHandler
         global::Android.Widget.ImageView imageView,
         float mediumScale,
         float maxScale,
-        Action onDismiss)
+        Action onDismiss,
+        Action<bool>? onZoomStateChanged = null)
     {
-        _imageView    = imageView;
-        _mediumScale  = mediumScale;
-        _maxScale     = maxScale;
-        _onDismiss    = onDismiss;
-        _minScale     = 1f;
-        _currentScale = 1f;
+        _imageView          = imageView;
+        _mediumScale        = mediumScale;
+        _maxScale           = maxScale;
+        _onDismiss          = onDismiss;
+        _onZoomStateChanged = onZoomStateChanged;
+        _minScale           = 1f;
+        _currentScale       = 1f;
 
         var ctx          = imageView.Context!;
         _scaleDetector   = new ScaleGestureDetector(ctx, this);
@@ -335,6 +338,7 @@ internal sealed class ZoomTouchHandler
             (viewH - imgH * scale) / 2f);
 
         _imageView.ImageMatrix = _matrix;
+        _onZoomStateChanged?.Invoke(false); // always at min scale after init
     }
 
     public void ResetZoom()
@@ -385,6 +389,7 @@ internal sealed class ZoomTouchHandler
         _matrix.PostScale(delta, delta, detector.FocusX, detector.FocusY);
         ConstrainTranslation();
         _imageView.ImageMatrix = _matrix;
+        _onZoomStateChanged?.Invoke(_currentScale > _minScale + 0.01f);
         return true;
     }
 
@@ -507,6 +512,7 @@ internal sealed class ZoomTouchHandler
             _currentScale = targetScale;
             _matrix.SetValues(endV);
             _imageView.ImageMatrix = _matrix;
+            _onZoomStateChanged?.Invoke(_currentScale > _minScale + 0.01f);
         };
 
         anim.Start();

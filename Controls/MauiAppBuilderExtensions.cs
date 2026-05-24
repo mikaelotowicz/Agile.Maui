@@ -27,12 +27,18 @@ public static class MauiAppBuilderExtensions
         {
 #if ANDROID
             handlers.AddHandler<ImageView, ImageViewHandler>();
+            handlers.AddHandler<GalleryView, GalleryViewHandler>();
+            handlers.AddHandler<VirtualizedCollectionView, VirtualizedCollectionViewHandler>();
 #endif
 #if IOS || MACCATALYST
             handlers.AddHandler<ImageView, ImageViewHandler>();
+            handlers.AddHandler<GalleryView, GalleryViewHandler>();
+            handlers.AddHandler<VirtualizedCollectionView, VirtualizedCollectionViewHandler>();
 #endif
 #if WINDOWS
             handlers.AddHandler<ImageView, ImageViewHandler>();
+            handlers.AddHandler<GalleryView, GalleryViewHandler>();
+            handlers.AddHandler<VirtualizedCollectionView, VirtualizedCollectionViewHandler>();
 #endif
         });
 

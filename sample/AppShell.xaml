@@ -11,4 +11,14 @@
         ContentTemplate="{DataTemplate local:MainPage}"
         Route="MainPage" />
 
+    <ShellContent
+        Title="Virtualized"
+        ContentTemplate="{DataTemplate local:VirtualizedListPage}"
+        Route="VirtualizedListPage" />
+
+    <ShellContent
+        Title="MAUI CollectionView"
+        ContentTemplate="{DataTemplate local:CollectionViewPage}"
+        Route="CollectionViewPage" />
+
 </Shell>
