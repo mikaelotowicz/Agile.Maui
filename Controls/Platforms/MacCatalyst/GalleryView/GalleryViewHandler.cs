@@ -18,8 +18,10 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
             [nameof(GalleryView.IsUrl)]         = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.Reconfigure(),
-            [nameof(GalleryView.MaxZoom)]       = (h, _) => { },
-            [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateIndicator(),
+            [nameof(GalleryView.MaxZoom)]                = (h, _) => { },
+            [nameof(GalleryView.ShowIndicator)]          = (h, _) => h.UpdateIndicator(),
+            [nameof(GalleryView.IndicatorColor)]         = (h, _) => h.UpdateIndicator(),
+            [nameof(GalleryView.IndicatorInactiveColor)] = (h, _) => h.UpdateIndicator(),
         };
 
     public GalleryViewHandler() : base(Mapper) { }
@@ -95,8 +97,13 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
     private void UpdateIndicator()
     {
         if (PlatformView is null) return;
-        PlatformView.IndicatorVisible = VirtualView.ShowIndicator;
+        PlatformView.IndicatorVisible       = VirtualView.ShowIndicator;
+        PlatformView.IndicatorActiveColor   = ToUIColor(VirtualView.IndicatorColor);
+        PlatformView.IndicatorInactiveColor = ToUIColor(VirtualView.IndicatorInactiveColor);
     }
+
+    private static UIColor ToUIColor(Microsoft.Maui.Graphics.Color c) =>
+        UIColor.FromRGBA((nfloat)c.Red, (nfloat)c.Green, (nfloat)c.Blue, (nfloat)c.Alpha);
 
     private void SyncPage()
     {
@@ -277,6 +284,16 @@ internal sealed class ThumbGalleryView : UIView
     public bool IndicatorVisible
     {
         set => _pageControl.Hidden = !value;
+    }
+
+    public UIColor IndicatorActiveColor
+    {
+        set => _pageControl.CurrentPageIndicatorTintColor = value;
+    }
+
+    public UIColor IndicatorInactiveColor
+    {
+        set => _pageControl.PageIndicatorTintColor = value;
     }
 
     public void SetPage(int index, bool animated)

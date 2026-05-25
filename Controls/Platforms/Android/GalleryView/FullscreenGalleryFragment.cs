@@ -143,6 +143,19 @@ public sealed class FullscreenGalleryFragment : DialogFragment
                 ViewGroup.LayoutParams.MatchParent);
             window.SetBackgroundDrawableResource(
                 global::Android.Resource.Color.Black);
+
+            // Garante que o dialog cobre 100% da tela, inclusive atrás da status bar.
+            // Sem LayoutNoLimits + LayoutInScreen o dialog herda o bounds do container MAUI
+            // e aparece deslocado/centralizado apenas na área do componente.
+            window.AddFlags(
+                WindowManagerFlags.LayoutInScreen |
+                WindowManagerFlags.LayoutNoLimits);
+
+            var attrs = window.Attributes!;
+            attrs.Gravity = GravityFlags.Fill;
+            attrs.X = 0;
+            attrs.Y = 0;
+            window.Attributes = attrs;
         }
     }
 
@@ -253,7 +266,7 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
 
         var container = new FrameLayout(context)
         {
-            LayoutParameters = new RecyclerView.LayoutParams(
+            LayoutParameters = new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent,
                 ViewGroup.LayoutParams.MatchParent),
         };
