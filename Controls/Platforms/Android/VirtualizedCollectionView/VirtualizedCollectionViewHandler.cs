@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Specialized;
 using Android.Content;
 using Android.Graphics;
+using Android.Util;
+using Bumptech.Glide;
 using Android.Views;
 using AndroidX.RecyclerView.Widget;
 using Microsoft.Maui.Handlers;
@@ -30,6 +32,8 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => { },
             [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => { },
             [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
+            [nameof(VirtualizedCollectionView.ItemSizeStrategy)]                       = (h, _) => h.ApplySizeStrategy(),
+            [nameof(VirtualizedCollectionView.ItemHeightRequest)]                      = (h, _) => h.ApplySizeStrategy(),
         };
 
     public static readonly CommandMapper<VirtualizedCollectionView, VirtualizedCollectionViewHandler> Commands =
@@ -42,6 +46,8 @@ public sealed class VirtualizedCollectionViewHandler
     private VrScrollListener?           _scrollListener;
     private VrSpacingDecoration?        _spacingDecoration;
     private INotifyCollectionChanged?   _collectionChangedSource;
+    private CachingLinearLayoutManager? _cachingLm;
+    private VrRecyclerListener?         _recyclerListener;
 
     public VirtualizedCollectionViewHandler() : base(Mapper, Commands) { }
 
@@ -60,6 +66,9 @@ public sealed class VirtualizedCollectionViewHandler
 
         _scrollListener = new VrScrollListener(OnScrolled);
         platformView.Rv.AddOnScrollListener(_scrollListener);
+
+        _recyclerListener = new VrRecyclerListener(Context!);
+        platformView.Rv.AddRecyclerListener(_recyclerListener);
     }
 
     protected override void DisconnectHandler(VrContainerView platformView)
@@ -72,6 +81,9 @@ public sealed class VirtualizedCollectionViewHandler
         UnsubscribeCollection();
         _adapter?.Dispose();
         _adapter = null;
+        _cachingLm = null;
+        _recyclerListener?.Dispose();
+        _recyclerListener = null;
         platformView.Rv.SetAdapter(null);
         platformView.Rv.SetLayoutManager(null);
         base.DisconnectHandler(platformView);
@@ -86,22 +98,52 @@ public sealed class VirtualizedCollectionViewHandler
         var columns    = VirtualView.ColumnCount;
 
         LinearLayoutManager llm;
-        if (columns == 1)
+        if (columns == 1 && !horizontal && VirtualView.ItemSizeStrategy == ItemSizeStrategy.Dynamic)
         {
-            var linear = new LinearLayoutManager(Context, direction, false);
-            linear.InitialPrefetchItemCount = 6;
-            llm = linear;
+            var clm = new CachingLinearLayoutManager(Context!, GetFallbackHeightPx())
+            {
+                InitialPrefetchItemCount = 4
+            };
+            _cachingLm = clm;
+            _adapter?.SetCachingLayoutManager(clm);
+            llm = clm;
         }
         else
         {
-            var grid = new GridLayoutManager(Context, columns, direction, false);
-            grid.InitialPrefetchItemCount = columns * 3;
-            llm = grid;
+            _cachingLm = null;
+            _adapter?.SetCachingLayoutManager(null);
+            if (columns == 1)
+            {
+                var linear = new LinearLayoutManager(Context, direction, false);
+                linear.InitialPrefetchItemCount = 6;
+                llm = linear;
+            }
+            else
+            {
+                var grid = new GridLayoutManager(Context, columns, direction, false);
+                grid.InitialPrefetchItemCount = columns * 3;
+                llm = grid;
+            }
         }
 
+        PlatformView.Rv.HasFixedSize = true;
         PlatformView.Rv.SetLayoutManager(llm);
         if (_adapter is not null)
             PlatformView.Rv.SetAdapter(_adapter);
+    }
+
+    private int GetFallbackHeightPx()
+    {
+        var dp = VirtualView.ItemHeightRequest > 0 ? VirtualView.ItemHeightRequest : 350.0;
+        return (int)(dp * Context!.Resources!.DisplayMetrics!.Density);
+    }
+
+    private void ApplySizeStrategy()
+    {
+        if (PlatformView is null) return;
+        ApplyLayoutManager();
+        if (VirtualView.ItemSizeStrategy == ItemSizeStrategy.Fixed)
+            _adapter?.SetFixedHeight(GetFallbackHeightPx());
     }
 
     private void ApplyItemSpacing()
@@ -176,15 +218,19 @@ public sealed class VirtualizedCollectionViewHandler
         }
 
         var items    = SnapshotItems(VirtualView.ItemsSource);
-        var heightPx = VirtualView.ItemHeight > 0
-            ? (int)Context.ToPixels(VirtualView.ItemHeight)
-            : RecyclerView.LayoutParams.WrapContent;
+        var heightPx = VirtualView.ItemSizeStrategy == ItemSizeStrategy.Fixed
+            ? GetFallbackHeightPx()
+            : VirtualView.ItemHeight > 0
+                ? (int)Context.ToPixels(VirtualView.ItemHeight)
+                : RecyclerView.LayoutParams.WrapContent;
 
         UnsubscribeCollection();
 
         if (_adapter is null)
         {
-            _adapter = new VrAdapter(items, template, MauiContext, heightPx);
+            _adapter = new VrAdapter(items, template, MauiContext, heightPx, Context!);
+            if (_cachingLm is not null)
+                _adapter.SetCachingLayoutManager(_cachingLm);
             PlatformView.Rv.SetAdapter(_adapter);
         }
         else
@@ -298,8 +344,8 @@ public sealed class VrContainerView : global::Android.Widget.FrameLayout
         Rv = new ClippedRecyclerView(context);
         Rv.HasFixedSize = false;
         Rv.SetItemAnimator(null);
-        Rv.SetItemViewCacheSize(20);
-        Rv.GetRecycledViewPool().SetMaxRecycledViews(0, 30);
+        Rv.SetItemViewCacheSize(5);
+        Rv.GetRecycledViewPool().SetMaxRecycledViews(0, 10);
         Rv.NestedScrollingEnabled = false;
         Rv.SetClipChildren(true);
         Rv.SetClipToPadding(true);
@@ -384,20 +430,27 @@ internal sealed class VrAdapter : RecyclerView.Adapter
 {
     private readonly DataTemplate        _template;
     private readonly IMauiContext        _mauiContext;
+    private readonly Context             _context;
     private          List<object>        _items;
     private          int                 _itemHeightPx;
     private readonly List<VrViewHolder>  _allHolders = [];
     private          CancellationTokenSource? _diffCts;
     private          bool                _disposed;
+    private          CachingLinearLayoutManager? _cachingLm;
 
     public int ItemHeightPx => _itemHeightPx;
 
-    public VrAdapter(List<object> items, DataTemplate template, IMauiContext mauiContext, int itemHeightPx)
+    public void SetFixedHeight(int px) => _itemHeightPx = px;
+
+    public void SetCachingLayoutManager(CachingLinearLayoutManager? clm) => _cachingLm = clm;
+
+    public VrAdapter(List<object> items, DataTemplate template, IMauiContext mauiContext, int itemHeightPx, Context context)
     {
         _items        = items;
         _template     = template;
         _mauiContext  = mauiContext;
         _itemHeightPx = itemHeightPx;
+        _context      = context;
     }
 
     public override int ItemCount => _items.Count;
@@ -408,10 +461,13 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         var mauiView = (MauiView)content;
 
         var nativeView = mauiView.ToPlatform(_mauiContext);
-        nativeView.LayoutParameters = _itemHeightPx > 0
-            ? new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MatchParent, _itemHeightPx)
-            : new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MatchParent,
-                                            ViewGroup.LayoutParams.WrapContent);
+        // Dynamic: WrapContent para o item se auto-medir (expanders, conteúdo variável)
+        // Fixed:   altura fixa fornecida por _itemHeightPx
+        int h = (_cachingLm == null && _itemHeightPx > 0)
+            ? _itemHeightPx
+            : ViewGroup.LayoutParams.WrapContent;
+        nativeView.LayoutParameters = new RecyclerView.LayoutParams(
+            ViewGroup.LayoutParams.MatchParent, h);
 
         var holder = new VrViewHolder(nativeView, mauiView);
         lock (_allHolders) _allHolders.Add(holder);
@@ -422,8 +478,34 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     {
         if (holder is VrViewHolder h && (uint)position < (uint)_items.Count)
         {
-            h.MauiView.BindingContext = null;
-            h.MauiView.BindingContext = _items[position];
+            if (_cachingLm != null)
+            {
+                // WrapContent: o item se dimensiona pelo conteúdo, expanders funcionam.
+                // O Post apenas alimenta o cache do CachingLM para estimativa de scroll.
+                h.ItemView.LayoutParameters = new RecyclerView.LayoutParams(
+                    ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+
+                h.MauiView.BindingContext = null;
+                h.MauiView.BindingContext = _items[position];
+
+                h.CancelHeavyBind();
+                h.BindCts = new CancellationTokenSource();
+                var token       = h.BindCts.Token;
+                var capturedLm  = _cachingLm;
+                var capturedPos = position;
+                h.ItemView.Post(() =>
+                {
+                    if (token.IsCancellationRequested) return;
+                    int real = h.ItemView.Height;
+                    if (real > 0)
+                        capturedLm.CacheItemHeight(capturedPos, real);
+                });
+            }
+            else
+            {
+                h.MauiView.BindingContext = null;
+                h.MauiView.BindingContext = _items[position];
+            }
         }
     }
 
@@ -482,6 +564,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     public async void UpdateItemsAsync(List<object> newItems, int newHeightPx)
     {
         _itemHeightPx = newHeightPx;
+        _cachingLm?.InvalidateCache();
 
         _diffCts?.Cancel();
         _diffCts?.Dispose();
@@ -516,7 +599,10 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             lock (_allHolders)
             {
                 foreach (var h in _allHolders)
+                {
+                    h.CancelHeavyBind();
                     h.MauiView.Handler?.DisconnectHandler();
+                }
                 _allHolders.Clear();
             }
         }
@@ -531,9 +617,17 @@ internal sealed class VrAdapter : RecyclerView.Adapter
 internal sealed class VrViewHolder : RecyclerView.ViewHolder
 {
     public MauiView MauiView { get; }
+    internal CancellationTokenSource? BindCts;
 
     public VrViewHolder(AView platformView, MauiView mauiView)
         : base(platformView) => MauiView = mauiView;
+
+    public void CancelHeavyBind()
+    {
+        BindCts?.Cancel();
+        BindCts?.Dispose();
+        BindCts = null;
+    }
 }
 
 internal sealed class VrDiffCallback : DiffUtil.Callback
@@ -581,4 +675,91 @@ internal sealed class ClippedRecyclerView : RecyclerView
         base.DispatchDraw(canvas);
         canvas.RestoreToCount(save);
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VrRecyclerListener — cancela Post pendente e libera Glide quando um holder
+// é devolvido ao pool (antes de ser revinculado a outro item).
+// ─────────────────────────────────────────────────────────────────────────────
+
+internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyclerListener
+{
+    private readonly Context _context;
+
+    public VrRecyclerListener(Context context) => _context = context;
+
+    public void OnViewRecycled(RecyclerView.ViewHolder holder)
+    {
+        if (holder is VrViewHolder vh)
+        {
+            vh.CancelHeavyBind();
+            Glide.With(_context).Clear(vh.ItemView);
+            vh.MauiView.BindingContext = null;
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CachingLinearLayoutManager — LinearLayoutManager com cache progressivo de alturas.
+// Elimina os saltos de deltaY causados por estimativas erradas do LLM padrão
+// quando itens têm alturas heterogêneas (ex: GalleryView com imagens de tamanhos variados).
+// ─────────────────────────────────────────────────────────────────────────────
+
+internal sealed class CachingLinearLayoutManager : LinearLayoutManager
+{
+    private readonly SparseIntArray _cache = new();
+    private int _avgHeight;
+    private int _measuredCount;
+    private readonly int _fallbackHeightPx;
+
+    public CachingLinearLayoutManager(Context ctx, int fallbackPx) : base(ctx)
+    {
+        _fallbackHeightPx = fallbackPx;
+    }
+
+    public void CacheItemHeight(int position, int heightPx)
+    {
+        bool isNew = _cache.Get(position, -1) == -1;
+        _cache.Put(position, heightPx);
+        if (isNew && heightPx > 0)
+        {
+            _measuredCount++;
+            _avgHeight += (heightPx - _avgHeight) / _measuredCount;
+        }
+    }
+
+    public int GetEstimatedHeight(int position)
+    {
+        int h = _cache.Get(position, -1);
+        if (h != -1) return h;
+        return _avgHeight > 0 ? _avgHeight : _fallbackHeightPx;
+    }
+
+    public void InvalidateCache()
+    {
+        _cache.Clear();
+        _avgHeight     = 0;
+        _measuredCount = 0;
+    }
+
+    public override int ComputeVerticalScrollOffset(RecyclerView.State state)
+    {
+        if (ChildCount == 0) return 0;
+        var first    = GetChildAt(0)!;
+        int firstPos = GetPosition(first);
+        int offset   = -GetDecoratedTop(first);
+        for (int i = 0; i < firstPos; i++)
+            offset += GetEstimatedHeight(i);
+        return Math.Max(0, offset);
+    }
+
+    public override int ComputeVerticalScrollRange(RecyclerView.State state)
+    {
+        int total = 0;
+        for (int i = 0; i < ItemCount; i++)
+            total += GetEstimatedHeight(i);
+        return total;
+    }
+
+    public override int ComputeVerticalScrollExtent(RecyclerView.State state) => Height;
 }

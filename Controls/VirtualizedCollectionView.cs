@@ -6,6 +6,8 @@ namespace Agile.Maui;
 
 public enum VirtualizedOrientation { Vertical, Horizontal }
 
+public enum ItemSizeStrategy { Fixed, Dynamic }
+
 // ContentView como base: no Windows, Content = CollectionView nativo do MAUI e nenhum
 // handler customizado é necessário. No Android/iOS os handlers criam RecyclerView /
 // UICollectionView nativos e ignoram o Content.
@@ -56,6 +58,14 @@ public class VirtualizedCollectionView : ContentView
         BindableProperty.Create(nameof(ItemSpacing), typeof(double),
             typeof(VirtualizedCollectionView), 0.0,
             validateValue: (_, v) => (double)v >= 0);
+
+    public static readonly BindableProperty ItemSizeStrategyProperty =
+        BindableProperty.Create(nameof(ItemSizeStrategy), typeof(ItemSizeStrategy),
+            typeof(VirtualizedCollectionView), ItemSizeStrategy.Fixed);
+
+    public static readonly BindableProperty ItemHeightRequestProperty =
+        BindableProperty.Create(nameof(ItemHeightRequest), typeof(double),
+            typeof(VirtualizedCollectionView), 350.0);
 
     public IEnumerable? ItemsSource
     {
@@ -122,6 +132,18 @@ public class VirtualizedCollectionView : ContentView
     {
         get => (double)GetValue(ItemSpacingProperty);
         set => SetValue(ItemSpacingProperty, value);
+    }
+
+    public ItemSizeStrategy ItemSizeStrategy
+    {
+        get => (ItemSizeStrategy)GetValue(ItemSizeStrategyProperty);
+        set => SetValue(ItemSizeStrategyProperty, value);
+    }
+
+    public double ItemHeightRequest
+    {
+        get => (double)GetValue(ItemHeightRequestProperty);
+        set => SetValue(ItemHeightRequestProperty, value);
     }
 
     public event EventHandler? RemainingItemsThresholdReached;
