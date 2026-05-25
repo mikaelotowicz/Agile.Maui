@@ -45,6 +45,10 @@ public class GalleryView : View
     public static readonly BindableProperty ImageFailedCommandProperty =
         BindableProperty.Create(nameof(ImageFailedCommand), typeof(ICommand), typeof(GalleryView), null);
 
+    public static readonly BindableProperty ThumbMaxPxProperty =
+        BindableProperty.Create(nameof(ThumbMaxPx), typeof(int), typeof(GalleryView), 720,
+            validateValue: (_, v) => (int)v >= 64);
+
     public IList<string>? Images { get => (IList<string>?)GetValue(ImagesProperty); set => SetValue(ImagesProperty, value); }
     public bool IsUrl { get => (bool)GetValue(IsUrlProperty); set => SetValue(IsUrlProperty, value); }
     public string? Placeholder { get => (string?)GetValue(PlaceholderProperty); set => SetValue(PlaceholderProperty, value); }
@@ -57,6 +61,7 @@ public class GalleryView : View
     public ICommand? SelectionChangedCommand { get => (ICommand?)GetValue(SelectionChangedCommandProperty); set => SetValue(SelectionChangedCommandProperty, value); }
     public ICommand? ImageLoadedCommand { get => (ICommand?)GetValue(ImageLoadedCommandProperty); set => SetValue(ImageLoadedCommandProperty, value); }
     public ICommand? ImageFailedCommand { get => (ICommand?)GetValue(ImageFailedCommandProperty); set => SetValue(ImageFailedCommandProperty, value); }
+    public int ThumbMaxPx { get => (int)GetValue(ThumbMaxPxProperty); set => SetValue(ThumbMaxPxProperty, value); }
 
     public event EventHandler<GalleryIndexChangedEventArgs>? SelectionChanged;
     public event EventHandler? ImageLoaded;

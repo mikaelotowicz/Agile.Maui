@@ -24,6 +24,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             [nameof(GalleryView.ShowIndicator)]          = (h, _) => h.UpdateDots(),
             [nameof(GalleryView.IndicatorColor)]         = (h, _) => h.UpdateDots(),
             [nameof(GalleryView.IndicatorInactiveColor)] = (h, _) => h.UpdateDots(),
+            [nameof(GalleryView.ThumbMaxPx)]             = (h, _) => h.ReloadAdapter(),
         };
 
     private GalleryPageCallback?         _pageCallback;
@@ -95,6 +96,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             isUrl:         VirtualView.IsUrl,
             placeholder:   VirtualView.Placeholder,
             aspectMode:    VirtualView.AspectMode,
+            thumbMaxPx:    VirtualView.ThumbMaxPx,
             onPageClick:   OpenFullscreen,
             onImageLoaded: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()),
             onImageFailed: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()));
@@ -330,6 +332,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
     private readonly bool            _isUrl;
     private readonly string?         _placeholder;
     private readonly ZoomImageAspect _aspectMode;
+    private readonly int             _thumbMaxPx;
     private readonly Action<int>     _onPageClick;
     private readonly Action          _onImageLoaded;
     private readonly Action          _onImageFailed;
@@ -339,6 +342,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         bool            isUrl,
         string?         placeholder,
         ZoomImageAspect aspectMode,
+        int             thumbMaxPx,
         Action<int>     onPageClick,
         Action          onImageLoaded,
         Action          onImageFailed)
@@ -347,6 +351,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         _isUrl         = isUrl;
         _placeholder   = placeholder;
         _aspectMode    = aspectMode;
+        _thumbMaxPx    = thumbMaxPx > 0 ? thumbMaxPx : 720;
         _onPageClick   = onPageClick;
         _onImageLoaded = onImageLoaded;
         _onImageFailed = onImageFailed;
@@ -431,14 +436,12 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         }
     }
 
-    private const int ThumbMaxPx = 1080;
-
     private RequestOptions BuildOptions(global::Android.Content.Context context)
     {
         var o = _aspectMode == ZoomImageAspect.CenterCrop
             ? new RequestOptions().CenterCrop()
             : new RequestOptions().FitCenter();
-        o = o.Override(ThumbMaxPx, ThumbMaxPx);
+        o = o.Override(_thumbMaxPx, _thumbMaxPx);
         var ph = ResolveDrawable(context, _placeholder);
         if (ph != 0) o = o.Clone().Placeholder(ph).Error(ph);
         return o;

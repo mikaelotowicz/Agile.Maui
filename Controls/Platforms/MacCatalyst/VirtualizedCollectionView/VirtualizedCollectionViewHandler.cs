@@ -332,9 +332,21 @@ internal sealed class VrMauiCell : UICollectionViewCell
 {
     private View?   _mauiView;
     private UIView? _nativeView;
+    private CancellationTokenSource? _cts;
 
     [Export("initWithFrame:")]
     public VrMauiCell(CGRect frame) : base(frame) { }
+
+    // Cancela qualquer operação async anterior e devolve um token para a nova.
+    public CancellationToken LoadToken
+    {
+        get
+        {
+            _cts?.Cancel();
+            _cts = new CancellationTokenSource();
+            return _cts.Token;
+        }
+    }
 
     public void Bind(object item, DataTemplate template, IMauiContext context)
     {
@@ -359,6 +371,8 @@ internal sealed class VrMauiCell : UICollectionViewCell
     public override void PrepareForReuse()
     {
         base.PrepareForReuse();
+        _cts?.Cancel();
+        _cts = null;
         if (_mauiView is not null)
             _mauiView.BindingContext = null;
     }
@@ -381,7 +395,12 @@ internal sealed class VrMauiCell : UICollectionViewCell
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
             _mauiView?.Handler?.DisconnectHandler();
+        }
         base.Dispose(disposing);
     }
 }
