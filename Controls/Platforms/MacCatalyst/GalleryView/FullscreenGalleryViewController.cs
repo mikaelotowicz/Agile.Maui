@@ -60,13 +60,10 @@ public sealed class FullscreenGalleryViewController : UIViewController
         SetupCloseButton();
         SetupIndicator();
 
-        // Set initial page offset without animation
+        // Force layout so frames/contentSize are set before manipulating offsets or loading images
+        View.LayoutIfNeeded();
         if (_startIndex > 0)
-        {
-            View.LayoutIfNeeded();
-            _pageScrollView!.ContentOffset = new CGPoint(
-                _startIndex * View.Bounds.Width, 0);
-        }
+            _pageScrollView!.ContentOffset = new CGPoint(_startIndex * View.Bounds.Width, 0);
 
         LoadVisiblePages(_startIndex);
         UpdateIndicator(_startIndex);
@@ -86,6 +83,9 @@ public sealed class FullscreenGalleryViewController : UIViewController
             _spinners![i].Center       = new CGPoint(bounds.Width / 2, bounds.Height / 2);
             UpdateZoomScaleForPage(i);
         }
+
+        // Restore correct page after bounds change (e.g. rotation)
+        _pageScrollView!.ContentOffset = new CGPoint(_currentPage * bounds.Width, 0);
 
         PositionOverlays();
     }
@@ -177,7 +177,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
             };
 
             _pageScrollView!.AddSubview(zoomSv);
-            _pageScrollView.AddSubview(spinner);
+            zoomSv.AddSubview(spinner);
 
             _zoomScrollViews[i] = zoomSv;
             _imageViews[i]      = imageView;
