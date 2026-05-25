@@ -59,13 +59,10 @@ public sealed class FullscreenGalleryViewController : UIViewController
         SetupCloseButton();
         SetupIndicator();
 
-        // Set initial page offset without animation
+        // Force layout so frames/contentSize are set before manipulating offsets or loading images
+        View.LayoutIfNeeded();
         if (_startIndex > 0)
-        {
-            View.LayoutIfNeeded();
-            _pageScrollView!.ContentOffset = new CGPoint(
-                _startIndex * View.Bounds.Width, 0);
-        }
+            _pageScrollView!.ContentOffset = new CGPoint(_startIndex * View.Bounds.Width, 0);
 
         LoadVisiblePages(_startIndex);
         UpdateIndicator(_startIndex);
@@ -85,6 +82,9 @@ public sealed class FullscreenGalleryViewController : UIViewController
             _spinners![i].Center       = new CGPoint(bounds.Width / 2, bounds.Height / 2);
             UpdateZoomScaleForPage(i);
         }
+
+        // Restore correct page after bounds change (e.g. rotation)
+        _pageScrollView!.ContentOffset = new CGPoint(_currentPage * bounds.Width, 0);
 
         PositionOverlays();
     }
@@ -175,16 +175,19 @@ public sealed class FullscreenGalleryViewController : UIViewController
                 HidesWhenStopped = true,
             };
 
-            // Wrap in a container view added to _pageScrollView
             _pageScrollView!.AddSubview(zoomSv);
-            _pageScrollView.AddSubview(spinner);
+            zoomSv.AddSubview(spinner);
 
             _zoomScrollViews[i] = zoomSv;
             _imageViews[i]      = imageView;
             _spinners[i]        = spinner;
 
             // Double-tap gesture on zoom scroll view
-            var doubleTap = new UITapGestureRecognizer(r => OnDoubleTap(r, i))
+            // Capture loop index into a local to avoid closure capturing the
+            // loop variable which would result in all handlers using the
+            // final value (and causing IndexOutOfRangeException).
+            int pageIndex = i;
+            var doubleTap = new UITapGestureRecognizer(r => OnDoubleTap(r, pageIndex))
                 { NumberOfTapsRequired = 2 };
             zoomSv.AddGestureRecognizer(doubleTap);
         }
@@ -352,28 +355,39 @@ public sealed class FullscreenGalleryViewController : UIViewController
         var bounds   = View!.Bounds;
         var scaleW   = bounds.Width  / imgSize.Width;
         var scaleH   = bounds.Height / imgSize.Height;
-        var minScale = (nfloat)Math.Min((double)scaleW, (double)scaleH);
+        var fitScale = (nfloat)Math.Min((double)scaleW, (double)scaleH);
 
-        sv.MinimumZoomScale = minScale;
-        sv.MaximumZoomScale = (nfloat)_maxZoom;
-        sv.ZoomScale        = minScale;
+        // Se a imagem for maior que a view, reduzimos para caber (fitScale < 1).
+        // Se for menor, exibimos no tamanho original (sem upscale).
+        nfloat initialScaleFactor = fitScale < 1 ? fitScale : (nfloat)1.0;
 
-        iv.Frame            = new CGRect(CGPoint.Empty, imgSize);
-        sv.ContentSize      = imgSize;
+        // Define o tamanho inicial visível da imagem (em points)
+        var displayedSize = new CGSize(imgSize.Width * initialScaleFactor, imgSize.Height * initialScaleFactor);
+
+        // Ajusta frame e contentSize para o tamanho visível
+        iv.Frame = new CGRect(CGPoint.Empty, displayedSize);
+        sv.ContentSize = displayedSize;
+
+        // Configura escalas: min = 1 (estado atual), max permite alcançar o tamanho
+        // original (1/initialScaleFactor) limitado por _maxZoom.
+        sv.MinimumZoomScale = (nfloat)1.0;
+        nfloat maxScale = (nfloat)Math.Max(1.0, (double)_maxZoom / (double)initialScaleFactor);
+        sv.MaximumZoomScale = maxScale;
+        sv.ZoomScale = (nfloat)1.0;
     }
 
     private void CenterImageForPage(int index)
     {
         var iv = _imageViews![index];
         var sv = _zoomScrollViews![index];
+        var offsetX = (nfloat)Math.Max((sv.Bounds.Width - sv.ContentSize.Width) / 2, 0);
+        var offsetY = (nfloat)Math.Max((sv.Bounds.Height - sv.ContentSize.Height) / 2, 0);
 
-        var offsetX = (nfloat)Math.Max(
-            (sv.Bounds.Width  - sv.ContentSize.Width)  / 2, 0);
-        var offsetY = (nfloat)Math.Max(
-            (sv.Bounds.Height - sv.ContentSize.Height) / 2, 0);
-
+        // Quando a imagem é maior que a view, contentSize será maior; centralizamos
+        // com base no contentSize. Quando a imagem é menor, usamos offset para
+        // garantir que fique centralizada dentro da scroll view.
         iv.Center = new CGPoint(
-            sv.ContentSize.Width  / 2 + offsetX,
+            sv.ContentSize.Width / 2 + offsetX,
             sv.ContentSize.Height / 2 + offsetY);
     }
 

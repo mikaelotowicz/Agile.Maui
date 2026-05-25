@@ -11,7 +11,6 @@ using AndroidX.RecyclerView.Widget;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 
-using Microsoft.Maui.Controls;
 using MauiView = Microsoft.Maui.Controls.View;
 using AView    = Android.Views.View;
 

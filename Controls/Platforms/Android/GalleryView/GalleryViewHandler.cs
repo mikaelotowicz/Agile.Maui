@@ -261,8 +261,25 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
 
     protected override void OnLayout(bool changed, int l, int t, int r, int b)
     {
-        base.OnLayout(changed, l, t, r, b);
-        if (changed && Width > 0 && Height > 0)
+        int w = r - l;
+        int h = b - t;
+
+        // FrameLayout.onLayout positions children using getMeasuredWidth/Height, not layout bounds.
+        // MAUI measure/layout passes can give different sizes — force Pager to fill actual bounds.
+        Pager.Layout(0, 0, w, h);
+
+        if (Dots.Visibility != ViewStates.Gone)
+        {
+            int dw       = Dots.MeasuredWidth;
+            int dh       = Dots.MeasuredHeight;
+            float density = Context?.Resources?.DisplayMetrics?.Density ?? 1f;
+            int margin   = (int)(10f * density + 0.5f);
+            int dotsLeft = (w - dw) / 2;
+            int dotsTop  = h - dh - margin;
+            Dots.Layout(dotsLeft, dotsTop, dotsLeft + dw, dotsTop + dh);
+        }
+
+        if (changed && w > 0 && h > 0)
             OnLayoutChanged?.Invoke();
     }
 
@@ -387,6 +404,9 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         imageView.SetScaleType(isFit
             ? global::Android.Widget.ImageView.ScaleType.FitCenter
             : global::Android.Widget.ImageView.ScaleType.CenterCrop);
+    // Garantir que não haja padding residual e que a ImageView não ajuste bounds
+    imageView.SetPadding(0, 0, 0, 0);
+    imageView.SetAdjustViewBounds(false);
 
         frame.AddView(imageView);
 
