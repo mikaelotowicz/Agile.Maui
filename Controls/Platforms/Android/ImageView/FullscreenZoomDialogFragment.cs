@@ -162,8 +162,10 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
                     $"[FullscreenZoom] Glide.Clear error: {ex.Message}");
             }
             _imageView.SetImageDrawable(null);
+            _imageView = null;
         }
 
+        _progressBar = null;
         _zoomHandler = null;
         base.OnDestroyView();
     }

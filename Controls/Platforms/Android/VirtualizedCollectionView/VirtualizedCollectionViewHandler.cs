@@ -1,6 +1,7 @@
 // Platforms/Android/VirtualizedCollectionView/VirtualizedCollectionViewHandler.cs
 using System.Collections;
 using System.Collections.Specialized;
+using Android.App;
 using Android.Content;
 using Android.Graphics;
 using Android.Util;
@@ -10,6 +11,7 @@ using AndroidX.RecyclerView.Widget;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 
+using Microsoft.Maui.Controls;
 using MauiView = Microsoft.Maui.Controls.View;
 using AView    = Android.Views.View;
 
@@ -24,7 +26,7 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ReloadItems(),
             [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ReloadItems(),
             [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.ReloadItems(),
-            [nameof(VirtualizedCollectionView.ColumnCount)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); },
+            [nameof(VirtualizedCollectionView.ColumnCount)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyCacheSizes(); },
             [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); },
             [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.ApplyItemSpacing(),
             [nameof(VirtualizedCollectionView.EmptyView)]                              = (h, _) => h.UpdateEmptyView(),
@@ -56,6 +58,12 @@ public sealed class VirtualizedCollectionViewHandler
     protected override void ConnectHandler(VrContainerView platformView)
     {
         base.ConnectHandler(platformView);
+        // MapWidth/MapHeight do ViewMapper base definem WrapContent quando Width/Height = -1.
+        // Forçar MatchParent aqui garante que o container sempre preenche o espaço alocado
+        // pelo MAUI e que FrameLayout.onMeasure passe EXACTLY para os filhos.
+        platformView.LayoutParameters = new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MatchParent,
+            ViewGroup.LayoutParams.MatchParent);
         platformView.Rv.NestedScrollingEnabled = false;
         platformView.Rv.SetClipChildren(true);
         platformView.Rv.SetClipToPadding(true);
@@ -63,6 +71,8 @@ public sealed class VirtualizedCollectionViewHandler
         ApplyItemSpacing();
         UpdateEmptyView();
         ReloadItems();
+
+        ApplyCacheSizes();
 
         _scrollListener = new VrScrollListener(OnScrolled);
         platformView.Rv.AddOnScrollListener(_scrollListener);
@@ -144,6 +154,38 @@ public sealed class VirtualizedCollectionViewHandler
         ApplyLayoutManager();
         if (VirtualView.ItemSizeStrategy == ItemSizeStrategy.Fixed)
             _adapter?.SetFixedHeight(GetFallbackHeightPx());
+    }
+
+    internal void ApplyCacheSizes()
+    {
+        if (PlatformView is null) return;
+        var (viewCache, poolMax) = GetOptimalCacheSizes(Context!, VirtualView.ColumnCount);
+        PlatformView.Rv.SetItemViewCacheSize(viewCache);
+        PlatformView.Rv.GetRecycledViewPool().SetMaxRecycledViews(0, poolMax);
+    }
+
+    private static (int viewCache, int poolMax) GetOptimalCacheSizes(Context context, int columnCount)
+    {
+        var am   = (ActivityManager?)context.GetSystemService(Context.ActivityService);
+        var info = new ActivityManager.MemoryInfo();
+        am?.GetMemoryInfo(info);
+        long totalMb = info.TotalMem / (1024L * 1024L);
+
+        int viewCache, poolMax;
+        if      (totalMb >= 6144) { viewCache = 8;  poolMax = 20; }
+        else if (totalMb >= 3072) { viewCache = 5;  poolMax = 12; }
+        else if (totalMb >= 1536) { viewCache = 3;  poolMax = 8;  }
+        else                      { viewCache = 2;  poolMax = 5;  }
+
+        // Grid precisa de mais views simultâneas — escala proporcional ao número de colunas.
+        if (columnCount > 1)
+        {
+            viewCache = viewCache * columnCount / 2;
+            poolMax   = poolMax   * columnCount / 2;
+        }
+
+        Log.Debug("VrHandler", $"RAM={totalMb}MB cols={columnCount} → cache={viewCache} pool={poolMax}");
+        return (viewCache, poolMax);
     }
 
     private void ApplyItemSpacing()
@@ -341,11 +383,15 @@ public sealed class VrContainerView : global::Android.Widget.FrameLayout
 
     public VrContainerView(Context context) : base(context)
     {
+        // MatchParent defensivo: garante largura/altura corretas antes de qualquer
+        // medição que ocorra antes de ConnectHandler setar os LayoutParams definitivos.
+        LayoutParameters = new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MatchParent,
+            ViewGroup.LayoutParams.MatchParent);
+
         Rv = new ClippedRecyclerView(context);
         Rv.HasFixedSize = false;
         Rv.SetItemAnimator(null);
-        Rv.SetItemViewCacheSize(5);
-        Rv.GetRecycledViewPool().SetMaxRecycledViews(0, 10);
         Rv.NestedScrollingEnabled = false;
         Rv.SetClipChildren(true);
         Rv.SetClipToPadding(true);
@@ -353,6 +399,20 @@ public sealed class VrContainerView : global::Android.Widget.FrameLayout
         AddView(Rv, new LayoutParams(
             ViewGroup.LayoutParams.MatchParent,
             ViewGroup.LayoutParams.MatchParent));
+    }
+
+    protected override void OnLayout(bool changed, int left, int top, int right, int bottom)
+    {
+        // FrameLayout.onLayout posicionaria filhos usando getMeasuredWidth(), que pode ser
+        // menor que (right-left) quando MAUI mede antes de calcular o layout final —
+        // VrHandlerChain confirmou: VrContainerView width=1035, measured=850.
+        // Usar os bounds reais do layout para que RecyclerView e EmptyView sempre
+        // preencham a largura/altura que o MAUI efetivamente alocou.
+        int w = right - left;
+        int h = bottom - top;
+        Rv.Layout(0, 0, w, h);
+        if (_emptyView?.Visibility != ViewStates.Gone)
+            _emptyView?.Layout(0, 0, w, h);
     }
 
     public void SetEmptyView(AView? view)
@@ -460,9 +520,9 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         var content  = _template.CreateContent();
         var mauiView = (MauiView)content;
 
+        mauiView.HorizontalOptions = LayoutOptions.Fill;
+
         var nativeView = mauiView.ToPlatform(_mauiContext);
-        // Dynamic: WrapContent para o item se auto-medir (expanders, conteúdo variável)
-        // Fixed:   altura fixa fornecida por _itemHeightPx
         int h = (_cachingLm == null && _itemHeightPx > 0)
             ? _itemHeightPx
             : ViewGroup.LayoutParams.WrapContent;
