@@ -20,14 +20,17 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             [nameof(GalleryView.IsUrl)]         = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.ReloadAdapter(),
-            [nameof(GalleryView.MaxZoom)]       = (h, _) => { },
-            [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateDots(),
+            [nameof(GalleryView.MaxZoom)]                = (h, _) => { },
+            [nameof(GalleryView.ShowIndicator)]          = (h, _) => h.UpdateDots(),
+            [nameof(GalleryView.IndicatorColor)]         = (h, _) => h.UpdateDots(),
+            [nameof(GalleryView.IndicatorInactiveColor)] = (h, _) => h.UpdateDots(),
         };
 
     private GalleryPageCallback?         _pageCallback;
     private INotifyCollectionChanged?    _imagesChangedSource;
     private bool                         _syncingPage;
     private bool                         _disposed;
+    private bool                         _pendingReload;
 
     public GalleryViewHandler() : base(Mapper) { }
 
@@ -39,6 +42,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
         base.ConnectHandler(platformView);
         _pageCallback = new GalleryPageCallback(OnPageChanged);
         platformView.Pager.RegisterOnPageChangeCallback(_pageCallback);
+        platformView.OnLayoutChanged = UpdateDots;
         ReloadAdapter();
     }
 
@@ -46,6 +50,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     {
         _disposed = true;
         UnsubscribeImages();
+        platformView.OnLayoutChanged = null;
         if (_pageCallback is not null)
         {
             platformView.Pager.UnregisterOnPageChangeCallback(_pageCallback);
@@ -58,6 +63,18 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     private void ReloadAdapter()
     {
         if (_disposed || PlatformView is null) return;
+        if (_pendingReload) return;
+        _pendingReload = true;
+        PlatformView.Post(() =>
+        {
+            _pendingReload = false;
+            if (_disposed || PlatformView is null) return;
+            DoReloadAdapter();
+        });
+    }
+
+    private void DoReloadAdapter()
+    {
         UnsubscribeImages();
 
         var pager  = PlatformView.Pager;
@@ -139,10 +156,19 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     private void UpdateDots()
     {
         if (_disposed || PlatformView is null) return;
-        var count = VirtualView.Images?.Count ?? 0;
-        var idx   = Math.Clamp(VirtualView.SelectedIndex, 0, Math.Max(0, count - 1));
-        PlatformView.Dots.Update(VirtualView.ShowIndicator, count, idx);
+        var count    = VirtualView.Images?.Count ?? 0;
+        var idx      = Math.Clamp(VirtualView.SelectedIndex, 0, Math.Max(0, count - 1));
+        var active   = ToAndroidArgb(VirtualView.IndicatorColor);
+        var inactive = ToAndroidArgb(VirtualView.IndicatorInactiveColor);
+        PlatformView.Dots.Update(VirtualView.ShowIndicator, count, idx, active, inactive);
     }
+
+    private static int ToAndroidArgb(Microsoft.Maui.Graphics.Color c) =>
+        global::Android.Graphics.Color.Argb(
+            (int)(c.Alpha * 255),
+            (int)(c.Red   * 255),
+            (int)(c.Green * 255),
+            (int)(c.Blue  * 255));
 
     private void OpenFullscreen(int startIndex)
     {
@@ -229,6 +255,21 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
         return base.DispatchTouchEvent(ev);
     }
 
+    internal Action? OnLayoutChanged { get; set; }
+
+    protected override void OnLayout(bool changed, int l, int t, int r, int b)
+    {
+        base.OnLayout(changed, l, t, r, b);
+        if (changed && Width > 0 && Height > 0)
+            OnLayoutChanged?.Invoke();
+    }
+
+    protected override void OnAttachedToWindow()
+    {
+        base.OnAttachedToWindow();
+        Pager.Adapter?.NotifyDataSetChanged();
+    }
+
     private static int DpToPx(global::Android.Content.Context ctx, int dp) =>
         (int)(dp * ctx.Resources!.DisplayMetrics!.Density + 0.5f);
 }
@@ -249,7 +290,7 @@ internal sealed class DotsView : global::Android.Widget.LinearLayout
         Visibility = ViewStates.Gone;
     }
 
-    public void Update(bool show, int count, int selected)
+    public void Update(bool show, int count, int selected, int activeArgb, int inactiveArgb)
     {
         RemoveAllViews();
         if (!show || count <= 1) { Visibility = ViewStates.Gone; return; }
@@ -264,19 +305,17 @@ internal sealed class DotsView : global::Android.Widget.LinearLayout
             var lp  = new global::Android.Widget.LinearLayout.LayoutParams(dotPx, dotPx);
             lp.SetMargins(marginPx, 0, marginPx, 0);
             dot.LayoutParameters = lp;
-            dot.Background = MakeDot(i == selected);
+            dot.Background = MakeDot(i == selected, activeArgb, inactiveArgb);
             AddView(dot);
         }
         Visibility = ViewStates.Visible;
     }
 
-    private static Drawable MakeDot(bool active)
+    private static Drawable MakeDot(bool active, int activeArgb, int inactiveArgb)
     {
         var d = new GradientDrawable();
         d.SetShape(ShapeType.Oval);
-        d.SetColor(active
-            ? unchecked((int)0xFFFFFFFF)
-            : unchecked((int)0x80FFFFFF));
+        d.SetColor(active ? activeArgb : inactiveArgb);
         return d;
     }
 }
@@ -317,20 +356,36 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
 
     public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType)
     {
-        var context   = parent.Context!;
+        var context = parent.Context!;
+        var isFit   = _aspectMode != ZoomImageAspect.CenterCrop;
+
+        // FrameLayout raiz necessário para ViewPager2 resolver MATCH_PARENT corretamente.
+        var frame = new global::Android.Widget.FrameLayout(context)
+        {
+            LayoutParameters = new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent,
+                ViewGroup.LayoutParams.MatchParent),
+        };
+
+        // ImageView MATCH_PARENT em ambos os modos.
+        // FitCenter centraliza a imagem dentro da área disponível (letterbox).
+        // CenterCrop preenche a área cortando as bordas.
         var imageView = new global::Android.Widget.ImageView(context)
         {
-            LayoutParameters = new RecyclerView.LayoutParams(
+            LayoutParameters = new global::Android.Widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent,
                 ViewGroup.LayoutParams.MatchParent),
             Clickable = true,
             Focusable = true,
         };
-        imageView.SetScaleType(_aspectMode == ZoomImageAspect.CenterCrop
-            ? global::Android.Widget.ImageView.ScaleType.CenterCrop
-            : global::Android.Widget.ImageView.ScaleType.FitCenter);
 
-        var holder = new ThumbPageViewHolder(imageView);
+        imageView.SetScaleType(isFit
+            ? global::Android.Widget.ImageView.ScaleType.FitCenter
+            : global::Android.Widget.ImageView.ScaleType.CenterCrop);
+
+        frame.AddView(imageView);
+
+        var holder = new ThumbPageViewHolder(frame, imageView);
         imageView.Click += (_, _) =>
         {
             var pos = holder.BindingAdapterPosition;
@@ -353,10 +408,11 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
     {
         if (holder is not ThumbPageViewHolder vh) return;
 
+        var source = _images[position];
+
         try { Glide.With(vh.ImageView).Clear(vh.ImageView); } catch { }
         vh.ImageView.SetImageDrawable(null);
 
-        var source   = _images[position];
         var opts     = BuildOptions(vh.ImageView.Context!);
         var listener = new ImgGlideRequestListener(
             onReady: _onImageLoaded,
@@ -370,7 +426,6 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         {
             var id = ResolveDrawable(vh.ImageView.Context!, source);
             if (id == 0) { _onImageFailed(); return; }
-            // SetImageResource é mais confiável que Glide para drawables locais
             vh.ImageView.SetImageResource(id);
             _onImageLoaded();
         }
@@ -400,7 +455,10 @@ internal sealed class ThumbPageViewHolder : RecyclerView.ViewHolder
 {
     public global::Android.Widget.ImageView ImageView { get; }
 
-    public ThumbPageViewHolder(global::Android.Widget.ImageView imageView) : base(imageView)
+    public ThumbPageViewHolder(
+        global::Android.Widget.FrameLayout   root,
+        global::Android.Widget.ImageView     imageView)
+        : base(root)
         => ImageView = imageView;
 }
 

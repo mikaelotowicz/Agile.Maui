@@ -4,7 +4,12 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:controls="clr-namespace:Agile.Maui;assembly=Agile.Maui"
+    xmlns:local="clr-namespace:sample"
     Title="ImageView Demo">
+
+    <ContentPage.BindingContext>
+        <local:MainViewModel />
+    </ContentPage.BindingContext>
 
     <ScrollView>
         <VerticalStackLayout Padding="16,24" Spacing="0">
@@ -36,8 +41,8 @@
                 AspectMode="CenterCrop"
                 EnableFullscreen="True"
                 HeightRequest="220"
-                ImageFailed="OnImageFailed"
-                ImageLoaded="OnImageLoaded"
+                ImageFailedCommand="{Binding ImageFailedCommand}"
+                ImageLoadedCommand="{Binding ImageLoadedCommand}"
                 IsUrl="True"
                 MaxZoom="6"
                 Placeholder="dotnet_bot"
@@ -58,8 +63,8 @@
                                                   Dark={StaticResource Gray950}}"
                 EnableFullscreen="True"
                 HeightRequest="220"
-                ImageFailed="OnImageFailed"
-                ImageLoaded="OnImageLoaded"
+                ImageFailedCommand="{Binding ImageFailedCommand}"
+                ImageLoadedCommand="{Binding ImageLoadedCommand}"
                 IsUrl="True"
                 MaxZoom="8"
                 Placeholder="dotnet_bot"
@@ -78,8 +83,8 @@
                 AspectMode="CenterCrop"
                 EnableFullscreen="True"
                 HeightRequest="180"
-                ImageFailed="OnImageFailed"
-                ImageLoaded="OnImageLoaded"
+                ImageFailedCommand="{Binding ImageFailedCommand}"
+                ImageLoadedCommand="{Binding ImageLoadedCommand}"
                 IsUrl="False"
                 MaxZoom="4"
                 Source="dotnet_bot" />
@@ -97,8 +102,8 @@
                 AspectMode="CenterCrop"
                 EnableFullscreen="False"
                 HeightRequest="140"
-                ImageFailed="OnImageFailed"
-                ImageLoaded="OnImageLoaded"
+                ImageFailedCommand="{Binding ImageFailedCommand}"
+                ImageLoadedCommand="{Binding ImageLoadedCommand}"
                 IsUrl="True"
                 Placeholder="dotnet_bot"
                 Source="https://url-invalida.local/sem-imagem.jpg" />
@@ -127,15 +132,16 @@
                                             Dark={StaticResource Gray400}}" />
 
             <controls:GalleryView
-                x:Name="UrlGallery"
                 AspectMode="CenterCrop"
                 HeightRequest="220"
-                ImageFailed="OnGalleryImageFailed"
-                ImageLoaded="OnGalleryImageLoaded"
+                ImageFailedCommand="{Binding GalleryImageFailedCommand}"
+                ImageLoadedCommand="{Binding GalleryImageLoadedCommand}"
+                Images="{Binding UrlImages}"
                 IsUrl="True"
                 MaxZoom="6"
                 Placeholder="dotnet_bot"
-                SelectionChanged="OnGallerySelectionChanged"
+                SelectedIndex="{Binding UrlSelectedIndex, Mode=TwoWay}"
+                SelectionChangedCommand="{Binding UrlSelectionChangedCommand}"
                 ShowIndicator="True" />
 
             <!--  ── 6. Galeria de imagens locais ─────────────────────  -->
@@ -143,21 +149,24 @@
                 Margin="2,20,0,6"
                 FontAttributes="Bold"
                 FontSize="12"
-                Text="Galeria · Imagens locais · AspectFit · MaxZoom 4×"
+                Text="Galeria · Imagens locais · AspectFit · MaxZoom 4× · Indicador"
                 TextColor="{AppThemeBinding Light={StaticResource Gray500},
                                             Dark={StaticResource Gray400}}" />
 
             <controls:GalleryView
-                x:Name="LocalGallery"
                 AspectMode="AspectFit"
                 BackgroundColor="{AppThemeBinding Light={StaticResource Gray100},
                                                   Dark={StaticResource Gray950}}"
-                HeightRequest="200"
-                ImageFailed="OnGalleryImageFailed"
-                ImageLoaded="OnGalleryImageLoaded"
+                HeightRequest="220"
+                ImageFailedCommand="{Binding GalleryImageFailedCommand}"
+                ImageLoadedCommand="{Binding GalleryImageLoadedCommand}"
+                Images="{Binding LocalImages}"
                 IsUrl="False"
                 MaxZoom="4"
-                SelectionChanged="OnGallerySelectionChanged" />
+                Placeholder="dotnet_bot"
+                SelectedIndex="{Binding LocalSelectedIndex, Mode=TwoWay}"
+                SelectionChangedCommand="{Binding LocalSelectionChangedCommand}"
+                ShowIndicator="True" />
 
             <!--  ── Log de eventos ────────────────────────────────────  -->
             <Border
@@ -177,10 +186,9 @@
                         TextColor="{AppThemeBinding Light={StaticResource Gray500},
                                                     Dark={StaticResource Gray400}}" />
                     <Label
-                        x:Name="StatusLabel"
                         FontSize="12"
                         LineBreakMode="WordWrap"
-                        Text="—" />
+                        Text="{Binding LogText}" />
                 </VerticalStackLayout>
             </Border>
 

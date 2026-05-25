@@ -29,6 +29,13 @@ public class GalleryView : View
     public static readonly BindableProperty ShowIndicatorProperty =
         BindableProperty.Create(nameof(ShowIndicator), typeof(bool), typeof(GalleryView), false);
 
+    public static readonly BindableProperty IndicatorColorProperty =
+        BindableProperty.Create(nameof(IndicatorColor), typeof(Color), typeof(GalleryView), Colors.White);
+
+    public static readonly BindableProperty IndicatorInactiveColorProperty =
+        BindableProperty.Create(nameof(IndicatorInactiveColor), typeof(Color), typeof(GalleryView),
+            new Color(1f, 1f, 1f, 0.5f));
+
     public static readonly BindableProperty SelectionChangedCommandProperty =
         BindableProperty.Create(nameof(SelectionChangedCommand), typeof(ICommand), typeof(GalleryView), null);
 
@@ -45,6 +52,8 @@ public class GalleryView : View
     public ZoomImageAspect AspectMode { get => (ZoomImageAspect)GetValue(AspectModeProperty); set => SetValue(AspectModeProperty, value); }
     public float MaxZoom { get => (float)GetValue(MaxZoomProperty); set => SetValue(MaxZoomProperty, value); }
     public bool ShowIndicator { get => (bool)GetValue(ShowIndicatorProperty); set => SetValue(ShowIndicatorProperty, value); }
+    public Color IndicatorColor { get => (Color)GetValue(IndicatorColorProperty); set => SetValue(IndicatorColorProperty, value); }
+    public Color IndicatorInactiveColor { get => (Color)GetValue(IndicatorInactiveColorProperty); set => SetValue(IndicatorInactiveColorProperty, value); }
     public ICommand? SelectionChangedCommand { get => (ICommand?)GetValue(SelectionChangedCommandProperty); set => SetValue(SelectionChangedCommandProperty, value); }
     public ICommand? ImageLoadedCommand { get => (ICommand?)GetValue(ImageLoadedCommandProperty); set => SetValue(ImageLoadedCommandProperty, value); }
     public ICommand? ImageFailedCommand { get => (ICommand?)GetValue(ImageFailedCommandProperty); set => SetValue(ImageFailedCommandProperty, value); }

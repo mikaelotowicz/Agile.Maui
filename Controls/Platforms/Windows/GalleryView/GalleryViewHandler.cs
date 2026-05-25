@@ -22,8 +22,10 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
             [nameof(GalleryView.IsUrl)]         = (h, _) => h.LoadImages(),
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.LoadImages(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.LoadImages(),
-            [nameof(GalleryView.MaxZoom)]       = (h, _) => { },
-            [nameof(GalleryView.ShowIndicator)] = (h, _) => h.UpdateDots(),
+            [nameof(GalleryView.MaxZoom)]                = (h, _) => { },
+            [nameof(GalleryView.ShowIndicator)]          = (h, _) => h.UpdateDots(),
+            [nameof(GalleryView.IndicatorColor)]         = (h, _) => h.UpdateDots(),
+            [nameof(GalleryView.IndicatorInactiveColor)] = (h, _) => h.UpdateDots(),
         };
 
     private bool                      _syncingPage;
@@ -160,28 +162,35 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
     private void UpdateDots()
     {
         if (PlatformView is null) return;
-        var show  = VirtualView.ShowIndicator;
-        var count = VirtualView.Images?.Count ?? 0;
-        var idx   = Math.Clamp(VirtualView.SelectedIndex, 0, Math.Max(0, count - 1));
-        var panel = PlatformView.Dots;
+        var show     = VirtualView.ShowIndicator;
+        var count    = VirtualView.Images?.Count ?? 0;
+        var idx      = Math.Clamp(VirtualView.SelectedIndex, 0, Math.Max(0, count - 1));
+        var panel    = PlatformView.Dots;
+        var active   = ToWinColor(VirtualView.IndicatorColor);
+        var inactive = ToWinColor(VirtualView.IndicatorInactiveColor);
 
         if (!show || count <= 1) { panel.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed; return; }
 
         panel.Children.Clear();
         for (int i = 0; i < count; i++)
         {
-            var alpha = (byte)(i == idx ? 255 : 128);
             panel.Children.Add(new Ellipse
             {
                 Width  = 7,
                 Height = 7,
                 Margin = new Microsoft.UI.Xaml.Thickness(3, 0, 3, 0),
-                Fill   = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                    global::Windows.UI.Color.FromArgb(alpha, 255, 255, 255)),
+                Fill   = new Microsoft.UI.Xaml.Media.SolidColorBrush(i == idx ? active : inactive),
             });
         }
         panel.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
     }
+
+    private static global::Windows.UI.Color ToWinColor(Microsoft.Maui.Graphics.Color c) =>
+        global::Windows.UI.Color.FromArgb(
+            (byte)(c.Alpha * 255),
+            (byte)(c.Red   * 255),
+            (byte)(c.Green * 255),
+            (byte)(c.Blue  * 255));
 
     private void ApplyPlaceholder(NativeImage img)
     {
