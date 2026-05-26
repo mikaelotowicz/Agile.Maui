@@ -32,6 +32,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     private bool                         _syncingPage;
     private bool                         _disposed;
     private bool                         _pendingReload;
+    private bool                         _needsAdapterReload;
 
     public GalleryViewHandler() : base(Mapper) { }
 
@@ -43,7 +44,15 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
         base.ConnectHandler(platformView);
         _pageCallback = new GalleryPageCallback(OnPageChanged);
         platformView.Pager.RegisterOnPageChangeCallback(_pageCallback);
-        platformView.OnLayoutChanged = UpdateDots;
+        platformView.OnLayoutChanged = () =>
+        {
+            UpdateDots();
+            if (_needsAdapterReload)
+            {
+                _needsAdapterReload = false;
+                DoReloadAdapter();
+            }
+        };
         ReloadAdapter();
     }
 
@@ -70,7 +79,11 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
         {
             _pendingReload = false;
             if (_disposed || PlatformView is null) return;
-            DoReloadAdapter();
+            var pager = PlatformView.Pager;
+            if (pager.Width > 0 && pager.Height > 0)
+                DoReloadAdapter();
+            else
+                _needsAdapterReload = true; // aguarda OnLayoutChanged com dimensões válidas
         });
     }
 
@@ -97,6 +110,8 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             placeholder:   VirtualView.Placeholder,
             aspectMode:    VirtualView.AspectMode,
             thumbMaxPx:    VirtualView.ThumbMaxPx,
+            cellWidth:     pager.Width,
+            cellHeight:    pager.Height,
             onPageClick:   OpenFullscreen,
             onImageLoaded: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()),
             onImageFailed: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()));
@@ -219,14 +234,9 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
         Pager = new ViewPager2(context) { Orientation = ViewPager2.OrientationHorizontal };
 
         var recycler = (RecyclerView)Pager.GetChildAt(0)!;
-        // Restaurar comportamentos padrão: permitir clipping e sem padding/margem adicional
         recycler.SetClipToPadding(true);
         recycler.SetClipChildren(true);
         recycler.SetPadding(0, 0, 0, 0);
-
-        // OffscreenPageLimit/SetItemViewCacheSize podem afetar o comportamento
-        // de paginação. Use um pequeno cache para evitar que páginas adjacentes
-        // sejam desenhadas parcialmente fora do viewport.
         recycler.SetItemViewCacheSize(1);
 
         Pager.OffscreenPageLimit = 1;
@@ -269,54 +279,29 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
         int w = r - l;
         int h = b - t;
 
-        // FrameLayout.onLayout positions children using getMeasuredWidth/Height, not layout bounds.
-        // MAUI measure/layout passes can give different sizes — force Pager to fill actual bounds.
+        // MAUI pode invocar layout() sem measure() prévio; garantir getMeasuredWidth() correto
+        // para que o RecyclerView interno do ViewPager2 dimensione as células com MATCH_PARENT.
+        if (w > 0 && h > 0 && (Pager.MeasuredWidth != w || Pager.MeasuredHeight != h))
+        {
+            Pager.Measure(
+                MeasureSpec.MakeMeasureSpec(w, MeasureSpecMode.Exactly),
+                MeasureSpec.MakeMeasureSpec(h, MeasureSpecMode.Exactly));
+        }
         Pager.Layout(0, 0, w, h);
-        // Defensive: garantir que cada item do RecyclerView (ViewPager2) tenha largura igual ao container
-        try
-        {
-            var recycler = (RecyclerView)Pager.GetChildAt(0)!;
-            for (int i = 0; i < recycler.ChildCount; i++)
-            {
-                var child = recycler.GetChildAt(i);
-                if (child is null) continue;
-                try
-                {
-                    var lp = child.LayoutParameters as RecyclerView.LayoutParams
-                             ?? new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent);
-                    if (lp.Width != ViewGroup.LayoutParams.MatchParent || lp.Height != ViewGroup.LayoutParams.MatchParent)
-                    {
-                        lp.Width = ViewGroup.LayoutParams.MatchParent;
-                        lp.Height = ViewGroup.LayoutParams.MatchParent;
-                        child.LayoutParameters = lp;
-                    }
-                }
-                catch { }
-            }
-        }
-        catch { }
-
-
-        // Log de diagnóstico temporário: medidas do Pager e do container
-        try
-        {
-            System.Diagnostics.Debug.WriteLine($"[GalleryLog] OnLayout: container={w}x{h} pager.Width={Pager.Width} pager.MeasuredWidth={Pager.MeasuredWidth} pager.ChildCount={Pager.ChildCount}");
-        }
-        catch { }
 
         if (Dots.Visibility != ViewStates.Gone)
         {
-            int dw       = Dots.MeasuredWidth;
-            int dh       = Dots.MeasuredHeight;
+            int dw      = Dots.MeasuredWidth;
+            int dh      = Dots.MeasuredHeight;
             float density = Context?.Resources?.DisplayMetrics?.Density ?? 1f;
-            int margin   = (int)(10f * density + 0.5f);
+            int margin  = (int)(10f * density + 0.5f);
             int dotsLeft = (w - dw) / 2;
             int dotsTop  = h - dh - margin;
             Dots.Layout(dotsLeft, dotsTop, dotsLeft + dw, dotsTop + dh);
         }
 
         if (changed && w > 0 && h > 0)
-            OnLayoutChanged?.Invoke();
+            Post(() => OnLayoutChanged?.Invoke());
     }
 
     protected override void OnAttachedToWindow()
@@ -386,6 +371,8 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
     private readonly string?         _placeholder;
     private readonly ZoomImageAspect _aspectMode;
     private readonly int             _thumbMaxPx;
+    private readonly int             _cellWidth;
+    private readonly int             _cellHeight;
     private readonly Action<int>     _onPageClick;
     private readonly Action          _onImageLoaded;
     private readonly Action          _onImageFailed;
@@ -396,6 +383,8 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         string?         placeholder,
         ZoomImageAspect aspectMode,
         int             thumbMaxPx,
+        int             cellWidth,
+        int             cellHeight,
         Action<int>     onPageClick,
         Action          onImageLoaded,
         Action          onImageFailed)
@@ -405,6 +394,8 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         _placeholder   = placeholder;
         _aspectMode    = aspectMode;
         _thumbMaxPx    = thumbMaxPx > 0 ? thumbMaxPx : 720;
+        _cellWidth     = cellWidth;
+        _cellHeight    = cellHeight;
         _onPageClick   = onPageClick;
         _onImageLoaded = onImageLoaded;
         _onImageFailed = onImageFailed;
@@ -417,17 +408,13 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         var context = parent.Context!;
         var isFit   = _aspectMode != ZoomImageAspect.CenterCrop;
 
-        // FrameLayout raiz necessário para ViewPager2 resolver MATCH_PARENT corretamente.
-        var frame = new global::Android.Widget.FrameLayout(context);
-        // Usar RecyclerView.LayoutParams garante que o ViewPager2/RecyclerView
-        // interpretem corretamente a largura/altura do item como MATCH_PARENT.
-        frame.LayoutParameters = new RecyclerView.LayoutParams(
-            ViewGroup.LayoutParams.MatchParent,
-            ViewGroup.LayoutParams.MatchParent);
+        var frame = new global::Android.Widget.FrameLayout(context)
+        {
+            LayoutParameters = new RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent,
+                ViewGroup.LayoutParams.MatchParent)
+        };
 
-        // ImageView MATCH_PARENT em ambos os modos.
-        // FitCenter centraliza a imagem dentro da área disponível (letterbox).
-        // CenterCrop preenche a área cortando as bordas.
         var imageView = new global::Android.Widget.ImageView(context)
         {
             LayoutParameters = new global::Android.Widget.FrameLayout.LayoutParams(
@@ -440,9 +427,8 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         imageView.SetScaleType(isFit
             ? global::Android.Widget.ImageView.ScaleType.FitCenter
             : global::Android.Widget.ImageView.ScaleType.CenterCrop);
-    // Garantir que não haja padding residual e que a ImageView não ajuste bounds
-    imageView.SetPadding(0, 0, 0, 0);
-    imageView.SetAdjustViewBounds(false);
+        imageView.SetPadding(0, 0, 0, 0);
+        imageView.SetAdjustViewBounds(false);
 
         frame.AddView(imageView);
 
@@ -479,35 +465,6 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
             onReady: _onImageLoaded,
             onFail:  _onImageFailed);
 
-        // Assegura defensivamente que o item nativo tem LayoutParams MATCH_PARENT
-        try
-        {
-            var lp = vh.ItemView.LayoutParameters as RecyclerView.LayoutParams;
-            if (lp is null || lp.Width != ViewGroup.LayoutParams.MatchParent || lp.Height != ViewGroup.LayoutParams.MatchParent)
-            {
-                // Adiar alteração de LayoutParameters para evitar modificar during layout pass
-                vh.ItemView.Post(() =>
-                {
-                    try
-                    {
-                        vh.ItemView.LayoutParameters = new RecyclerView.LayoutParams(
-                            ViewGroup.LayoutParams.MatchParent,
-                            ViewGroup.LayoutParams.MatchParent);
-                    }
-                    catch { }
-                });
-            }
-        }
-        catch { }
-
-        // Log de diagnóstico do tamanho das views no momento do bind
-        try
-        {
-            var parent = vh.ItemView.Parent as global::Android.Views.View;
-            System.Diagnostics.Debug.WriteLine($"[GalleryLog] OnBind pos={position} item={vh.ItemView.Width} measured={vh.ItemView.MeasuredWidth} parent={(parent?.Width ?? -1)} image={vh.ImageView.Width} imgMeasured={vh.ImageView.MeasuredWidth}");
-        }
-        catch { }
-
         if (_isUrl)
         {
             Glide.With(vh.ImageView).Load(source).Apply(opts).Listener(listener).Into(vh.ImageView);
@@ -526,7 +483,9 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         var o = _aspectMode == ZoomImageAspect.CenterCrop
             ? new RequestOptions().CenterCrop()
             : new RequestOptions().FitCenter();
-        o = o.Override(_thumbMaxPx, _thumbMaxPx);
+        int overrideW = _cellWidth  > 0 ? _cellWidth  : _thumbMaxPx;
+        int overrideH = _cellHeight > 0 ? _cellHeight : _thumbMaxPx;
+        o = o.Override(overrideW, overrideH);
         var ph = ResolveDrawable(context, _placeholder);
         if (ph != 0) o = o.Clone().Placeholder(ph).Error(ph);
         return o;
