@@ -3,6 +3,9 @@
     "Windows Machine": {
       "commandName": "Project",
       "nativeDebugging": false
+    },
+    "Mac Catalyst": {
+      "commandName": "MauiMacCatalyst"
     }
   }
 }

@@ -1,12 +1,12 @@
 # <img src="Controls/agile.png" width="118" height="118" align="center" /> Agile.Maui
 
-.NET MAUI component library with native implementations for Android, iOS, macOS Catalyst, and Windows.
+.NET MAUI component library with **native** implementations for Android, iOS, macOS Catalyst, and Windows. Every control maps directly to the platform's own scrolling and rendering infrastructure — no WebView, no abstraction layers.
 
-| Control | Android | iOS / macOS | Windows |
+| Control | Android | iOS / macOS Catalyst | Windows |
 |---|---|---|---|
-| `ImageView` | Glide + Matrix zoom | UIScrollView zoom | BitmapImage |
-| `GalleryView` | ViewPager2 | UIScrollView paging | FlipView |
-| `VirtualizedCollectionView` | RecyclerView | UICollectionView | CollectionView (MAUI) |
+| `ImageView` | `Android.Widget.ImageView` + Glide + Matrix zoom | `UIImageView` + `UIScrollView` zoom | `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage` |
+| `GalleryView` | `ViewPager2` + `RecyclerView` | `UIScrollView` paging + `UIPageControl` | `FlipView` |
+| `VirtualizedCollectionView` | `RecyclerView` + `LinearLayoutManager` | `UICollectionView` + `UICollectionViewCompositionalLayout` | MAUI `CollectionView` (built-in virtualization) |
 
 ---
 
@@ -21,47 +21,66 @@ dotnet add package Agile.Maui
 ```csharp
 using Agile.Maui;
 
-builder.UseAgileMaui();
+public static MauiApp CreateMauiApp()
+{
+    var builder = MauiApp.CreateBuilder();
+    builder
+        .UseMauiApp<App>()
+        .UseAgileMaui();   // registers all handlers
+
+    return builder.Build();
+}
 ```
 
 ### XAML namespace
 
 ```xml
-xmlns:controls="clr-namespace:Agile.Maui;assembly=Agile.Maui"
+xmlns:agile="clr-namespace:Agile.Maui;assembly=Agile.Maui"
 ```
 
 ---
 
 ## ImageView
 
-Displays a single image with **zoom** and **fullscreen** support. Tapping the image (when `EnableFullscreen="True"`) opens a full-screen viewer with pinch-to-zoom and double-tap.
+Displays a single image with optional **zoom** and **fullscreen** viewer. When `EnableFullscreen` is `true` and the user taps the image, a full-screen overlay opens with pinch-to-zoom, double-tap, and single-tap-to-dismiss.
+
+### How it works
+
+| Platform | Thumbnail | Fullscreen viewer |
+|---|---|---|
+| **Android** | `Android.Widget.ImageView` loaded by **Glide** (memory + disk cache, `RequestOptions.Override` for bounded decode) | `FullscreenZoomDialogFragment` — pure native Matrix zoom via `ScaleGestureDetector`, `GestureDetector`, and `ValueAnimator`. No external dependencies. |
+| **iOS / macOS** | `UIImageView` loaded by `NSUrlSession` with a `CancellationTokenSource` per load; placeholder shown immediately | `FullscreenZoomViewController` — `UIScrollView` with built-in pinch zoom (`minimumZoomScale` / `maximumZoomScale`) + `UITapGestureRecognizer` for double-tap and dismiss |
+| **Windows** | `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage`; `ImageOpened` / `ImageFailed` events forwarded to MAUI | No fullscreen viewer (fullscreen is a no-op on Windows) |
+
+Image loading in all handlers is fully cancellable: loading a new `Source` while a previous load is in-flight cancels the previous operation before starting the next.
 
 ### Properties
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `Source` | `string?` | `null` | Local resource name or full URL |
-| `IsUrl` | `bool` | `false` | `true` when `Source` is an HTTP/HTTPS URL |
+| `Source` | `string?` | `null` | Local resource name or full HTTP/HTTPS URL |
+| `IsUrl` | `bool` | `false` | Set to `true` when `Source` is a URL |
 | `Placeholder` | `string?` | `null` | Local resource shown while loading and on error |
-| `AspectMode` | `ZoomImageAspect` | `CenterCrop` | `CenterCrop` or `AspectFit` |
-| `MaxZoom` | `float` | `5` | Maximum scale in fullscreen (minimum: `1`) |
+| `AspectMode` | `ZoomImageAspect` | `CenterCrop` | `CenterCrop` fills and crops; `AspectFit` letterboxes |
+| `MaxZoom` | `float` | `5` | Maximum pinch scale in the fullscreen viewer (minimum: `1`) |
 | `EnableFullscreen` | `bool` | `true` | Enables the fullscreen viewer on tap |
+| `FullscreenSource` | `string?` | `null` | High-quality URL or resource to load in the fullscreen viewer. When `null`, falls back to `Source` |
 | `ImageLoadedCommand` | `ICommand?` | `null` | Executed when the image loads successfully |
-| `ImageFailedCommand` | `ICommand?` | `null` | Executed when loading fails |
+| `ImageFailedCommand` | `ICommand?` | `null` | Executed when loading fails or the resource is not found |
 
 ### Events
 
-| Event | Description |
-|---|---|
-| `ImageLoaded` | Raised when the image loads successfully |
-| `ImageFailed` | Raised when loading fails or the resource is not found |
+| Event | Args | Description |
+|---|---|---|
+| `ImageLoaded` | `EventArgs` | Raised when the image loads successfully |
+| `ImageFailed` | `EventArgs` | Raised when loading fails or the resource is not found |
 
 ### XAML examples
 
 **URL with CenterCrop and max zoom 6×:**
 ```xml
-<controls:ImageView
-    Source="https://example.com/image.jpg"
+<agile:ImageView
+    Source="https://example.com/photo.jpg"
     IsUrl="True"
     AspectMode="CenterCrop"
     MaxZoom="6"
@@ -69,9 +88,20 @@ Displays a single image with **zoom** and **fullscreen** support. Tapping the im
     HeightRequest="220" />
 ```
 
+**High-quality fullscreen source:**
+```xml
+<agile:ImageView
+    Source="https://cdn.example.com/thumb.jpg"
+    FullscreenSource="https://cdn.example.com/full.jpg"
+    IsUrl="True"
+    AspectMode="CenterCrop"
+    MaxZoom="8"
+    HeightRequest="220" />
+```
+
 **Local image with AspectFit:**
 ```xml
-<controls:ImageView
+<agile:ImageView
     Source="my_image"
     IsUrl="False"
     AspectMode="AspectFit"
@@ -81,17 +111,17 @@ Displays a single image with **zoom** and **fullscreen** support. Tapping the im
 
 **Fullscreen disabled:**
 ```xml
-<controls:ImageView
-    Source="https://example.com/image.jpg"
+<agile:ImageView
+    Source="https://example.com/photo.jpg"
     IsUrl="True"
     EnableFullscreen="False"
     Placeholder="placeholder"
     HeightRequest="140" />
 ```
 
-**With events:**
+**Code-behind events:**
 ```xml
-<controls:ImageView
+<agile:ImageView
     Source="{Binding ImageUrl}"
     IsUrl="True"
     ImageLoaded="OnImageLoaded"
@@ -99,9 +129,14 @@ Displays a single image with **zoom** and **fullscreen** support. Tapping the im
     HeightRequest="220" />
 ```
 
-**With commands (MVVM):**
+```csharp
+private void OnImageLoaded(object sender, EventArgs e) { /* image ready */ }
+private void OnImageFailed(object sender, EventArgs e) { /* show error UI */ }
+```
+
+**MVVM commands:**
 ```xml
-<controls:ImageView
+<agile:ImageView
     Source="{Binding ImageUrl}"
     IsUrl="True"
     ImageLoadedCommand="{Binding OnLoadedCommand}"
@@ -109,46 +144,61 @@ Displays a single image with **zoom** and **fullscreen** support. Tapping the im
     HeightRequest="220" />
 ```
 
-### Local images
+### Local image path conventions
 
-- **Android:** drawable name under `Resources/drawable/` (no extension)
-- **iOS / macOS:** asset name under `Resources/Images/` (no extension)
-- **Windows:** relative path under `Resources/Images/` (with or without `.png` extension)
+| Platform | Location | Value for `Source` |
+|---|---|---|
+| Android | `Resources/drawable/` | Filename without extension (`my_photo`) |
+| iOS / macOS | `Resources/Images/` | Asset name without extension (`my_photo`) |
+| Windows | `Resources/Images/` | Filename with or without `.png` extension |
 
 ---
 
 ## GalleryView
 
-Image gallery with **horizontal swipe**, page indicator, and **fullscreen viewer with zoom and swipe**. Supports `ObservableCollection<string>` — the gallery updates automatically when the collection changes.
+Horizontal image gallery with swipe navigation, page indicator, and a **fullscreen viewer** that preserves the swipe gesture between pages and adds pinch-to-zoom. Supports `ObservableCollection<string>` — add or remove items at runtime and the gallery updates automatically.
+
+### How it works
+
+| Platform | Gallery | Fullscreen viewer |
+|---|---|---|
+| **Android** | `ViewPager2` (backed by `RecyclerView`) with a `ThumbPagerAdapter`. Each page is an `Android.Widget.ImageView` loaded by Glide. Indicator is a `LinearLayout` of `ShapeDrawable` dots. | `FullscreenGalleryFragment` — another `ViewPager2` with `ZoomTouchHandler` on each page (same Matrix-based zoom as `ImageView`). Page position is passed from thumbnail to fullscreen and back. |
+| **iOS / macOS** | `UIScrollView` with `isPagingEnabled = true`. Each page is a `UIImageView` loaded asynchronously by `NSUrlSession`, cancellable via a per-page `CancellationTokenSource`. Indicator is a `UIPageControl`. | `FullscreenGalleryViewController` — another paging `UIScrollView` with a `UIScrollView`-based zoom per page. |
+| **Windows** | `FlipView` with a `BitmapImage` per item. Indicator is a `StackPanel` of `Ellipse` dots. Image events (`ImageOpened` / `ImageFailed`) are forwarded to MAUI. | No fullscreen viewer. |
+
+Thumbnail download is bounded by `ThumbMaxPx`: Glide (Android) uses `RequestOptions.Override(ThumbMaxPx, ThumbMaxPx)` to avoid decoding the full-resolution bitmap into memory.
 
 ### Properties
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `Images` | `IList<string>?` | `null` | List of sources (URLs or local resource names) |
+| `Images` | `IList<string>?` | `null` | List of URLs or local resource names |
 | `IsUrl` | `bool` | `false` | `true` when sources are HTTP/HTTPS URLs |
 | `Placeholder` | `string?` | `null` | Local resource shown while loading and on error |
-| `SelectedIndex` | `int` | `0` | Index of the visible image (bindable, two-way) |
-| `AspectMode` | `ZoomImageAspect` | `CenterCrop` | `CenterCrop` or `AspectFit` |
-| `MaxZoom` | `float` | `5` | Maximum scale in fullscreen (minimum: `1`) |
-| `ShowIndicator` | `bool` | `false` | Shows page indicator dots |
+| `SelectedIndex` | `int` | `0` | Index of the currently visible page (bindable, two-way) |
+| `AspectMode` | `ZoomImageAspect` | `CenterCrop` | `CenterCrop` fills and crops; `AspectFit` letterboxes |
+| `MaxZoom` | `float` | `5` | Maximum pinch scale in the fullscreen viewer (minimum: `1`) |
+| `ShowIndicator` | `bool` | `false` | Shows page indicator dots below the gallery |
+| `IndicatorColor` | `Color` | `Colors.White` | Color of the active dot |
+| `IndicatorInactiveColor` | `Color` | `rgba(255,255,255,0.5)` | Color of inactive dots |
+| `ThumbMaxPx` | `int` | `720` | Maximum pixel dimension for thumbnail decode (minimum: `64`). Lower values reduce memory on large galleries. |
 | `SelectionChangedCommand` | `ICommand?` | `null` | Executed on page change; receives the new index (`int`) as parameter |
-| `ImageLoadedCommand` | `ICommand?` | `null` | Executed when an image loads successfully |
-| `ImageFailedCommand` | `ICommand?` | `null` | Executed when an image fails to load |
+| `ImageLoadedCommand` | `ICommand?` | `null` | Executed when any image in the gallery loads |
+| `ImageFailedCommand` | `ICommand?` | `null` | Executed when any image in the gallery fails to load |
 
 ### Events
 
 | Event | Args | Description |
 |---|---|---|
-| `SelectionChanged` | `GalleryIndexChangedEventArgs` | Raised on page change; `e.Index` holds the current index |
-| `ImageLoaded` | `EventArgs` | Raised when an image loads successfully |
+| `SelectionChanged` | `GalleryIndexChangedEventArgs` | Raised on page change; `e.Index` is the new page index |
+| `ImageLoaded` | `EventArgs` | Raised when an image in the gallery loads successfully |
 | `ImageFailed` | `EventArgs` | Raised when an image fails to load |
 
 ### XAML examples
 
 **URL gallery with indicator:**
 ```xml
-<controls:GalleryView
+<agile:GalleryView
     Images="{Binding ImageUrls}"
     IsUrl="True"
     AspectMode="CenterCrop"
@@ -158,9 +208,30 @@ Image gallery with **horizontal swipe**, page indicator, and **fullscreen viewer
     HeightRequest="220" />
 ```
 
+**Custom indicator colors:**
+```xml
+<agile:GalleryView
+    Images="{Binding ImageUrls}"
+    IsUrl="True"
+    ShowIndicator="True"
+    IndicatorColor="#FF6200EE"
+    IndicatorInactiveColor="#66000000"
+    HeightRequest="220" />
+```
+
+**Memory-optimized gallery with large image lists:**
+```xml
+<agile:GalleryView
+    Images="{Binding ImageUrls}"
+    IsUrl="True"
+    ThumbMaxPx="480"
+    AspectMode="CenterCrop"
+    HeightRequest="220" />
+```
+
 **Local image gallery with AspectFit:**
 ```xml
-<controls:GalleryView
+<agile:GalleryView
     Images="{Binding LocalImages}"
     IsUrl="False"
     AspectMode="AspectFit"
@@ -169,30 +240,16 @@ Image gallery with **horizontal swipe**, page indicator, and **fullscreen viewer
     HeightRequest="200" />
 ```
 
-**With two-way index binding and events:**
+**Two-way index binding with events:**
 ```xml
-<controls:GalleryView
-    Images="{Binding Photos}"
-    IsUrl="True"
-    SelectedIndex="{Binding CurrentIndex}"
-    SelectionChanged="OnSelectionChanged"
-    ImageLoaded="OnImageLoaded"
-    ShowIndicator="True"
-    HeightRequest="240" />
-```
-
-**With commands (MVVM):**
-```xml
-<controls:GalleryView
+<agile:GalleryView
     Images="{Binding Photos}"
     IsUrl="True"
     SelectedIndex="{Binding CurrentIndex, Mode=TwoWay}"
-    SelectionChangedCommand="{Binding PageChangedCommand}"
+    SelectionChanged="OnSelectionChanged"
     ShowIndicator="True"
     HeightRequest="240" />
 ```
-
-### Reading the selected index in code-behind
 
 ```csharp
 private void OnSelectionChanged(object sender, GalleryIndexChangedEventArgs e)
@@ -201,10 +258,20 @@ private void OnSelectionChanged(object sender, GalleryIndexChangedEventArgs e)
 }
 ```
 
-### ObservableCollection — reactive updates
+**MVVM:**
+```xml
+<agile:GalleryView
+    Images="{Binding Photos}"
+    IsUrl="True"
+    SelectedIndex="{Binding CurrentIndex, Mode=TwoWay}"
+    SelectionChangedCommand="{Binding PageChangedCommand}"
+    ShowIndicator="True"
+    HeightRequest="240" />
+```
+
+### Reactive updates with ObservableCollection
 
 ```csharp
-// The gallery updates automatically when items are added or removed
 var photos = new ObservableCollection<string>
 {
     "https://example.com/photo1.jpg",
@@ -213,95 +280,131 @@ var photos = new ObservableCollection<string>
 GalleryControl.Images = photos;
 
 photos.Add("https://example.com/photo3.jpg"); // gallery updates automatically
+photos.RemoveAt(0);                            // and on removal too
 ```
 
 ---
 
 ## VirtualizedCollectionView
 
-List or grid with **native virtualization** on all platforms. Supports fixed height (better performance) or automatic height, multiple columns, infinite scroll, and scroll events.
+High-performance list or grid with **native virtualization** on all platforms. Renders only the items visible on screen and recycles views as the user scrolls — independent of collection size.
+
+### How it works
+
+| Platform | Engine | Layout | Item measurement |
+|---|---|---|---|
+| **Android** | `RecyclerView` | `CachingLinearLayoutManager` (single column) or `GridLayoutManager` (multi-column). Heights cached in a `SparseIntArray` to avoid re-measuring items already seen. | `ItemHeight > 0` → `setHasFixedSize(true)` + `MeasureSpec.EXACTLY`. `ItemHeight = -1` → `wrap_content`. |
+| **iOS / macOS** | `UICollectionView` with `UICollectionViewCompositionalLayout` | `ItemSizeStrategy.Fixed` → `NSCollectionLayoutSize.CreateAbsolute`. `ItemSizeStrategy.Dynamic` → `NSCollectionLayoutSize.CreateEstimated` + self-sizing via MAUI `Measure/Arrange`. | Self-sizing uses `((IView)mauiView).Measure(width, ∞)` — not Auto Layout — because MAUI views don't expose `intrinsicContentSize`. |
+| **Windows** | MAUI built-in `CollectionView` (backed by `ItemsRepeater` with virtualization) | `GridItemsLayout` (multi-column) or `LinearItemsLayout` | Delegated to the MAUI layout engine. `ItemHeight` is ignored on Windows. |
+
+**Android — memory tuning:** `ItemViewCacheSize` and `RecycledViewPool` sizes are calculated from the device's available RAM at handler connect time, so the pool is larger on high-RAM devices.
+
+**iOS — event coalescing:** `INotifyCollectionChanged` events are queued and flushed in a single `PerformBatchUpdates` call. When a batch exceeds 30 operations, or contains a mix of inserts, deletes, and moves, the handler falls back to `ReloadData` to avoid index conflicts.
+
+**Android — async diffing:** When `ItemsSource` is replaced entirely, `DiffUtil.CalculateDiff` runs on a background thread pool and is cancelled if a newer update arrives before the diff completes.
 
 ### Properties
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `ItemsSource` | `IEnumerable?` | `null` | Data source (supports `ObservableCollection`) |
-| `ItemTemplate` | `DataTemplate?` | `null` | Template for each item |
-| `ItemHeight` | `double` | `-1` | Fixed item height in DIPs. `-1` = automatic (wrap_content) |
-| `ColumnCount` | `int` | `1` | Number of columns (minimum: `1`) |
+| `ItemsSource` | `IEnumerable?` | `null` | Data source; supports `ObservableCollection` |
+| `ItemTemplate` | `DataTemplate?` | `null` | Template rendered for each item |
+| `ItemHeight` | `double` | `-1` | Fixed item height in DIPs for Android/iOS. `-1` = measure each item. Ignored on Windows. |
+| `ItemSizeStrategy` | `ItemSizeStrategy` | `Fixed` | `Fixed`: use `ItemHeight` (faster). `Dynamic`: self-sizing cells, iOS only (see note below). |
+| `ItemHeightRequest` | `double` | `350` | Estimated height hint used when `ItemSizeStrategy = Dynamic` (iOS). Should be close to the real height to avoid layout thrashing. |
+| `ColumnCount` | `int` | `1` | Number of grid columns (minimum: `1`) |
 | `Orientation` | `VirtualizedOrientation` | `Vertical` | `Vertical` or `Horizontal` |
-| `ItemSpacing` | `double` | `0` | Spacing between items in DIPs |
-| `RemainingItemsThreshold` | `int` | `-1` | Triggers `RemainingItemsThresholdReached` when N items remain. `-1` = disabled |
+| `ItemSpacing` | `double` | `0` | Gap between items in DIPs |
+| `RemainingItemsThreshold` | `int` | `-1` | Fires `RemainingItemsThresholdReached` when N items remain before the end. `-1` disables. |
 | `RemainingItemsThresholdReachedCommand` | `ICommand?` | `null` | Executed when the threshold is reached (infinite scroll) |
-| `ScrolledCommand` | `ICommand?` | `null` | Executed on each scroll event; receives `VirtualizedScrolledEventArgs` |
-| `EmptyView` | `object?` | `null` | Content shown when `ItemsSource` is empty |
+| `ScrolledCommand` | `ICommand?` | `null` | Executed on scroll; receives `VirtualizedScrolledEventArgs` |
+| `EmptyView` | `object?` | `null` | View shown when `ItemsSource` is empty or null |
 | `EmptyViewTemplate` | `DataTemplate?` | `null` | Template for the empty state |
 
 ### Events
 
 | Event | Args | Description |
 |---|---|---|
-| `RemainingItemsThresholdReached` | `EventArgs` | Raised when `RemainingItemsThreshold` items remain |
-| `Scrolled` | `VirtualizedScrolledEventArgs` | Raised on each scroll; `e.ScrollX` and `e.ScrollY` in DIPs |
+| `RemainingItemsThresholdReached` | `EventArgs` | Raised when `RemainingItemsThreshold` items remain before the end of the list |
+| `Scrolled` | `VirtualizedScrolledEventArgs` | Raised on each scroll frame; `e.ScrollX` and `e.ScrollY` in DIPs |
 
 ### Methods
 
 | Method | Description |
 |---|---|
-| `ScrollTo(int index, bool animated = true)` | Scrolls the list to the item at the given index |
+| `ScrollTo(int index, bool animated = true)` | Scrolls to the item at `index` |
 
 ### XAML examples
 
 **Simple list with automatic height:**
 ```xml
-<controls:VirtualizedCollectionView
+<agile:VirtualizedCollectionView
     ItemsSource="{Binding Items}"
     RemainingItemsThreshold="10"
     RemainingItemsThresholdReached="OnLoadMore">
-    <controls:VirtualizedCollectionView.ItemTemplate>
+    <agile:VirtualizedCollectionView.ItemTemplate>
         <DataTemplate>
             <Label Text="{Binding Name}" Padding="16,12" />
         </DataTemplate>
-    </controls:VirtualizedCollectionView.ItemTemplate>
-</controls:VirtualizedCollectionView>
+    </agile:VirtualizedCollectionView.ItemTemplate>
+</agile:VirtualizedCollectionView>
 ```
 
-**2-column grid with fixed height (better performance):**
+**2-column grid with fixed height (best performance):**
 ```xml
-<controls:VirtualizedCollectionView
+<agile:VirtualizedCollectionView
     ItemsSource="{Binding Products}"
     ColumnCount="2"
     ItemHeight="120"
     ItemSpacing="4"
     RemainingItemsThreshold="8"
     RemainingItemsThresholdReachedCommand="{Binding LoadMoreCommand}">
-    <controls:VirtualizedCollectionView.ItemTemplate>
-        <DataTemplate>
+    <agile:VirtualizedCollectionView.ItemTemplate>
+        <DataTemplate x:DataType="local:Product">
             <Grid Padding="8">
                 <Label Text="{Binding Name}" />
             </Grid>
         </DataTemplate>
-    </controls:VirtualizedCollectionView.ItemTemplate>
-</controls:VirtualizedCollectionView>
+    </agile:VirtualizedCollectionView.ItemTemplate>
+</agile:VirtualizedCollectionView>
+```
+
+**Dynamic height with estimated size (iOS self-sizing):**
+```xml
+<agile:VirtualizedCollectionView
+    ItemsSource="{Binding Feed}"
+    ItemSizeStrategy="Dynamic"
+    ItemHeightRequest="200"
+    RemainingItemsThreshold="5"
+    RemainingItemsThresholdReachedCommand="{Binding LoadMoreCommand}">
+    <agile:VirtualizedCollectionView.ItemTemplate>
+        <DataTemplate x:DataType="local:Post">
+            <StackLayout Padding="16,12">
+                <Label Text="{Binding Title}" FontSize="16" FontAttributes="Bold" />
+                <Label Text="{Binding Body}" />
+            </StackLayout>
+        </DataTemplate>
+    </agile:VirtualizedCollectionView.ItemTemplate>
+</agile:VirtualizedCollectionView>
 ```
 
 **Infinite scroll with scroll monitoring (MVVM):**
 ```xml
-<controls:VirtualizedCollectionView
+<agile:VirtualizedCollectionView
     ItemsSource="{Binding Items}"
     ItemHeight="80"
     RemainingItemsThreshold="15"
     RemainingItemsThresholdReachedCommand="{Binding LoadMoreCommand}"
     ScrolledCommand="{Binding ScrolledCommand}">
-    <controls:VirtualizedCollectionView.ItemTemplate>
+    <agile:VirtualizedCollectionView.ItemTemplate>
         <DataTemplate x:DataType="local:MyItem">
             <Label Text="{Binding Title}" Padding="16,12" />
         </DataTemplate>
-    </controls:VirtualizedCollectionView.ItemTemplate>
-    <controls:VirtualizedCollectionView.EmptyView>
-        <Label Text="No items found." HorizontalOptions="Center" />
-    </controls:VirtualizedCollectionView.EmptyView>
-</controls:VirtualizedCollectionView>
+    </agile:VirtualizedCollectionView.ItemTemplate>
+    <agile:VirtualizedCollectionView.EmptyView>
+        <Label Text="No items found." HorizontalOptions="Center" VerticalOptions="Center" />
+    </agile:VirtualizedCollectionView.EmptyView>
+</agile:VirtualizedCollectionView>
 ```
 
 **Programmatic scroll:**
@@ -309,8 +412,7 @@ List or grid with **native virtualization** on all platforms. Supports fixed hei
 MyList.ScrollTo(index: 50, animated: true);
 ```
 
-### `VirtualizedScrolledEventArgs`
-
+**Reading scroll position:**
 ```csharp
 private void OnScrolled(object sender, VirtualizedScrolledEventArgs e)
 {
@@ -318,31 +420,71 @@ private void OnScrolled(object sender, VirtualizedScrolledEventArgs e)
 }
 ```
 
-### Performance tip
+### `ItemSizeStrategy` guide
 
-Set `ItemHeight` to a fixed value whenever the template has a predictable height. This allows RecyclerView (Android) and UICollectionView (iOS) to calculate layout without measuring each item individually, reducing scroll time and CPU usage.
+| Strategy | When to use | Platforms |
+|---|---|---|
+| `Fixed` | Item template has a known, constant height. Set `ItemHeight` to that value. | Android, iOS, macOS, Windows |
+| `Dynamic` | Template height varies per item (e.g. feed with variable-length text). Set `ItemHeightRequest` to an estimate close to the average height. | iOS, macOS. On Android, set `ItemHeight = -1` instead (same effect). |
+
+> **iOS tip:** When using `ItemSizeStrategy.Dynamic`, set `ItemHeightRequest` as close to the real average height as possible. UIKit uses this estimate to allocate the initial cell pool. A very small estimate (e.g. 44) causes UIKit to create many extra cells upfront, driving memory usage significantly higher.
+
+### Performance tips
+
+- **Always set `ItemHeight`** when the template has a predictable height. This lets RecyclerView and UICollectionView skip individual item measurement during scroll, reducing CPU usage and jank.
+- **Set `ItemSizeStrategy = Fixed`** (the default) unless items genuinely vary in height.
+- **Use `x:DataType`** in `DataTemplate` to enable compiled bindings — avoids reflection overhead per item.
+- **Prefer `ObservableCollection`** over replacing the entire `ItemsSource` for incremental updates. On Android, incremental changes run `DiffUtil` which animates and avoids full redraw. On iOS, changes are batched into a single `PerformBatchUpdates` call.
 
 ---
 
-## Enum `ZoomImageAspect`
+## Enums
+
+### `ZoomImageAspect`
 
 Used by `ImageView.AspectMode` and `GalleryView.AspectMode`.
 
-| Value | Behavior |
+| Value | Behavior | Equivalent |
+|---|---|---|
+| `CenterCrop` | Fills the view, cropping edges | Android `centerCrop` / iOS `ScaleAspectFill` / WinUI `UniformToFill` |
+| `AspectFit` | Fits the entire image, letterboxing if needed | Android `fitCenter` / iOS `ScaleAspectFit` / WinUI `Uniform` |
+
+### `VirtualizedOrientation`
+
+Used by `VirtualizedCollectionView.Orientation`.
+
+| Value | Description |
 |---|---|
-| `CenterCrop` | Fills the available space, cropping the edges (equivalent to `ScaleAspectFill` / `UniformToFill`) |
-| `AspectFit` | Shows the entire image within the space, with letterboxing if needed (equivalent to `ScaleAspectFit` / `Uniform`) |
+| `Vertical` | Items flow top to bottom (default) |
+| `Horizontal` | Items flow left to right |
+
+### `ItemSizeStrategy`
+
+Used by `VirtualizedCollectionView.ItemSizeStrategy`.
+
+| Value | Description |
+|---|---|
+| `Fixed` | Each item has the height set by `ItemHeight`. Fastest option. |
+| `Dynamic` | Items measure themselves. Use `ItemHeightRequest` as the initial size hint. |
 
 ---
 
 ## Requirements
 
-- .NET 10
-- .NET MAUI 10
-- Android API 21+
-- iOS 15+
-- macOS Catalyst 15+
-- Windows 10 build 17763+
+| Requirement | Version |
+|---|---|
+| .NET | 10 |
+| .NET MAUI | 10 |
+| Android | API 21+ (Android 5.0) |
+| iOS | 15.0+ |
+| macOS Catalyst | 15.0+ |
+| Windows | 10 build 19041+ (Windows 10 2004) |
+
+---
+
+## Performance tuning
+
+For a detailed reference on internal cache sizes, layout manager selection, DiffUtil behavior, iOS coalescing thresholds, and memory guidelines for images inside cells, see **[TUNING.md](TUNING.md)**.
 
 ---
 

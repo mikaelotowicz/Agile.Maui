@@ -27,6 +27,8 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ReloadItems(),
             [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ReloadItems(),
             [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.RefreshLayout(),
+            [nameof(VirtualizedCollectionView.ItemHeightRequest)]                      = (h, _) => h.RefreshLayout(),
+            [nameof(VirtualizedCollectionView.ItemSizeStrategy)]                       = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.ColumnCount)]                            = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.RefreshLayout(),
@@ -49,6 +51,10 @@ public sealed class VirtualizedCollectionViewHandler
     private VrCollectionDelegate?     _delegate;
     private INotifyCollectionChanged? _collectionChangedSource;
     private UIView?                   _emptyNativeView;
+    // Coalescing de CollectionChanged: acumula eventos rápidos (ex: 500 × Items.Add)
+    // em um único PerformBatchUpdates, evitando 500 dispatches individuais ao UIKit.
+    private readonly List<NotifyCollectionChangedEventArgs> _pendingChanges = [];
+    private bool _flushScheduled;
 
     public VirtualizedCollectionViewHandler() : base(Mapper, Commands) { }
 
@@ -56,17 +62,26 @@ public sealed class VirtualizedCollectionViewHandler
     {
         var cv = new UICollectionView(CGRect.Empty, BuildCompositionalLayout())
         {
-            BackgroundColor        = UIColor.Clear,
-            AlwaysBounceVertical   = true,
-            AlwaysBounceHorizontal = false,
+            BackgroundColor = UIColor.Clear,
         };
+        ApplyBounceDirection(cv);
         cv.RegisterClassForCell(typeof(VrMauiCell), CellId);
         return cv;
+    }
+
+    private void ApplyBounceDirection(UICollectionView cv)
+    {
+        var horizontal = VirtualView?.Orientation == VirtualizedOrientation.Horizontal;
+        cv.AlwaysBounceVertical   = !horizontal;
+        cv.AlwaysBounceHorizontal = horizontal;
     }
 
     protected override void ConnectHandler(UICollectionView platformView)
     {
         base.ConnectHandler(platformView);
+        // Prefetching agressivo cria células extras fora da tela antes de serem necessárias,
+        // multiplicando a memória consumida por cada MAUI View no pool de reuse.
+        platformView.PrefetchingEnabled = false;
         _delegate = new VrCollectionDelegate(
             onScrolled:    (x, y) => VirtualView?.RaiseScrolled(x, y),
             onScrollEnded: CheckRemainingThreshold);
@@ -77,6 +92,8 @@ public sealed class VirtualizedCollectionViewHandler
     protected override void DisconnectHandler(UICollectionView platformView)
     {
         UnsubscribeCollection();
+        _flushScheduled = false;
+        _pendingChanges.Clear();
         platformView.Delegate   = null!;
         _delegate               = null;
         _dataSource?.Dispose();
@@ -93,10 +110,16 @@ public sealed class VirtualizedCollectionViewHandler
         var itemHeight = VirtualView?.ItemHeight ?? -1;
         var horizontal = VirtualView?.Orientation == VirtualizedOrientation.Horizontal;
 
-        // Dimensão da altura: absoluta quando fixada, estimada (self-sizing) caso contrário.
-        var heightDim = itemHeight > 0
-            ? NSCollectionLayoutDimension.CreateAbsolute((nfloat)itemHeight)
-            : NSCollectionLayoutDimension.CreateEstimated(44);
+        // ItemHeight > 0  →  CreateAbsolute(itemHeight): altura explícita, sobrepõe tudo.
+        // Fixed            →  CreateAbsolute(ItemHeightRequest): altura fixa sem per-cell measure.
+        // Dynamic          →  CreateEstimated(ItemHeightRequest): self-sizing via
+        //                     PreferredLayoutAttributesFitting, suporta expanders e conteúdo variável.
+        var estimatedH  = (nfloat)Math.Max(44, VirtualView?.ItemHeightRequest ?? 350);
+        var useAbsolute = itemHeight > 0 || VirtualView?.ItemSizeStrategy == ItemSizeStrategy.Fixed;
+        var absoluteH   = itemHeight > 0 ? (nfloat)itemHeight : estimatedH;
+        var heightDim   = useAbsolute
+            ? NSCollectionLayoutDimension.CreateAbsolute(absoluteH)
+            : NSCollectionLayoutDimension.CreateEstimated(estimatedH);
 
         NSCollectionLayoutGroup group;
         if (!horizontal)
@@ -116,9 +139,9 @@ public sealed class VirtualizedCollectionViewHandler
         else
         {
             // Scroll horizontal: cada grupo é uma coluna com `columns` itens de altura igual.
-            var widthDim  = itemHeight > 0
-                ? NSCollectionLayoutDimension.CreateAbsolute((nfloat)itemHeight)
-                : NSCollectionLayoutDimension.CreateEstimated(44);
+            var widthDim = useAbsolute
+                ? NSCollectionLayoutDimension.CreateAbsolute(absoluteH)
+                : NSCollectionLayoutDimension.CreateEstimated(estimatedH);
             var itemSize  = NSCollectionLayoutSize.Create(
                 widthDim,
                 NSCollectionLayoutDimension.CreateFractionalHeight((nfloat)(1.0 / columns)));
@@ -149,6 +172,7 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (PlatformView is null) return;
         PlatformView.SetCollectionViewLayout(BuildCompositionalLayout(), animated: false);
+        ApplyBounceDirection(PlatformView);
         PlatformView.ReloadData();
     }
 
@@ -194,53 +218,68 @@ public sealed class VirtualizedCollectionViewHandler
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_dataSource is null || PlatformView is null) return;
-        MainThread.BeginInvokeOnMainThread(() =>
+
+        // Reset precisa de snapshot completo — descarta qualquer fila pendente.
+        if (e.Action == NotifyCollectionChangedAction.Reset)
         {
-            if (_dataSource is null || PlatformView is null) return;
+            _pendingChanges.Clear();
+            _flushScheduled = false;
+            MainThread.BeginInvokeOnMainThread(ReloadItems);
+            return;
+        }
 
-            switch (e.Action)
+        // Acumula o evento; agenda flush apenas uma vez por ciclo de run loop.
+        // Isso coalesce 500 × Add (de foreach Items.Add) em um único PerformBatchUpdates.
+        _pendingChanges.Add(e);
+        if (!_flushScheduled)
+        {
+            _flushScheduled = true;
+            MainThread.BeginInvokeOnMainThread(FlushPendingChanges);
+        }
+    }
+
+    private void FlushPendingChanges()
+    {
+        _flushScheduled = false;
+        if (_dataSource is null || PlatformView is null || _pendingChanges.Count == 0) return;
+
+        var pending = _pendingChanges.ToArray(); // snapshot local
+        _pendingChanges.Clear();
+
+        // Lote grande ou misto (Add + Remove, Move, etc.) → snapshot fresco é mais seguro.
+        // Threshold 30: abaixo disso, anima; acima, ReloadData é mais rápido e menos arriscado.
+        var firstAction = pending[0].Action;
+        var isMixed     = Array.Exists(pending, e => e.Action != firstAction);
+        var hasMove     = Array.Exists(pending, e => e.Action == NotifyCollectionChangedAction.Move);
+
+        if (pending.Length > 30 || isMixed || hasMove)
+        {
+            ReloadItems();
+            return;
+        }
+
+        // Lote pequeno e uniforme: aplica todos em um único PerformBatchUpdates.
+        PlatformView.PerformBatchUpdates(() =>
+        {
+            foreach (var e in pending)
             {
-                case NotifyCollectionChangedAction.Add when e.NewItems is not null:
-                    PlatformView.PerformBatchUpdates(() =>
-                    {
-                        _dataSource.ApplyCollectionChange(e);
+                _dataSource.ApplyCollectionChange(e);
+                switch (e.Action)
+                {
+                    case NotifyCollectionChangedAction.Add when e.NewItems is not null:
                         PlatformView.InsertItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count));
-                    }, null);
-                    break;
-
-                case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
-                    PlatformView.PerformBatchUpdates(() =>
-                    {
-                        _dataSource.ApplyCollectionChange(e);
+                        break;
+                    case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
                         PlatformView.DeleteItems(IndexPaths(e.OldStartingIndex, e.OldItems.Count));
-                    }, null);
-                    break;
-
-                case NotifyCollectionChangedAction.Replace when e.NewItems is not null:
-                    PlatformView.PerformBatchUpdates(() =>
-                    {
-                        _dataSource.ApplyCollectionChange(e);
+                        break;
+                    case NotifyCollectionChangedAction.Replace when e.NewItems is not null:
                         PlatformView.ReloadItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count));
-                    }, null);
-                    break;
-
-                case NotifyCollectionChangedAction.Move:
-                    PlatformView.PerformBatchUpdates(() =>
-                    {
-                        _dataSource.ApplyCollectionChange(e);
-                        PlatformView.MoveItem(
-                            NSIndexPath.FromItemSection(e.OldStartingIndex, 0),
-                            NSIndexPath.FromItemSection(e.NewStartingIndex, 0));
-                    }, null);
-                    break;
-
-                default:
-                    // Reset ou outros: re-snapshot completo da fonte.
-                    ReloadItems();
-                    return; // ReloadItems já chama UpdateEmptyVisibility
+                        break;
+                }
             }
-            UpdateEmptyVisibility(_dataSource.Items.Count == 0);
-        });
+        }, null);
+
+        UpdateEmptyVisibility(_dataSource.Items.Count == 0);
     }
 
     // ── Threshold / scroll ────────────────────────────────────────────────────
@@ -253,9 +292,16 @@ public sealed class VirtualizedCollectionViewHandler
         var visiblePaths = PlatformView.IndexPathsForVisibleItems;
         if (visiblePaths.Length == 0) return;
 
-        var total       = _dataSource.Items.Count;
-        var lastVisible = visiblePaths.Max(ip => (int)ip.Item);
+        // Loop manual — evita closure LINQ + boxing de nint para cada NSIndexPath.
+        var lastVisible = -1;
+        foreach (var ip in visiblePaths)
+        {
+            var idx = (int)ip.Item;
+            if (idx > lastVisible) lastVisible = idx;
+        }
+        if (lastVisible < 0) return;
 
+        var total = _dataSource.Items.Count;
         if (total > 0 && total - 1 - lastVisible <= threshold)
             VirtualView?.RaiseRemainingItemsThresholdReached();
     }
@@ -318,7 +364,10 @@ public sealed class VirtualizedCollectionViewHandler
     private static List<object> SnapshotItems(IEnumerable? source)
     {
         if (source is null) return [];
-        var list = new List<object>();
+        // Pré-aloca quando o source expõe Count (ObservableCollection, List, Array, etc.),
+        // evitando as realocações geométricas do List<T> para 500+ itens.
+        var capacity = source is System.Collections.ICollection c ? c.Count : 0;
+        var list     = new List<object>(capacity > 0 ? capacity : 16);
         foreach (var item in source) list.Add(item);
         return list;
     }
@@ -330,65 +379,115 @@ public sealed class VirtualizedCollectionViewHandler
 
 internal sealed class VrMauiCell : UICollectionViewCell
 {
-    private View?   _mauiView;
-    private UIView? _nativeView;
-    private CancellationTokenSource? _cts;
+    private View?             _mauiView;
+    private UIView?           _nativeView;
+    private UICollectionView? _collectionView;
+    private DataTemplate?     _template;
+    private bool              _measureInvalidated;
+    private bool              _layoutStabilized;
 
     [Export("initWithFrame:")]
     public VrMauiCell(CGRect frame) : base(frame) { }
 
-    // Cancela qualquer operação async anterior e devolve um token para a nova.
-    public CancellationToken LoadToken
+    public void Bind(object item, DataTemplate template, IMauiContext context, UICollectionView collectionView)
     {
-        get
-        {
-            _cts?.Cancel();
-            _cts = new CancellationTokenSource();
-            return _cts.Token;
-        }
-    }
+        _collectionView = collectionView;
 
-    public void Bind(object item, DataTemplate template, IMauiContext context)
-    {
-        if (_mauiView is null)
+        // Recria a view quando o template muda em runtime; sem esse check,
+        // cells do pool reuse manteriam a hierarquia do template antigo.
+        if (_mauiView is null || !ReferenceEquals(_template, template))
         {
+            if (_mauiView is not null)
+            {
+                _mauiView.MeasureInvalidated -= OnMauiMeasureInvalidated;
+                _mauiView.Handler?.DisconnectHandler();
+                _nativeView?.RemoveFromSuperview();
+                _nativeView       = null;
+                _mauiView         = null;
+                _layoutStabilized = false;
+            }
+            _template   = template;
             _mauiView   = (View)template.CreateContent();
             _nativeView = _mauiView.ToPlatform(context);
+            _mauiView.MeasureInvalidated += OnMauiMeasureInvalidated;
 
-            _nativeView.TranslatesAutoresizingMaskIntoConstraints = false;
+            // Frame-based layout: MAUI gerencia o posicionamento via Arrange(),
+            // evitando conflito entre Auto Layout e o sistema de layout do MAUI.
+            _nativeView.AutoresizingMask =
+                UIViewAutoresizing.FlexibleWidth | UIViewAutoresizing.FlexibleHeight;
             ContentView.AddSubview(_nativeView);
-            NSLayoutConstraint.ActivateConstraints([
-                _nativeView.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor),
-                _nativeView.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor),
-                _nativeView.LeadingAnchor.ConstraintEqualTo(ContentView.LeadingAnchor),
-                _nativeView.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor),
-            ]);
         }
 
         _mauiView.BindingContext = item;
+        SetNeedsLayout();
+    }
+
+    private void OnMauiMeasureInvalidated(object? sender, EventArgs e)
+    {
+        // Ignora invalidações durante o setup inicial (BindingContext recém-atribuído
+        // ainda não completou um ciclo PreferredLayoutAttributesFitting). Sem esse
+        // guard, o BindingContext dispara MeasureInvalidated → InvalidateLayout() →
+        // novos cells → BindingContext → loop infinito travando a lista.
+        if (!_layoutStabilized) return;
+        _measureInvalidated = true;
+        SetNeedsLayout();
+    }
+
+    public override void LayoutSubviews()
+    {
+        base.LayoutSubviews();
+        if (_mauiView is null || _nativeView is null) return;
+        var bounds = ContentView.Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+        _nativeView.Frame = bounds;
+        ((IView)_mauiView).Arrange(new Rect(0, 0, bounds.Width, bounds.Height));
+
+        if (_measureInvalidated)
+        {
+            _measureInvalidated = false;
+            // UIKit chamará PreferredLayoutAttributesFitting → nova altura → resize animado.
+            _collectionView?.CollectionViewLayout.InvalidateLayout();
+        }
     }
 
     public override void PrepareForReuse()
     {
         base.PrepareForReuse();
-        _cts?.Cancel();
-        _cts = null;
+        _measureInvalidated = false;
+        _layoutStabilized   = false;
         if (_mauiView is not null)
             _mauiView.BindingContext = null;
     }
 
-    // Garante que o self-sizing via CreateEstimated funcione: força o layout
-    // da célula antes que o UIKit meça via systemLayoutSizeFitting.
+    // Self-sizing via CompositionalLayout (CreateEstimated): o UIKit chama este método
+    // para obter a altura real da célula. Usamos MAUI Measure porque MAUI views não
+    // expõem IntrinsicContentSize para Auto Layout — SystemLayoutSizeFittingSize retorna
+    // height=0, tornando as células invisíveis.
     // [Export] necessário porque o binding .NET 10 não expõe este método como virtual.
     [Export("preferredLayoutAttributesFittingAttributes:")]
     public UICollectionViewLayoutAttributes PreferredLayoutAttributesFitting(
         UICollectionViewLayoutAttributes layoutAttributes)
     {
-        SetNeedsLayout();
-        LayoutIfNeeded();
-        var size = ContentView.SystemLayoutSizeFittingSize(
-            new CGSize(layoutAttributes.Frame.Width, UIView.UILayoutFittingCompressedSize.Height));
-        layoutAttributes.Size = size;
+        if (_mauiView is null) return layoutAttributes;
+
+        var width = layoutAttributes.Frame.Width;
+        if (width <= 0) return layoutAttributes;
+
+        // Mede a view com a largura da coluna (determinada pelo CompositionalLayout)
+        // e altura livre — MAUI calcula a altura necessária para o conteúdo.
+        var measured = ((IView)_mauiView).Measure(width, double.PositiveInfinity);
+        var height   = Math.Max(1, measured.Height);
+
+        // Célula medida pelo UIKit: a partir daqui pode reagir a MeasureInvalidated
+        // (ex: expander abre/fecha) sem risco de loop no setup inicial.
+        _layoutStabilized = true;
+
+        layoutAttributes.Frame = new CGRect(
+            layoutAttributes.Frame.X,
+            layoutAttributes.Frame.Y,
+            width,
+            (nfloat)height);
+
         return layoutAttributes;
     }
 
@@ -396,10 +495,14 @@ internal sealed class VrMauiCell : UICollectionViewCell
     {
         if (disposing)
         {
-            _cts?.Cancel();
-            _cts?.Dispose();
-            _cts = null;
+            if (_mauiView is not null)
+                _mauiView.MeasureInvalidated -= OnMauiMeasureInvalidated;
             _mauiView?.Handler?.DisconnectHandler();
+            _nativeView?.RemoveFromSuperview();
+            _collectionView = null;
+            _nativeView     = null;
+            _mauiView       = null;
+            _template       = null;
         }
         base.Dispose(disposing);
     }
@@ -438,7 +541,7 @@ internal sealed class VrDataSource : UICollectionViewDataSource
     {
         var cell = (VrMauiCell)collectionView.DequeueReusableCell(_cellId, indexPath);
         if ((uint)indexPath.Item < (uint)Items.Count)
-            cell.Bind(Items[(int)indexPath.Item], _template, _mauiContext);
+            cell.Bind(Items[(int)indexPath.Item], _template, _mauiContext, collectionView);
         return cell;
     }
 

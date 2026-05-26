@@ -219,10 +219,15 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
         Pager = new ViewPager2(context) { Orientation = ViewPager2.OrientationHorizontal };
 
         var recycler = (RecyclerView)Pager.GetChildAt(0)!;
+        // Restaurar comportamentos padrão: permitir clipping e sem padding/margem adicional
         recycler.SetClipToPadding(true);
         recycler.SetClipChildren(true);
         recycler.SetPadding(0, 0, 0, 0);
-        recycler.SetItemViewCacheSize(0);
+
+        // OffscreenPageLimit/SetItemViewCacheSize podem afetar o comportamento
+        // de paginação. Use um pequeno cache para evitar que páginas adjacentes
+        // sejam desenhadas parcialmente fora do viewport.
+        recycler.SetItemViewCacheSize(1);
 
         Pager.OffscreenPageLimit = 1;
         Pager.SetPageTransformer(null);
@@ -267,6 +272,37 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
         // FrameLayout.onLayout positions children using getMeasuredWidth/Height, not layout bounds.
         // MAUI measure/layout passes can give different sizes — force Pager to fill actual bounds.
         Pager.Layout(0, 0, w, h);
+        // Defensive: garantir que cada item do RecyclerView (ViewPager2) tenha largura igual ao container
+        try
+        {
+            var recycler = (RecyclerView)Pager.GetChildAt(0)!;
+            for (int i = 0; i < recycler.ChildCount; i++)
+            {
+                var child = recycler.GetChildAt(i);
+                if (child is null) continue;
+                try
+                {
+                    var lp = child.LayoutParameters as RecyclerView.LayoutParams
+                             ?? new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent);
+                    if (lp.Width != ViewGroup.LayoutParams.MatchParent || lp.Height != ViewGroup.LayoutParams.MatchParent)
+                    {
+                        lp.Width = ViewGroup.LayoutParams.MatchParent;
+                        lp.Height = ViewGroup.LayoutParams.MatchParent;
+                        child.LayoutParameters = lp;
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+
+
+        // Log de diagnóstico temporário: medidas do Pager e do container
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"[GalleryLog] OnLayout: container={w}x{h} pager.Width={Pager.Width} pager.MeasuredWidth={Pager.MeasuredWidth} pager.ChildCount={Pager.ChildCount}");
+        }
+        catch { }
 
         if (Dots.Visibility != ViewStates.Gone)
         {
@@ -382,12 +418,12 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         var isFit   = _aspectMode != ZoomImageAspect.CenterCrop;
 
         // FrameLayout raiz necessário para ViewPager2 resolver MATCH_PARENT corretamente.
-        var frame = new global::Android.Widget.FrameLayout(context)
-        {
-            LayoutParameters = new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent,
-                ViewGroup.LayoutParams.MatchParent),
-        };
+        var frame = new global::Android.Widget.FrameLayout(context);
+        // Usar RecyclerView.LayoutParams garante que o ViewPager2/RecyclerView
+        // interpretem corretamente a largura/altura do item como MATCH_PARENT.
+        frame.LayoutParameters = new RecyclerView.LayoutParams(
+            ViewGroup.LayoutParams.MatchParent,
+            ViewGroup.LayoutParams.MatchParent);
 
         // ImageView MATCH_PARENT em ambos os modos.
         // FitCenter centraliza a imagem dentro da área disponível (letterbox).
@@ -442,6 +478,35 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         var listener = new ImgGlideRequestListener(
             onReady: _onImageLoaded,
             onFail:  _onImageFailed);
+
+        // Assegura defensivamente que o item nativo tem LayoutParams MATCH_PARENT
+        try
+        {
+            var lp = vh.ItemView.LayoutParameters as RecyclerView.LayoutParams;
+            if (lp is null || lp.Width != ViewGroup.LayoutParams.MatchParent || lp.Height != ViewGroup.LayoutParams.MatchParent)
+            {
+                // Adiar alteração de LayoutParameters para evitar modificar during layout pass
+                vh.ItemView.Post(() =>
+                {
+                    try
+                    {
+                        vh.ItemView.LayoutParameters = new RecyclerView.LayoutParams(
+                            ViewGroup.LayoutParams.MatchParent,
+                            ViewGroup.LayoutParams.MatchParent);
+                    }
+                    catch { }
+                });
+            }
+        }
+        catch { }
+
+        // Log de diagnóstico do tamanho das views no momento do bind
+        try
+        {
+            var parent = vh.ItemView.Parent as global::Android.Views.View;
+            System.Diagnostics.Debug.WriteLine($"[GalleryLog] OnBind pos={position} item={vh.ItemView.Width} measured={vh.ItemView.MeasuredWidth} parent={(parent?.Width ?? -1)} image={vh.ImageView.Width} imgMeasured={vh.ImageView.MeasuredWidth}");
+        }
+        catch { }
 
         if (_isUrl)
         {
