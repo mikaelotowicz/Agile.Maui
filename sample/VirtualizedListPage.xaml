@@ -75,7 +75,7 @@
             x:Name="SearchBar"
             Grid.Row="1"
             Margin="8,6"
-            BackgroundColor="Transparent"
+            BackgroundColor="White"
             Placeholder="Buscar produto..."
             TextChanged="OnSearchTextChanged" />
 
@@ -83,6 +83,8 @@
         <controls:VirtualizedCollectionView
             x:Name="ProductList"
             Grid.Row="2"
+            ItemHeightRequest="200"
+            ItemSizeStrategy="Dynamic"
             ItemsSource="{Binding Items}"
             RemainingItemsThreshold="8"
             RemainingItemsThresholdReached="OnLoadMore"
@@ -111,9 +113,12 @@
                                     StrokeThickness="0"
                                     VerticalOptions="Center"
                                     WidthRequest="76">
-                                    <Image
-                                        Aspect="AspectFill"
+                                    <controls:ImageView
+                                        AspectMode="CenterCrop"
+                                        EnableFullscreen="True"
+                                        FullscreenSource="{Binding FullImageUrl}"
                                         HeightRequest="76"
+                                        IsUrl="True"
                                         Source="{Binding ImageUrl}"
                                         WidthRequest="76" />
                                 </Border>

@@ -11,9 +11,9 @@ public sealed class ProductItem : INotifyPropertyChanged
     public string Description { get; init; } = "";
     public double Price       { get; init; }
     public double Rating      { get; init; }
-    public string ImageUrl    { get; init; } = "";
+    public string ImageUrl         { get; init; } = "";
+    public string FullImageUrl     { get; init; } = "";
     public string Category    { get; init; } = "";
-
     public string RatingText  => $"★ {Rating:F1}";
     public string PriceText   => $"R$ {Price:F2}";
 
@@ -140,7 +140,8 @@ public sealed class ProductItem : INotifyPropertyChanged
             Description = desc,
             Price       = Math.Round(price, 2),
             Rating      = Math.Round(Math.Min(rating, 5.0), 1),
-            ImageUrl    = $"https://picsum.photos/seed/prod{id}/80/80",
+            ImageUrl     = $"https://picsum.photos/seed/prod{id}/80/80",
+            FullImageUrl = $"https://picsum.photos/seed/prod{id}/600/500",
         };
     }
 

@@ -2,6 +2,7 @@
 // MacCatalyst uses the same UIKit APIs as iOS — this file mirrors Platforms/iOS/ImageViewHandler.cs
 using CoreGraphics;
 using Foundation;
+using ImageIO;
 using Microsoft.Maui.Handlers;
 using UIKit;
 
@@ -21,6 +22,13 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
         };
 
     public ImageViewHandler() : base(Mapper) { }
+
+    // NSUrlSession.SharedSession usa a main queue como delegateQueue — callbacks na main thread.
+    // Session própria com NSOperationQueue background garante callbacks fora da main thread.
+    private static readonly NSUrlSession _session = NSUrlSession.FromConfiguration(
+        NSUrlSessionConfiguration.DefaultSessionConfiguration,
+        null!,
+        new NSOperationQueue());
 
     private UITapGestureRecognizer? _tapGesture;
     private CancellationTokenSource? _loadCts;
@@ -109,12 +117,36 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
 
     private async Task LoadFromUrlAsync(string url, CancellationToken token)
     {
+        // Lidos na main thread antes do ConfigureAwait — BindableObject e UIScreen não são thread-safe
+        var targetW     = VirtualView.WidthRequest;
+        var targetH     = VirtualView.HeightRequest;
+        var screenScale = UIScreen.MainScreen.Scale;
+
+        NSUrlSessionDataTask? dataTask = null;
+        var tcs = new TaskCompletionSource<(NSData?, NSUrlResponse?)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
         try
         {
-            var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url));
+            var request = new NSUrlRequest(new NSUrl(url));
 
-            var data = result.Data;
-            var response = result.Response;
+            dataTask = _session.CreateDataTask(request, (data, response, error) =>
+            {
+                if (error is not null) tcs.TrySetException(new NSErrorException(error));
+                else                   tcs.TrySetResult((data, response));
+            });
+
+            // Cancela a task nativa quando o token disparar, evitando esperar o timeout do sistema
+            using var reg = token.Register(() =>
+            {
+                dataTask?.Cancel();
+                tcs.TrySetCanceled(token);
+            });
+
+            dataTask.Resume();
+
+            // ConfigureAwait(false): decode não roda na main thread
+            var (data, response) = await tcs.Task.ConfigureAwait(false);
 
             if (token.IsCancellationRequested) return;
 
@@ -128,7 +160,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
                 return;
             }
 
-            var image = UIImage.LoadFromData(data);
+            var image = DecodeDownsampled(data, targetW, targetH, screenScale);
             if (image is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
@@ -149,6 +181,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
             });
         }
         catch (OperationCanceledException) { }
+        catch (NSErrorException ex) when (ex.Error.Code == -999) { } // NSURLErrorCancelled — cancelado pelo token
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
@@ -159,6 +192,32 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
                 VirtualView?.RaiseImageFailed();
             });
         }
+    }
+
+    private static UIImage? DecodeDownsampled(NSData data, double w, double h, nfloat scale)
+    {
+        if (w > 0 && h > 0 && scale > 0)
+        {
+            try
+            {
+                var maxPx = (int)(Math.Max(w, h) * (double)scale);
+                using var src = CGImageSource.FromData(data);
+                if (src is not null)
+                {
+                    using var cg = src.CreateThumbnail(0, new CGImageThumbnailOptions
+                    {
+                        CreateThumbnailFromImageAlways = true,
+                        CreateThumbnailWithTransform   = true,
+                        MaxPixelSize                   = maxPx,
+                    });
+                    if (cg is not null)
+                        return UIImage.FromImage(cg, scale, UIImageOrientation.Up);
+                }
+            }
+            catch { /* fallback abaixo */ }
+        }
+
+        return UIImage.LoadFromData(data);
     }
 
     private void ApplyPlaceholder()
@@ -176,8 +235,9 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
         var vc = GetViewController();
         if (vc is null) return;
 
+        var fsSource = VirtualView.FullscreenSource ?? VirtualView.Source;
         var fullscreen = new FullscreenZoomViewController(
-            source:       VirtualView.Source,
+            source:       fsSource,
             isUrl:        VirtualView.IsUrl,
             placeholder:  VirtualView.Placeholder,
             maxZoom:      VirtualView.MaxZoom,

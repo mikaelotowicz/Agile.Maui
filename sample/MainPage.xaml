@@ -14,7 +14,7 @@
     <ScrollView>
         <VerticalStackLayout Padding="16,24" Spacing="0">
 
-            <!--  Cabeçalho  -->
+            <!--  Cabeçalho  --><!--
             <Label
                 Margin="0,0,0,4"
                 Style="{StaticResource Headline}"
@@ -28,7 +28,7 @@
                 TextColor="{AppThemeBinding Light={StaticResource Gray500},
                                             Dark={StaticResource Gray400}}" />
 
-            <!--  ── 1. URL · CenterCrop ────────────────────────────────  -->
+            --><!--  ── 1. URL · CenterCrop ────────────────────────────────  --><!--
             <Label
                 Margin="2,0,0,6"
                 FontAttributes="Bold"
@@ -48,7 +48,7 @@
                 Placeholder="dotnet_bot"
                 Source="https://picsum.photos/seed/maui1/800/500" />
 
-            <!--  ── 2. URL · AspectFit ─────────────────────────────────  -->
+            --><!--  ── 2. URL · AspectFit ─────────────────────────────────  --><!--
             <Label
                 Margin="2,20,0,6"
                 FontAttributes="Bold"
@@ -70,7 +70,7 @@
                 Placeholder="dotnet_bot"
                 Source="https://picsum.photos/seed/maui2/400/700" />
 
-            <!--  ── 3. Imagem local ───────────────────────────────────  -->
+            --><!--  ── 3. Imagem local ───────────────────────────────────  --><!--
             <Label
                 Margin="2,20,0,6"
                 FontAttributes="Bold"
@@ -89,7 +89,7 @@
                 MaxZoom="4"
                 Source="dotnet_bot" />
 
-            <!--  ── 4. URL inválida — placeholder + fullscreen off ────  -->
+            --><!--  ── 4. URL inválida — placeholder + fullscreen off ────  --><!--
             <Label
                 Margin="2,20,0,6"
                 FontAttributes="Bold"
@@ -106,7 +106,7 @@
                 ImageLoadedCommand="{Binding ImageLoadedCommand}"
                 IsUrl="True"
                 Placeholder="dotnet_bot"
-                Source="https://url-invalida.local/sem-imagem.jpg" />
+                Source="https://url-invalida.local/sem-imagem.jpg" />-->
 
             <!--  ══ GalleryView ══════════════════════════════════════  -->
             <Label
@@ -144,7 +144,7 @@
                 SelectionChangedCommand="{Binding UrlSelectionChangedCommand}"
                 ShowIndicator="True" />
 
-            <!--  ── 6. Galeria de imagens locais ─────────────────────  -->
+            <!--  ── 6. Galeria de imagens locais ─────────────────────  --><!--
             <Label
                 Margin="2,20,0,6"
                 FontAttributes="Bold"
@@ -168,7 +168,7 @@
                 SelectionChangedCommand="{Binding LocalSelectionChangedCommand}"
                 ShowIndicator="True" />
 
-            <!--  ── Log de eventos ────────────────────────────────────  -->
+            --><!--  ── Log de eventos ────────────────────────────────────  --><!--
             <Border
                 Margin="0,24,0,0"
                 Padding="14,10"
@@ -192,7 +192,7 @@
                 </VerticalStackLayout>
             </Border>
 
-            <BoxView HeightRequest="32" Color="Transparent" />
+            <BoxView HeightRequest="32" Color="Transparent" />-->
 
         </VerticalStackLayout>
     </ScrollView>

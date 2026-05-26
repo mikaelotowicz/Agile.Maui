@@ -32,6 +32,10 @@ public class ImageView : View
         BindableProperty.Create(
             nameof(EnableFullscreen), typeof(bool), typeof(ImageView), true);
 
+    public static readonly BindableProperty FullscreenSourceProperty =
+        BindableProperty.Create(
+            nameof(FullscreenSource), typeof(string), typeof(ImageView), null);
+
     public static readonly BindableProperty AspectModeProperty =
         BindableProperty.Create(
             nameof(AspectMode), typeof(ZoomImageAspect), typeof(ImageView),
@@ -76,6 +80,13 @@ public class ImageView : View
     {
         get => (bool)GetValue(EnableFullscreenProperty);
         set => SetValue(EnableFullscreenProperty, value);
+    }
+
+    /// <summary>URL/recurso de alta qualidade para o fullscreen. Se null, usa Source.</summary>
+    public string? FullscreenSource
+    {
+        get => (string?)GetValue(FullscreenSourceProperty);
+        set => SetValue(FullscreenSourceProperty, value);
     }
 
     /// <summary>Modo de exibição no thumbnail.</summary>

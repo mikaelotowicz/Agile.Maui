@@ -63,9 +63,8 @@ public sealed class VirtualizedCollectionViewHandler
         platformView.LayoutParameters = new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MatchParent,
             ViewGroup.LayoutParams.MatchParent);
-        platformView.Rv.NestedScrollingEnabled = false;
-        platformView.Rv.SetClipChildren(true);
-        platformView.Rv.SetClipToPadding(true);
+        // NestedScrollingEnabled, ClipChildren e ClipToPadding já são definidos no
+        // construtor de VrContainerView — não repetir aqui.
         ApplyLayoutManager();
         ApplyItemSpacing();
         UpdateEmptyView();
@@ -267,8 +266,11 @@ public sealed class VirtualizedCollectionViewHandler
 
         UnsubscribeCollection();
 
-        if (_adapter is null)
+        // Recria o adapter se o template mudou em runtime; sem esse check,
+        // OnCreateViewHolder continuaria usando o template antigo.
+        if (_adapter is null || !ReferenceEquals(_adapter.Template, template))
         {
+            _adapter?.Dispose();
             _adapter = new VrAdapter(items, template, MauiContext, heightPx, Context!);
             if (_cachingLm is not null)
                 _adapter.SetCachingLayoutManager(_cachingLm);
@@ -365,7 +367,8 @@ public sealed class VirtualizedCollectionViewHandler
     private static List<object> SnapshotItems(IEnumerable? source)
     {
         if (source is null) return [];
-        var list = new List<object>();
+        var capacity = source is System.Collections.ICollection c ? c.Count : 0;
+        var list     = new List<object>(capacity > 0 ? capacity : 16);
         foreach (var item in source) list.Add(item);
         return list;
     }
@@ -497,7 +500,8 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     private          bool                _disposed;
     private          CachingLinearLayoutManager? _cachingLm;
 
-    public int ItemHeightPx => _itemHeightPx;
+    public DataTemplate Template    => _template;
+    public int          ItemHeightPx => _itemHeightPx;
 
     public void SetFixedHeight(int px) => _itemHeightPx = px;
 
@@ -588,6 +592,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     public void IncrementalAdd(int startIndex, List<object> newItems)
     {
         _items.InsertRange(startIndex, newItems);
+        _cachingLm?.InvalidateScrollRange();
         if (newItems.Count == 1)
             NotifyItemInserted(startIndex);
         else
@@ -597,6 +602,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     public void IncrementalRemove(int startIndex, int count)
     {
         _items.RemoveRange(startIndex, count);
+        _cachingLm?.InvalidateScrollRange();
         if (count == 1)
             NotifyItemRemoved(startIndex);
         else
@@ -620,18 +626,22 @@ internal sealed class VrAdapter : RecyclerView.Adapter
 
     // ── Substituição completa com DiffUtil assíncrono ─────────────────────────
 
-    public async void UpdateItemsAsync(List<object> newItems, int newHeightPx)
+    public void UpdateItemsAsync(List<object> newItems, int newHeightPx)
     {
         _itemHeightPx = newHeightPx;
         _cachingLm?.InvalidateCache();
+        _ = RunDiffAsync(newItems);
+    }
 
+    private async Task RunDiffAsync(List<object> newItems)
+    {
         _diffCts?.Cancel();
         _diffCts?.Dispose();
         _diffCts = new CancellationTokenSource();
         var token   = _diffCts.Token;
         var oldList = _items;
 
-        DiffUtil.DiffResult? result;
+        DiffUtil.DiffResult result;
         try
         {
             result = await Task.Run(
@@ -639,7 +649,16 @@ internal sealed class VrAdapter : RecyclerView.Adapter
                 token);
         }
         catch (OperationCanceledException) { return; }
-        catch (Exception) { return; }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[VrAdapter] DiffUtil error: {ex}");
+            if (!token.IsCancellationRequested)
+            {
+                _items = newItems;
+                NotifyDataSetChanged();
+            }
+            return;
+        }
         if (token.IsCancellationRequested) return;
 
         _items = newItems;
@@ -770,6 +789,9 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
     private int _avgHeight;
     private int _measuredCount;
     private readonly int _fallbackHeightPx;
+    // Cache do scroll range total — evita O(n) por frame de scroll.
+    // Invalidado quando uma nova altura real é registrada ou o dataset muda.
+    private int _cachedScrollRange = -1;
 
     public CachingLinearLayoutManager(Context ctx, int fallbackPx) : base(ctx)
     {
@@ -783,7 +805,8 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
         if (isNew && heightPx > 0)
         {
             _measuredCount++;
-            _avgHeight += (heightPx - _avgHeight) / _measuredCount;
+            _avgHeight        += (heightPx - _avgHeight) / _measuredCount;
+            _cachedScrollRange = -1; // invalidar: média mudou, range muda
         }
     }
 
@@ -794,11 +817,16 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
         return _avgHeight > 0 ? _avgHeight : _fallbackHeightPx;
     }
 
+    // Chamado pelo adapter em IncrementalAdd/Remove — preserva o cache de alturas
+    // mas invalida o range total (número de itens mudou).
+    public void InvalidateScrollRange() => _cachedScrollRange = -1;
+
     public void InvalidateCache()
     {
         _cache.Clear();
-        _avgHeight     = 0;
-        _measuredCount = 0;
+        _avgHeight         = 0;
+        _measuredCount     = 0;
+        _cachedScrollRange = -1;
     }
 
     public override int ComputeVerticalScrollOffset(RecyclerView.State state)
@@ -814,9 +842,14 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
 
     public override int ComputeVerticalScrollRange(RecyclerView.State state)
     {
+        // Cache O(1): recalcula apenas quando o dataset ou as alturas mudam.
+        if (_cachedScrollRange >= 0) return _cachedScrollRange;
+
         int total = 0;
-        for (int i = 0; i < ItemCount; i++)
+        int count = ItemCount;
+        for (int i = 0; i < count; i++)
             total += GetEstimatedHeight(i);
+        _cachedScrollRange = total;
         return total;
     }
 

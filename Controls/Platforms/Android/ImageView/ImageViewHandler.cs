@@ -168,8 +168,9 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
             return;
         }
 
+        var fsSource = VirtualView.FullscreenSource ?? VirtualView.Source;
         var dialog = new FullscreenZoomDialogFragment(
-            source:      VirtualView.Source,
+            source:      fsSource,
             isUrl:       VirtualView.IsUrl,
             placeholder: VirtualView.Placeholder,
             maxZoom:     VirtualView.MaxZoom);

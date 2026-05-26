@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Agile.Maui** é uma biblioteca de componentes .NET MAUI (v1.0.0) que fornece um controle `ImageView` customizado com zoom e fullscreen, targeting Android, iOS, macOS Catalyst e Windows via single-project multi-targeting.
+**Agile.Maui** é uma biblioteca de componentes .NET MAUI (v1.0.1) que fornece `ImageView` (zoom/fullscreen), `GalleryView` e `VirtualizedCollectionView` (lista virtualizada de alto desempenho), targeting Android, iOS, macOS Catalyst e Windows via single-project multi-targeting.
 
 ## Build Commands
 
@@ -71,6 +71,27 @@ imageView.ImageFailed += (s, e) => { };
 ```
 
 Internamente: `VirtualView?.RaiseImageLoaded()` / `VirtualView?.RaiseImageFailed()`.
+
+### VirtualizedCollectionView — iOS/MacCatalyst
+
+**Handler:** `ViewHandler<VirtualizedCollectionView, UICollectionView>`
+
+| Componente | Responsabilidade |
+|---|---|
+| `UICollectionViewCompositionalLayout` | Sizing por coluna com `CreateAbsolute` (fixo) ou `CreateEstimated(ItemHeightRequest)` (self-sizing) |
+| `VrMauiCell : UICollectionViewCell` | Cria/reutiliza MAUI View lazy; frame-based layout via `AutoresizingMask` |
+| `VrDataSource` | Snapshot dos items; batch updates via `PerformBatchUpdates` |
+| `VrCollectionDelegate` | Scroll events + threshold checking |
+
+**Regras críticas para self-sizing (iOS):**
+- `PreferredLayoutAttributesFitting` usa **`((IView)_mauiView).Measure(width, ∞)`** — NÃO `SystemLayoutSizeFittingSize`. MAUI views não expõem `IntrinsicContentSize` para Auto Layout; usar Auto Layout retorna `height=0` e torna células invisíveis.
+- `LayoutSubviews` chama **`((IView)_mauiView).Arrange(bounds)`** explicitamente para garantir que o sistema de layout do MAUI posicione os filhos com o frame final.
+- `_nativeView` usa **frame-based layout** (`AutoresizingMask.FlexibleWidth | FlexibleHeight`) — NÃO Auto Layout constraints — para evitar conflito entre NSLayoutConstraint e MAUI Arrange.
+
+**Regras de memória (iOS):**
+- `PrefetchingEnabled = false` — desabilita criação antecipada de células fora da tela.
+- `CreateEstimated` deve usar `ItemHeightRequest` (default 350pt), não um valor pequeno. Com 44pt, o UIKit cria ~20 células visíveis estimadas × pool 2× = 40 MAUI views × ~12 MB = 480 MB.
+- MacCatalyst tem cópia idêntica do handler iOS em `Platforms/MacCatalyst/` (mesmo namespace `Agile.Maui.Platforms.iOS`).
 
 ### Patterns importantes
 
