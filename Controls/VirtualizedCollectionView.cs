@@ -4,9 +4,9 @@ using System.Windows.Input;
 
 namespace Agile.Maui;
 
-public enum VirtualizedOrientation { Vertical, Horizontal }
+public enum ItemsLayoutOrientation { Vertical, Horizontal }
 
-public enum ItemSizeStrategy { Fixed, Dynamic }
+public enum ItemSizingStrategy { MeasureFirstItem, MeasureAllItems }
 
 // ContentView como base: no Windows, Content = CollectionView nativo do MAUI e nenhum
 // handler customizado é necessário. No Android/iOS os handlers criam RecyclerView /
@@ -25,14 +25,14 @@ public partial class VirtualizedCollectionView : ContentView
         BindableProperty.Create(nameof(ItemHeight), typeof(double),
             typeof(VirtualizedCollectionView), -1.0);
 
-    public static readonly BindableProperty ColumnCountProperty =
-        BindableProperty.Create(nameof(ColumnCount), typeof(int),
+    public static readonly BindableProperty SpanProperty =
+        BindableProperty.Create(nameof(Span), typeof(int),
             typeof(VirtualizedCollectionView), 1,
             validateValue: (_, v) => (int)v >= 1);
 
     public static readonly BindableProperty OrientationProperty =
-        BindableProperty.Create(nameof(Orientation), typeof(VirtualizedOrientation),
-            typeof(VirtualizedCollectionView), VirtualizedOrientation.Vertical);
+        BindableProperty.Create(nameof(Orientation), typeof(ItemsLayoutOrientation),
+            typeof(VirtualizedCollectionView), ItemsLayoutOrientation.Vertical);
 
     public static readonly BindableProperty RemainingItemsThresholdProperty =
         BindableProperty.Create(nameof(RemainingItemsThreshold), typeof(int),
@@ -59,9 +59,9 @@ public partial class VirtualizedCollectionView : ContentView
             typeof(VirtualizedCollectionView), 0.0,
             validateValue: (_, v) => (double)v >= 0);
 
-    public static readonly BindableProperty ItemSizeStrategyProperty =
-        BindableProperty.Create(nameof(ItemSizeStrategy), typeof(ItemSizeStrategy),
-            typeof(VirtualizedCollectionView), ItemSizeStrategy.Fixed);
+    public static readonly BindableProperty ItemSizingStrategyProperty =
+        BindableProperty.Create(nameof(ItemSizingStrategy), typeof(ItemSizingStrategy),
+            typeof(VirtualizedCollectionView), ItemSizingStrategy.MeasureFirstItem);
 
     public static readonly BindableProperty ItemHeightRequestProperty =
         BindableProperty.Create(nameof(ItemHeightRequest), typeof(double),
@@ -86,15 +86,15 @@ public partial class VirtualizedCollectionView : ContentView
         set => SetValue(ItemHeightProperty, value);
     }
 
-    public int ColumnCount
+    public int Span
     {
-        get => (int)GetValue(ColumnCountProperty);
-        set => SetValue(ColumnCountProperty, value);
+        get => (int)GetValue(SpanProperty);
+        set => SetValue(SpanProperty, value);
     }
 
-    public VirtualizedOrientation Orientation
+    public ItemsLayoutOrientation Orientation
     {
-        get => (VirtualizedOrientation)GetValue(OrientationProperty);
+        get => (ItemsLayoutOrientation)GetValue(OrientationProperty);
         set => SetValue(OrientationProperty, value);
     }
 
@@ -134,10 +134,10 @@ public partial class VirtualizedCollectionView : ContentView
         set => SetValue(ItemSpacingProperty, value);
     }
 
-    public ItemSizeStrategy ItemSizeStrategy
+    public ItemSizingStrategy ItemSizingStrategy
     {
-        get => (ItemSizeStrategy)GetValue(ItemSizeStrategyProperty);
-        set => SetValue(ItemSizeStrategyProperty, value);
+        get => (ItemSizingStrategy)GetValue(ItemSizingStrategyProperty);
+        set => SetValue(ItemSizingStrategyProperty, value);
     }
 
     public double ItemHeightRequest
@@ -180,7 +180,7 @@ public partial class VirtualizedCollectionView : ContentView
 
 public sealed class VirtualizedScrolledEventArgs : EventArgs
 {
-    public double ScrollX { get; }
-    public double ScrollY { get; }
-    public VirtualizedScrolledEventArgs(double x, double y) { ScrollX = x; ScrollY = y; }
+    public double HorizontalOffset { get; }
+    public double VerticalOffset { get; }
+    public VirtualizedScrolledEventArgs(double x, double y) { HorizontalOffset = x; VerticalOffset = y; }
 }

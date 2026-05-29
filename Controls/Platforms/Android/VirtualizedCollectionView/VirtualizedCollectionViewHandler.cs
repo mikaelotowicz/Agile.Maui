@@ -11,8 +11,10 @@ using AndroidX.RecyclerView.Widget;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 
-using MauiView = Microsoft.Maui.Controls.View;
-using AView    = Android.Views.View;
+using MauiView            = Microsoft.Maui.Controls.View;
+using AView               = Android.Views.View;
+using ItemsLayoutOrientation = Agile.Maui.ItemsLayoutOrientation;
+using ItemSizingStrategy     = Agile.Maui.ItemSizingStrategy;
 
 namespace Agile.Maui.Platforms.Android;
 
@@ -22,10 +24,10 @@ public sealed class VirtualizedCollectionViewHandler
     public static readonly PropertyMapper<VirtualizedCollectionView, VirtualizedCollectionViewHandler> Mapper =
         new(ViewMapper)
         {
-            [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ReloadItems(),
-            [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ReloadItems(),
-            [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.ReloadItems(),
-            [nameof(VirtualizedCollectionView.ColumnCount)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyCacheSizes(); },
+            [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.Span)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyCacheSizes(); },
             [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); },
             [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.ApplyItemSpacing(),
             [nameof(VirtualizedCollectionView.EmptyView)]                              = (h, _) => h.UpdateEmptyView(),
@@ -33,7 +35,7 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => { },
             [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => { },
             [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
-            [nameof(VirtualizedCollectionView.ItemSizeStrategy)]                       = (h, _) => h.ApplySizeStrategy(),
+            [nameof(VirtualizedCollectionView.ItemSizingStrategy)]                       = (h, _) => h.ApplySizeStrategy(),
             [nameof(VirtualizedCollectionView.ItemHeightRequest)]                      = (h, _) => h.ApplySizeStrategy(),
         };
 
@@ -49,6 +51,9 @@ public sealed class VirtualizedCollectionViewHandler
     private INotifyCollectionChanged?   _collectionChangedSource;
     private CachingLinearLayoutManager? _cachingLm;
     private VrRecyclerListener?         _recyclerListener;
+    // Coalescing de ItemsSource + ItemTemplate + ItemHeight: todos disparam no connect
+    // via mapper — sem isso o adapter seria recriado até 3× antes do primeiro render.
+    private bool                        _reloadScheduled;
 
     public VirtualizedCollectionViewHandler() : base(Mapper, Commands) { }
 
@@ -87,6 +92,7 @@ public sealed class VirtualizedCollectionViewHandler
             _scrollListener = null;
         }
         UnsubscribeCollection();
+        _reloadScheduled = false;
         _adapter?.Dispose();
         _adapter = null;
         _cachingLm = null;
@@ -97,16 +103,31 @@ public sealed class VirtualizedCollectionViewHandler
         base.DisconnectHandler(platformView);
     }
 
+    // ── Coalescing de ReloadItems ─────────────────────────────────────────────
+
+    // Garante que ItemsSource + ItemTemplate + ItemHeight disparados no mesmo ciclo
+    // resultem em um único ReloadItems() — evita recriar o adapter até 3× no connect.
+    private void ScheduleReload()
+    {
+        if (_reloadScheduled) return;
+        _reloadScheduled = true;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            _reloadScheduled = false;
+            ReloadItems();
+        });
+    }
+
     internal void ApplyLayoutManager()
     {
         if (PlatformView is null) return;
 
-        var horizontal = VirtualView.Orientation == VirtualizedOrientation.Horizontal;
+        var horizontal = VirtualView.Orientation == ItemsLayoutOrientation.Horizontal;
         var direction  = horizontal ? LinearLayoutManager.Horizontal : LinearLayoutManager.Vertical;
-        var columns    = VirtualView.ColumnCount;
+        var columns    = VirtualView.Span;
 
         LinearLayoutManager llm;
-        if (columns == 1 && !horizontal && VirtualView.ItemSizeStrategy == ItemSizeStrategy.Dynamic)
+        if (columns == 1 && !horizontal && VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureAllItems)
         {
             var clm = new CachingLinearLayoutManager(Context!, GetFallbackHeightPx())
             {
@@ -150,14 +171,14 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (PlatformView is null) return;
         ApplyLayoutManager();
-        if (VirtualView.ItemSizeStrategy == ItemSizeStrategy.Fixed)
+        if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirstItem)
             _adapter?.SetFixedHeight(GetFallbackHeightPx());
     }
 
     internal void ApplyCacheSizes()
     {
         if (PlatformView is null) return;
-        var (viewCache, poolMax) = GetOptimalCacheSizes(Context!, VirtualView.ColumnCount);
+        var (viewCache, poolMax) = GetOptimalCacheSizes(Context!, VirtualView.Span);
         PlatformView.Rv.SetItemViewCacheSize(viewCache);
         PlatformView.Rv.GetRecycledViewPool().SetMaxRecycledViews(0, poolMax);
     }
@@ -198,8 +219,8 @@ public sealed class VirtualizedCollectionViewHandler
         if (spacingPx <= 0) return;
         _spacingDecoration = new VrSpacingDecoration(
             spacingPx,
-            VirtualView.ColumnCount,
-            VirtualView.Orientation == VirtualizedOrientation.Horizontal);
+            VirtualView.Span,
+            VirtualView.Orientation == ItemsLayoutOrientation.Horizontal);
         PlatformView.Rv.AddItemDecoration(_spacingDecoration);
     }
 
@@ -258,7 +279,7 @@ public sealed class VirtualizedCollectionViewHandler
         }
 
         var items    = SnapshotItems(VirtualView.ItemsSource);
-        var heightPx = VirtualView.ItemSizeStrategy == ItemSizeStrategy.Fixed
+        var heightPx = VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirstItem
             ? GetFallbackHeightPx()
             : VirtualView.ItemHeight > 0
                 ? (int)Context.ToPixels(VirtualView.ItemHeight)

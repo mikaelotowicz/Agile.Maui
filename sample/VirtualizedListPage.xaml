@@ -84,7 +84,7 @@
             x:Name="ProductList"
             Grid.Row="2"
             ItemHeightRequest="200"
-            ItemSizeStrategy="Dynamic"
+            ItemSizingStrategy="MeasureAllItems"
             ItemsSource="{Binding Items}"
             RemainingItemsThreshold="8"
             RemainingItemsThresholdReached="OnLoadMore"

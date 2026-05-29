@@ -15,6 +15,8 @@ using Foundation;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 using UIKit;
+using ItemsLayoutOrientation = Agile.Maui.ItemsLayoutOrientation;
+using ItemSizingStrategy     = Agile.Maui.ItemSizingStrategy;
 
 namespace Agile.Maui.Platforms.iOS;
 
@@ -24,12 +26,12 @@ public sealed class VirtualizedCollectionViewHandler
     public static readonly PropertyMapper<VirtualizedCollectionView, VirtualizedCollectionViewHandler> Mapper =
         new(ViewMapper)
         {
-            [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ReloadItems(),
-            [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ReloadItems(),
+            [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ScheduleReload(),
             [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.ItemHeightRequest)]                      = (h, _) => h.RefreshLayout(),
-            [nameof(VirtualizedCollectionView.ItemSizeStrategy)]                       = (h, _) => h.RefreshLayout(),
-            [nameof(VirtualizedCollectionView.ColumnCount)]                            = (h, _) => h.RefreshLayout(),
+            [nameof(VirtualizedCollectionView.ItemSizingStrategy)]                       = (h, _) => h.RefreshLayout(),
+            [nameof(VirtualizedCollectionView.Span)]                            = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.EmptyView)]                              = (h, _) => h.UpdateEmptyView(),
@@ -53,6 +55,9 @@ public sealed class VirtualizedCollectionViewHandler
     private UIView?                   _emptyNativeView;
     private readonly List<NotifyCollectionChangedEventArgs> _pendingChanges = [];
     private bool _flushScheduled;
+    // Coalescing de ItemsSource + ItemTemplate: ambos disparam no connect via mapper —
+    // sem isso ReloadData() seria chamado duas vezes antes do primeiro render.
+    private bool _reloadScheduled;
 
     public VirtualizedCollectionViewHandler() : base(Mapper, Commands) { }
 
@@ -69,7 +74,7 @@ public sealed class VirtualizedCollectionViewHandler
 
     private void ApplyBounceDirection(UICollectionView cv)
     {
-        var horizontal = VirtualView?.Orientation == VirtualizedOrientation.Horizontal;
+        var horizontal = VirtualView?.Orientation == ItemsLayoutOrientation.Horizontal;
         cv.AlwaysBounceVertical   = !horizontal;
         cv.AlwaysBounceHorizontal = horizontal;
     }
@@ -89,7 +94,8 @@ public sealed class VirtualizedCollectionViewHandler
     protected override void DisconnectHandler(UICollectionView platformView)
     {
         UnsubscribeCollection();
-        _flushScheduled = false;
+        _flushScheduled  = false;
+        _reloadScheduled = false;
         _pendingChanges.Clear();
         platformView.Delegate   = null!;
         _delegate               = null;
@@ -99,20 +105,33 @@ public sealed class VirtualizedCollectionViewHandler
         base.DisconnectHandler(platformView);
     }
 
+    // ── Coalescing de ReloadItems ─────────────────────────────────────────────
+
+    private void ScheduleReload()
+    {
+        if (_reloadScheduled) return;
+        _reloadScheduled = true;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            _reloadScheduled = false;
+            ReloadItems();
+        });
+    }
+
     // ── Layout ───────────────────────────────────────────────────────────────
 
     private UICollectionViewLayout BuildCompositionalLayout()
     {
-        var columns    = Math.Max(1, VirtualView?.ColumnCount ?? 1);
+        var columns    = Math.Max(1, VirtualView?.Span ?? 1);
         var itemHeight = VirtualView?.ItemHeight ?? -1;
-        var horizontal = VirtualView?.Orientation == VirtualizedOrientation.Horizontal;
+        var horizontal = VirtualView?.Orientation == ItemsLayoutOrientation.Horizontal;
 
         // ItemHeight > 0  →  CreateAbsolute(itemHeight): altura explícita, sobrepõe tudo.
         // Fixed            →  CreateAbsolute(ItemHeightRequest): altura fixa sem per-cell measure.
         // Dynamic          →  CreateEstimated(ItemHeightRequest): self-sizing via
         //                     PreferredLayoutAttributesFitting, suporta expanders e conteúdo variável.
         var estimatedH  = (nfloat)Math.Max(44, VirtualView?.ItemHeightRequest ?? 350);
-        var useAbsolute = itemHeight > 0 || VirtualView?.ItemSizeStrategy == ItemSizeStrategy.Fixed;
+        var useAbsolute = itemHeight > 0 || VirtualView?.ItemSizingStrategy == ItemSizingStrategy.MeasureFirstItem;
         var absoluteH   = itemHeight > 0 ? (nfloat)itemHeight : estimatedH;
         var heightDim   = useAbsolute
             ? NSCollectionLayoutDimension.CreateAbsolute(absoluteH)

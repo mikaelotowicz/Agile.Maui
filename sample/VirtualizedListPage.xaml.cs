@@ -178,7 +178,7 @@ public partial class VirtualizedListPage : ContentPage
     private void OnColumnToggleClicked(object? sender, EventArgs e)
     {
         _columnCount = _columnCount == 1 ? 2 : 1;
-        ProductList.ColumnCount = _columnCount;
+        ProductList.Span = _columnCount;
 
         ColumnToggleButton.Text = _columnCount == 1 ? "⊞ Grade" : "☰ Lista";
 
@@ -227,7 +227,7 @@ public partial class VirtualizedListPage : ContentPage
         var now = Environment.TickCount64;
         if (now - _lastScrollTick < 100) return;
         _lastScrollTick = now;
-        ScrollLabel.Text = $"Y: {e.ScrollY:F0}dp";
+        ScrollLabel.Text = $"Y: {e.VerticalOffset:F0}dp";
         UpdateMetricsLabel();
     }
 
