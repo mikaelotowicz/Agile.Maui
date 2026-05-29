@@ -307,6 +307,7 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
     protected override void OnAttachedToWindow()
     {
         base.OnAttachedToWindow();
+        // Notifica apenas quando há adapter — evita NPE e reload desnecessário ao re-attach.
         Pager.Adapter?.NotifyDataSetChanged();
     }
 
@@ -366,16 +367,18 @@ internal sealed class DotsView : global::Android.Widget.LinearLayout
 
 internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
 {
-    private readonly string[]        _images;
-    private readonly bool            _isUrl;
-    private readonly string?         _placeholder;
-    private readonly ZoomImageAspect _aspectMode;
-    private readonly int             _thumbMaxPx;
-    private readonly int             _cellWidth;
-    private readonly int             _cellHeight;
-    private readonly Action<int>     _onPageClick;
-    private readonly Action          _onImageLoaded;
-    private readonly Action          _onImageFailed;
+    private readonly string[]                _images;
+    private readonly bool                    _isUrl;
+    private readonly string?                 _placeholder;
+    private readonly ZoomImageAspect         _aspectMode;
+    private readonly int                     _thumbMaxPx;
+    private readonly int                     _cellWidth;
+    private readonly int                     _cellHeight;
+    private readonly Action<int>             _onPageClick;
+    private readonly Action                  _onImageLoaded;
+    private readonly Action                  _onImageFailed;
+    // Criado uma vez no construtor — evita alocar um peer JNI por bind.
+    private readonly ImgGlideRequestListener _glideListener;
 
     public ThumbPagerAdapter(
         string[]        images,
@@ -399,6 +402,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         _onPageClick   = onPageClick;
         _onImageLoaded = onImageLoaded;
         _onImageFailed = onImageFailed;
+        _glideListener = new ImgGlideRequestListener(onImageLoaded, onImageFailed);
     }
 
     public override int ItemCount => _images.Length;
@@ -460,14 +464,11 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         try { Glide.With(vh.ImageView).Clear(vh.ImageView); } catch { }
         vh.ImageView.SetImageDrawable(null);
 
-        var opts     = BuildOptions(vh.ImageView.Context!);
-        var listener = new ImgGlideRequestListener(
-            onReady: _onImageLoaded,
-            onFail:  _onImageFailed);
+        var opts = BuildOptions(vh.ImageView.Context!);
 
         if (_isUrl)
         {
-            Glide.With(vh.ImageView).Load(source).Apply(opts).Listener(listener).Into(vh.ImageView);
+            Glide.With(vh.ImageView).Load(source).Apply(opts).Listener(_glideListener).Into(vh.ImageView);
         }
         else
         {
@@ -487,7 +488,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         int overrideH = _cellHeight > 0 ? _cellHeight : _thumbMaxPx;
         o = o.Override(overrideW, overrideH);
         var ph = ResolveDrawable(context, _placeholder);
-        if (ph != 0) o = o.Clone().Placeholder(ph).Error(ph);
+        if (ph != 0) o = o.Placeholder(ph).Error(ph);
         return o;
     }
 

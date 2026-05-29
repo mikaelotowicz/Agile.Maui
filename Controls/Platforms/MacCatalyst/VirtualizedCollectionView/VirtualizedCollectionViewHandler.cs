@@ -82,7 +82,8 @@ public sealed class VirtualizedCollectionViewHandler
             onScrolled:    (x, y) => VirtualView?.RaiseScrolled(x, y),
             onScrollEnded: CheckRemainingThreshold);
         platformView.Delegate = _delegate;
-        ReloadItems();
+        // ReloadItems() não é necessário aqui — o mapper dispara ItemsSource e ItemTemplate
+        // imediatamente após ConnectHandler, cobrindo a carga inicial sem duplicação.
     }
 
     protected override void DisconnectHandler(UICollectionView platformView)
