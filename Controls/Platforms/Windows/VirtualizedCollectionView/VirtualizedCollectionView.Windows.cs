@@ -6,6 +6,8 @@
 // e ignoram o Content.
 
 using Microsoft.UI.Dispatching;
+using ItemsLayoutOrientation = Agile.Maui.ItemsLayoutOrientation;
+using MauiOrientation = Microsoft.Maui.Controls.ItemsLayoutOrientation;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -76,7 +78,7 @@ public partial class VirtualizedCollectionView
             case nameof(EmptyView):               _cv.EmptyView               = EmptyView;               break;
             case nameof(EmptyViewTemplate):       _cv.EmptyViewTemplate       = EmptyViewTemplate;       break;
             case nameof(RemainingItemsThreshold): _cv.RemainingItemsThreshold = RemainingItemsThreshold; break;
-            case nameof(ColumnCount):
+            case nameof(Span):
             case nameof(Orientation):
             case nameof(ItemSpacing):             SyncLayout();                                          break;
         }
@@ -84,12 +86,12 @@ public partial class VirtualizedCollectionView
 
     private void SyncLayout()
     {
-        var orientation = Orientation == VirtualizedOrientation.Vertical
-            ? ItemsLayoutOrientation.Vertical
-            : ItemsLayoutOrientation.Horizontal;
+        var orientation = Orientation == ItemsLayoutOrientation.Vertical
+            ? MauiOrientation.Vertical
+            : MauiOrientation.Horizontal;
         double spacing = ItemSpacing;
-        _cv.ItemsLayout = ColumnCount > 1
-            ? new GridItemsLayout(ColumnCount, orientation)
+        _cv.ItemsLayout = Span > 1
+            ? new GridItemsLayout(Span, orientation)
                 { HorizontalItemSpacing = spacing, VerticalItemSpacing = spacing }
             : new LinearItemsLayout(orientation)
                 { ItemSpacing = spacing };
@@ -205,7 +207,7 @@ public partial class VirtualizedCollectionView
             SetDragCursor(InputSystemCursorShape.Hand);
         }
 
-        bool   horizontal = Orientation == VirtualizedOrientation.Horizontal;
+        bool   horizontal = Orientation == ItemsLayoutOrientation.Horizontal;
         double deltaX     = _dragLastPoint.X - pos.X;
         double deltaY     = _dragLastPoint.Y - pos.Y;
         _dragLastPoint    = pos;
@@ -312,7 +314,7 @@ public partial class VirtualizedCollectionView
         }
 
         // Deslocamento proporcional ao tempo real decorrido (v × frames)
-        bool   horizontal = Orientation == VirtualizedOrientation.Horizontal;
+        bool   horizontal = Orientation == ItemsLayoutOrientation.Horizontal;
         double moveX      = horizontal ? _inertiaVx * framesElapsed : 0;
         double moveY      = horizontal ? 0 : _inertiaVy * framesElapsed;
 
@@ -352,7 +354,7 @@ public partial class VirtualizedCollectionView
     // evitando que o timer fique rodando sem efeito.
     private bool HasScrollCapacity(double deltaX, double deltaY)
     {
-        bool horizontal = Orientation == VirtualizedOrientation.Horizontal;
+        bool horizontal = Orientation == ItemsLayoutOrientation.Horizontal;
 
         if (_dragScrollViewer is not null)
         {
