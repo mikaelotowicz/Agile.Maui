@@ -24,6 +24,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
     public ImageViewHandler() : base(Mapper) { }
 
     private bool _disposed;
+    private ImgGlideRequestListener? _glideListener;
 
     protected override global::Android.Widget.ImageView CreatePlatformView()
     {
@@ -48,6 +49,9 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
     protected override void ConnectHandler(global::Android.Widget.ImageView platformView)
     {
         base.ConnectHandler(platformView);
+        _glideListener = new ImgGlideRequestListener(
+            onReady: () => { if (!_disposed) MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()); },
+            onFail:  () => { if (!_disposed) MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()); });
         platformView.Click += OnImageClick;
         ApplyScaleType();
         LoadImage();
@@ -69,6 +73,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
         }
 
         platformView.SetImageDrawable(null);
+        _glideListener?.Dispose();
+        _glideListener = null;
         base.DisconnectHandler(platformView);
     }
 
@@ -94,17 +100,14 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
             return;
         }
 
-        var options  = BuildRequestOptions();
-        var listener = new ImgGlideRequestListener(
-            onReady: () => { if (!_disposed) MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()); },
-            onFail:  () => { if (!_disposed) MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()); });
+        var options = BuildRequestOptions();
 
         if (VirtualView.IsUrl)
         {
             Glide.With(PlatformView)
                 .Load(VirtualView.Source)
                 .Apply(options)
-                .Listener(listener)
+                .Listener(_glideListener)
                 .Into(PlatformView);
         }
         else
@@ -120,7 +123,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
             Glide.With(PlatformView)
                 .Load(drawableId)
                 .Apply(options)
-                .Listener(listener)
+                .Listener(_glideListener)
                 .Into(PlatformView);
         }
     }

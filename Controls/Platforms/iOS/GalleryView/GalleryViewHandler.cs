@@ -166,6 +166,13 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
 
 internal sealed class ThumbGalleryView : UIView
 {
+    // Session própria com queue de background — decode fora da main thread.
+    // NSUrlSession.SharedSession usa a main queue e bloquearia a UI em imagens grandes.
+    private static readonly NSUrlSession _urlSession = NSUrlSession.FromConfiguration(
+        NSUrlSessionConfiguration.DefaultSessionConfiguration,
+        null!,
+        new NSOperationQueue());
+
     private readonly UIScrollView    _scrollView;
     private string[]                 _images      = [];
     private bool                     _isUrl;
@@ -374,7 +381,7 @@ internal sealed class ThumbGalleryView : UIView
         try
         {
             ApplyPlaceholder(iv);
-            var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url));
+            var result = await _urlSession.CreateDataTaskAsync(new NSUrl(url)).ConfigureAwait(false);
             if (token.IsCancellationRequested) return;
 
             if (result.Data is null)
