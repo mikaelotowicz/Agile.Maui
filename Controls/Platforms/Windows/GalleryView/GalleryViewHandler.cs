@@ -169,18 +169,34 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
         var active   = ToWinColor(VirtualView.IndicatorColor);
         var inactive = ToWinColor(VirtualView.IndicatorInactiveColor);
 
-        if (!show || count <= 1) { panel.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed; return; }
-
-        panel.Children.Clear();
-        for (int i = 0; i < count; i++)
+        if (!show || count <= 1)
         {
-            panel.Children.Add(new Ellipse
+            panel.Children.Clear();
+            panel.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+            return;
+        }
+
+        // Rebuild estrutural apenas quando o número de dots muda.
+        if (panel.Children.Count != count)
+        {
+            panel.Children.Clear();
+            for (int i = 0; i < count; i++)
             {
-                Width  = 7,
-                Height = 7,
-                Margin = new Microsoft.UI.Xaml.Thickness(3, 0, 3, 0),
-                Fill   = new Microsoft.UI.Xaml.Media.SolidColorBrush(i == idx ? active : inactive),
-            });
+                panel.Children.Add(new Ellipse
+                {
+                    Width  = 7,
+                    Height = 7,
+                    Margin = new Microsoft.UI.Xaml.Thickness(3, 0, 3, 0),
+                    Fill   = new Microsoft.UI.Xaml.Media.SolidColorBrush(inactive),
+                });
+            }
+        }
+
+        // Atualiza apenas as cores — sem recriar elementos por swipe.
+        for (int i = 0; i < panel.Children.Count; i++)
+        {
+            if (panel.Children[i] is Ellipse e && e.Fill is Microsoft.UI.Xaml.Media.SolidColorBrush brush)
+                brush.Color = i == idx ? active : inactive;
         }
         panel.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
     }

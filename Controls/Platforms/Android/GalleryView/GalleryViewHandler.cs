@@ -114,7 +114,8 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             cellHeight:    pager.Height,
             onPageClick:   OpenFullscreen,
             onImageLoaded: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()),
-            onImageFailed: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()));
+            onImageFailed: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()),
+            context:       Context!);
 
         if (targetIdx > 0)
         {
@@ -333,22 +334,34 @@ internal sealed class DotsView : global::Android.Widget.LinearLayout
 
     public void Update(bool show, int count, int selected, int activeArgb, int inactiveArgb)
     {
-        RemoveAllViews();
-        if (!show || count <= 1) { Visibility = ViewStates.Gone; return; }
-
-        var density  = Context!.Resources!.DisplayMetrics!.Density;
-        int dotPx    = (int)(DotDp    * density + 0.5f);
-        int marginPx = (int)(MarginDp * density + 0.5f);
-
-        for (int i = 0; i < count; i++)
+        if (!show || count <= 1)
         {
-            var dot = new global::Android.Views.View(Context);
-            var lp  = new global::Android.Widget.LinearLayout.LayoutParams(dotPx, dotPx);
-            lp.SetMargins(marginPx, 0, marginPx, 0);
-            dot.LayoutParameters = lp;
-            dot.Background = MakeDot(i == selected, activeArgb, inactiveArgb);
-            AddView(dot);
+            if (ChildCount > 0) RemoveAllViews();
+            Visibility = ViewStates.Gone;
+            return;
         }
+
+        // Rebuild estrutural apenas quando o número de dots muda.
+        if (ChildCount != count)
+        {
+            RemoveAllViews();
+            var density  = Context!.Resources!.DisplayMetrics!.Density;
+            int dotPx    = (int)(DotDp    * density + 0.5f);
+            int marginPx = (int)(MarginDp * density + 0.5f);
+            for (int i = 0; i < count; i++)
+            {
+                var dot = new global::Android.Views.View(Context);
+                var lp  = new global::Android.Widget.LinearLayout.LayoutParams(dotPx, dotPx);
+                lp.SetMargins(marginPx, 0, marginPx, 0);
+                dot.LayoutParameters = lp;
+                AddView(dot);
+            }
+        }
+
+        // Atualiza apenas o preenchimento dos dots — sem recriar views por swipe.
+        for (int i = 0; i < ChildCount; i++)
+            GetChildAt(i)!.Background = MakeDot(i == selected, activeArgb, inactiveArgb);
+
         Visibility = ViewStates.Visible;
     }
 
@@ -377,32 +390,35 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
     private readonly Action<int>             _onPageClick;
     private readonly Action                  _onImageLoaded;
     private readonly Action                  _onImageFailed;
-    // Criado uma vez no construtor — evita alocar um peer JNI por bind.
     private readonly ImgGlideRequestListener _glideListener;
+    // Pré-construído no construtor — todos os inputs são imutáveis após a criação.
+    private readonly RequestOptions          _requestOptions;
 
     public ThumbPagerAdapter(
-        string[]        images,
-        bool            isUrl,
-        string?         placeholder,
-        ZoomImageAspect aspectMode,
-        int             thumbMaxPx,
-        int             cellWidth,
-        int             cellHeight,
-        Action<int>     onPageClick,
-        Action          onImageLoaded,
-        Action          onImageFailed)
+        string[]                             images,
+        bool                                 isUrl,
+        string?                              placeholder,
+        ZoomImageAspect                      aspectMode,
+        int                                  thumbMaxPx,
+        int                                  cellWidth,
+        int                                  cellHeight,
+        Action<int>                          onPageClick,
+        Action                               onImageLoaded,
+        Action                               onImageFailed,
+        global::Android.Content.Context      context)
     {
-        _images        = images;
-        _isUrl         = isUrl;
-        _placeholder   = placeholder;
-        _aspectMode    = aspectMode;
-        _thumbMaxPx    = thumbMaxPx > 0 ? thumbMaxPx : 720;
-        _cellWidth     = cellWidth;
-        _cellHeight    = cellHeight;
-        _onPageClick   = onPageClick;
-        _onImageLoaded = onImageLoaded;
-        _onImageFailed = onImageFailed;
-        _glideListener = new ImgGlideRequestListener(onImageLoaded, onImageFailed);
+        _images         = images;
+        _isUrl          = isUrl;
+        _placeholder    = placeholder;
+        _aspectMode     = aspectMode;
+        _thumbMaxPx     = thumbMaxPx > 0 ? thumbMaxPx : 720;
+        _cellWidth      = cellWidth;
+        _cellHeight     = cellHeight;
+        _onPageClick    = onPageClick;
+        _onImageLoaded  = onImageLoaded;
+        _onImageFailed  = onImageFailed;
+        _glideListener  = new ImgGlideRequestListener(onImageLoaded, onImageFailed);
+        _requestOptions = BuildOptions(context);
     }
 
     public override int ItemCount => _images.Length;
@@ -464,11 +480,9 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         try { Glide.With(vh.ImageView).Clear(vh.ImageView); } catch { }
         vh.ImageView.SetImageDrawable(null);
 
-        var opts = BuildOptions(vh.ImageView.Context!);
-
         if (_isUrl)
         {
-            Glide.With(vh.ImageView).Load(source).Apply(opts).Listener(_glideListener).Into(vh.ImageView);
+            Glide.With(vh.ImageView).Load(source).Apply(_requestOptions).Listener(_glideListener).Into(vh.ImageView);
         }
         else
         {
@@ -479,6 +493,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         }
     }
 
+    // Chamado uma única vez no construtor — context é o único input não-armazenado.
     private RequestOptions BuildOptions(global::Android.Content.Context context)
     {
         var o = _aspectMode == ZoomImageAspect.CenterCrop
