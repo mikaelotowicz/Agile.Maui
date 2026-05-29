@@ -68,8 +68,8 @@ public sealed class VirtualizedCollectionViewHandler
         ApplyLayoutManager();
         ApplyItemSpacing();
         UpdateEmptyView();
-        ReloadItems();
-
+        // ReloadItems() não é necessário aqui — o mapper dispara ItemsSource e ItemTemplate
+        // imediatamente após ConnectHandler, cobrindo a carga inicial sem duplicação.
         ApplyCacheSizes();
 
         _scrollListener = new VrScrollListener(OnScrolled);

@@ -445,4 +445,10 @@ internal sealed class ThumbScrollDelegate : UIScrollViewDelegate
 
     public override void DecelerationEnded(UIScrollView scrollView)
         => _owner.NotifyScrollEnded();
+
+    // Cobre o caso em que o usuário arrasta devagar e solta sem gerar fase de deceleração.
+    public override void DraggingEnded(UIScrollView scrollView, bool willDecelerate)
+    {
+        if (!willDecelerate) _owner.NotifyScrollEnded();
+    }
 }
