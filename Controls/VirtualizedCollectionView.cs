@@ -11,7 +11,7 @@ public enum ItemSizeStrategy { Fixed, Dynamic }
 // ContentView como base: no Windows, Content = CollectionView nativo do MAUI e nenhum
 // handler customizado é necessário. No Android/iOS os handlers criam RecyclerView /
 // UICollectionView nativos e ignoram o Content.
-public class VirtualizedCollectionView : ContentView
+public partial class VirtualizedCollectionView : ContentView
 {
     public static readonly BindableProperty ItemsSourceProperty =
         BindableProperty.Create(nameof(ItemsSource), typeof(IEnumerable),
@@ -164,52 +164,13 @@ public class VirtualizedCollectionView : ContentView
             ScrolledCommand.Execute(args);
     }
 
-    // ── Windows: CollectionView nativo do MAUI como Content ───────────────────
+    // ── Windows ───────────────────────────────────────────────────────────────
+    // Toda a lógica do Windows (CollectionView nativo como Content, drag-to-scroll
+    // com mouse e inércia) vive na partial em
+    // Platforms/Windows/VirtualizedCollectionView/VirtualizedCollectionView.Windows.cs.
     // No Android/iOS os handlers sobrescrevem CreatePlatformView e ignoram Content.
 
-#if WINDOWS
-    private readonly CollectionView _cv;
-
-    public VirtualizedCollectionView()
-    {
-        _cv = new CollectionView();
-        Content = _cv;
-        _cv.RemainingItemsThresholdReached += (_, _) => RaiseRemainingItemsThresholdReached();
-        _cv.Scrolled += (_, e) => RaiseScrolled(e.HorizontalOffset, e.VerticalOffset);
-    }
-
-    protected override void OnPropertyChanged(string? propertyName = null)
-    {
-        base.OnPropertyChanged(propertyName);
-        switch (propertyName)
-        {
-            case nameof(ItemsSource):             _cv.ItemsSource             = ItemsSource;             break;
-            case nameof(ItemTemplate):            _cv.ItemTemplate            = ItemTemplate;            break;
-            case nameof(EmptyView):               _cv.EmptyView               = EmptyView;               break;
-            case nameof(EmptyViewTemplate):       _cv.EmptyViewTemplate       = EmptyViewTemplate;       break;
-            case nameof(RemainingItemsThreshold): _cv.RemainingItemsThreshold = RemainingItemsThreshold; break;
-            case nameof(ColumnCount):
-            case nameof(Orientation):
-            case nameof(ItemSpacing):             SyncLayout();                                          break;
-        }
-    }
-
-    private void SyncLayout()
-    {
-        var orientation = Orientation == VirtualizedOrientation.Vertical
-            ? ItemsLayoutOrientation.Vertical
-            : ItemsLayoutOrientation.Horizontal;
-        double spacing = ItemSpacing;
-        _cv.ItemsLayout = ColumnCount > 1
-            ? new GridItemsLayout(ColumnCount, orientation)
-                { HorizontalItemSpacing = spacing, VerticalItemSpacing = spacing }
-            : new LinearItemsLayout(orientation)
-                { ItemSpacing = spacing };
-    }
-
-    public void ScrollTo(int index, bool animated = true) =>
-        _cv.ScrollTo(index, animate: animated);
-#else
+#if !WINDOWS
     public void ScrollTo(int index, bool animated = true) =>
         Handler?.Invoke(nameof(ScrollTo), new ScrollToRequest(index, animated));
 #endif
