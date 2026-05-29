@@ -47,20 +47,20 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
     {
         platformView.Pager.SelectionChanged -= OnSelectionChanged;
         UnsubscribeImages();
-        ClearImages();
+        ClearImages(platformView);
         base.DisconnectHandler(platformView);
     }
 
-    private void ClearImages()
+    private void ClearImages(GalleryWinContainer? platformView = null)
     {
         foreach (var cleanup in _imageHandlerCleanup) cleanup();
         _imageHandlerCleanup.Clear();
-        PlatformView?.Pager.Items.Clear();
+        (platformView ?? PlatformView)?.Pager.Items.Clear();
     }
 
     private void LoadImages()
     {
-        if (PlatformView is null) return;
+        if (PlatformView is null || VirtualView is null) return;
 
         PlatformView.Pager.SelectionChanged -= OnSelectionChanged;
         UnsubscribeImages();
@@ -133,13 +133,13 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
 
     private void OnImagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (PlatformView is null) return;
+        if (PlatformView is null || VirtualView is null) return;
         LoadImages();
     }
 
     private void SyncPage()
     {
-        if (PlatformView is null || _syncingPage) return;
+        if (PlatformView is null || VirtualView is null || _syncingPage) return;
         var images = VirtualView.Images;
         if (images is null || images.Count == 0) return;
         _syncingPage = true;
@@ -161,7 +161,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
 
     private void UpdateDots()
     {
-        if (PlatformView is null) return;
+        if (PlatformView is null || VirtualView is null) return;
         var show     = VirtualView.ShowIndicator;
         var count    = VirtualView.Images?.Count ?? 0;
         var idx      = Math.Clamp(VirtualView.SelectedIndex, 0, Math.Max(0, count - 1));
