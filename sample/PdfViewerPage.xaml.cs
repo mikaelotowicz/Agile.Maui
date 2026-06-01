@@ -70,9 +70,7 @@ public partial class PdfViewerPage : ContentPage
     {
         bool dark  = Application.Current?.RequestedTheme == AppTheme.Dark;
         string suf = dark ? "_dark" : "";
-        // MAUI converte os SVGs de Resources/Images em PNG no build → referenciar .png
-        // (com .svg o iOS não encontra o recurso e o botão fica sem ícone).
-        BackButton.Source = ImageSource.FromFile($"ic_back{suf}.png");
+        BackButton.Source = ImageSource.FromFile($"ic_back{suf}.svg");
     }
 
     // ── Carregar PDF ──────────────────────────────────────────────────────────
@@ -99,13 +97,13 @@ public partial class PdfViewerPage : ContentPage
     // ── Chips de URL rápida ───────────────────────────────────────────────────
 
     private void OnLoadSampleSmall(object? sender, EventArgs e)
-        => LoadPdf("https://www.ietf.org/rfc/rfc2616.txt.pdf");
+        => LoadPdf("https://www.africau.edu/images/default/sample.pdf");
 
     private void OnLoadSampleMedium(object? sender, EventArgs e)
         => LoadPdf("https://www.ietf.org/rfc/rfc2616.txt.pdf");
 
     private void OnLoadSampleLarge(object? sender, EventArgs e)
-        => LoadPdf("https://www.ietf.org/rfc/rfc2616.txt.pdf");
+        => LoadPdf("https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf");
 
     // ── Picker de arquivo ─────────────────────────────────────────────────────
 
@@ -130,23 +128,18 @@ public partial class PdfViewerPage : ContentPage
 
             string path = result.FullPath;
 
-            // Alguns providers no iOS/macCatalyst também retornam URIs/paths não acessíveis
-            // diretamente ao app. Copiar para FileSystem.CacheDirectory garante leitura
-            // local consistente. Android mantém a verificação extra para content://.
 #if ANDROID
             if (path.StartsWith("content://", StringComparison.OrdinalIgnoreCase) ||
                 !File.Exists(path))
-#elif IOS || MACCATALYST
-            if (!File.Exists(path))
-#endif
             {
-                PdfViewerLog.Write("Pdf/Sample", $"Copying to cache {result.FileName}");
+                PdfViewerLog.Write("Pdf/Sample", $"Android: copiando content:// → cache  {result.FileName}");
                 var dest = Path.Combine(FileSystem.CacheDirectory, result.FileName);
                 await using var src  = await result.OpenReadAsync();
                 await using var file = File.Create(dest);
                 await src.CopyToAsync(file);
                 path = dest;
             }
+#endif
             LoadPdf(path);
         }
         catch (Exception ex)

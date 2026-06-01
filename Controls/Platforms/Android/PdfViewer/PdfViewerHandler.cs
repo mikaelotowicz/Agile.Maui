@@ -287,6 +287,7 @@ public sealed class PdfViewerHandler
 
                     ApplySpacing();
                     PlatformView.Rv.SetAdapter(_adapter);
+                    ResetZoomTo100();   // todo documento abre em 100% (paridade entre plataformas)
                     vv.RaiseDocumentLoaded(count);
                     TrimAndPrefetch(0);
                 });
@@ -470,6 +471,16 @@ public sealed class PdfViewerHandler
         if (_syncingZoom || PlatformView is null || VirtualView is null) return;
         _syncingZoom = true;
         PlatformView.SetZoom((float)VirtualView.ZoomFactor);
+        _syncingZoom = false;
+    }
+
+    /// <summary>Reseta o zoom para 100% (escala nativa e ZoomFactor) — chamado ao abrir cada documento.</summary>
+    private void ResetZoomTo100()
+    {
+        if (PlatformView is null || VirtualView is null) return;
+        _syncingZoom = true;
+        PlatformView.SetZoom(1f);
+        VirtualView.ZoomFactor = 1.0;
         _syncingZoom = false;
     }
 
