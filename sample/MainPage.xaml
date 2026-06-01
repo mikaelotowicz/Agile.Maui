@@ -169,6 +169,25 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!--  ── PdfViewer ──────────────────────────────────────────  -->
+            <Label
+                Margin="0,16,0,8"
+                Style="{StaticResource Headline}"
+                Text="PdfViewer" />
+
+            <Label
+                Margin="0,0,0,12"
+                FontSize="13"
+                HorizontalTextAlignment="Center"
+                Text="Virtualização · Cache LRU MB · Prefetch · Zoom 0.5×–8×"
+                TextColor="{AppThemeBinding Light={StaticResource Gray500},
+                                            Dark={StaticResource Gray400}}" />
+
+            <Button
+                Clicked="OnOpenPdfClicked"
+                HorizontalOptions="Fill"
+                Text="Abrir PdfViewer Demo" />
+
             <BoxView HeightRequest="32" Color="Transparent" />
 
         </VerticalStackLayout>

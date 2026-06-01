@@ -6,19 +6,13 @@
     xmlns:local="clr-namespace:sample"
     Title="sample">
 
+    <!--
+        Um único ShellContent (sem flyout/tabbar): evita o crash do Shell flyout/tabbar
+        renderer no Android com .NET 10. As demais demos são acessíveis por rota.
+    -->
     <ShellContent
         Title="Home"
         ContentTemplate="{DataTemplate local:MainPage}"
         Route="MainPage" />
-
-    <ShellContent
-        Title="Virtualized"
-        ContentTemplate="{DataTemplate local:VirtualizedListPage}"
-        Route="VirtualizedListPage" />
-
-    <ShellContent
-        Title="MAUI CollectionView"
-        ContentTemplate="{DataTemplate local:CollectionViewPage}"
-        Route="CollectionViewPage" />
 
 </Shell>

@@ -17,6 +17,8 @@ namespace sample
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
+            builder.Services.AddTransient<PdfViewerPage>();
+
 #if DEBUG
             builder.Logging.AddDebug();
 #endif
