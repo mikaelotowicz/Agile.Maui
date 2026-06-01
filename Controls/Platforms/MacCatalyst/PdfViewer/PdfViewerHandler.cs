@@ -1,10 +1,19 @@
-﻿// Platforms/iOS/PdfViewer/PdfViewerHandler.cs
+// Platforms/iOS/PdfViewer/PdfViewerHandler.cs
 //
-// Motor: CoreGraphics.CGPDFDocument (equivalente ao PDFium na plataforma Apple).
+// Motor: PdfKit.PdfDocument (parser nativo da Apple — alta fidelidade, honra /Rotate,
+//   anotações e formulários) renderizado em um CGBitmapContext (CoreGraphics puro).
+//   O render roda em THREAD DE BACKGROUND: por isso NÃO usamos UIGraphicsImageRenderer
+//   (UIKit, só main thread → "UIKit Consistency error"/tela branca no prefetch). O
+//   CGBitmapContext + PdfPage.Draw(box, ctx) é thread-safe fora da main thread.
+// Qualidade: anti-aliasing, suavização/subpixel de fontes e interpolação alta no contexto,
+//   render em RenderScale × escala da tela (Retina) para máxima nitidez.
 // Virtualização: UIScrollView com UIImageView por página — só cria views para páginas no viewport.
 // Cache: LRU de UIImage com limite em MB; TrimToWindow libera páginas fora da janela ativa.
 // Prefetch: renderiza em background N páginas acima/abaixo e adiciona UIImageView ao scroll.
-// Zoom: UIScrollView.ZoomScale (pinch nativo) + double-tap.
+//   Igual ao Android: prefetch contínuo (sem trim) durante o scroll, deduplicado por centro;
+//   o trim agressivo do cache fica para o "scroll idle" (fim do arrasto/desaceleração).
+// Zoom: UIScrollView.ZoomScale (pinch nativo) + double-tap. NÃO re-renderiza ao ampliar
+//   (a nitidez vem do render base em alta resolução), alinhando com o Android.
 
 using CoreGraphics;
 using Foundation;
@@ -50,8 +59,10 @@ public sealed class PdfViewerHandler
     private CancellationTokenSource?   _loadCts;
     private CancellationTokenSource?   _prefetchCts;
     private bool                       _syncingPage;
+    private bool                       _reportingPage;            // mudança originada do scroll → não re-sincronizar
+    private int                        _targetPage = -1;          // página alvo de um scroll programático em curso
     private bool                       _syncingZoom;
-    private int                        _lastPrefetchCenter = -1;  // dedup: evita re-prefetch do mesmo centro
+    private int                        _lastPrefetchCenter = -1;  // dedup: evita re-prefetch do mesmo centro durante o scroll
     private string?                    _tempPath;
 
     private static readonly NSUrlSession _session = NSUrlSession.FromConfiguration(
@@ -67,9 +78,25 @@ public sealed class PdfViewerHandler
 
         pv.OnPageChanged = page =>
         {
-            if (_syncingPage) return;
-            VirtualView?.RaisePageChanged(page);
-            TrimAndPrefetch(page);
+            if (_syncingPage)
+            {
+                // Scroll programático (GoToPage) em curso: só libera o guard ao atingir o
+                // alvo. Assim os eventos de scroll da animação não são tratados como scroll
+                // do usuário (evita re-sincronização competindo com a animação → jank/loop).
+                if (page == _targetPage)
+                {
+                    _syncingPage = false;
+                    _targetPage  = -1;
+                    ReportPage(page);
+                    Prefetch(page);
+                }
+                return;
+            }
+            ReportPage(page);
+            // Prefetch contínuo durante o scroll (sem trim, que fica só no idle) — antecipa o
+            // render das páginas que entram na viewport, evitando a página em branco. Dedup
+            // por centro evita refazer a janela a cada frame do scrollViewDidScroll.
+            Prefetch(page);
         };
 
         pv.OnZoomChanged = zoom =>
@@ -78,7 +105,17 @@ public sealed class PdfViewerHandler
             _syncingZoom = true;
             if (VirtualView is not null) VirtualView.ZoomFactor = zoom;
             _syncingZoom = false;
-            ReRenderAll();
+            // Zoom é feito pelo UIScrollView (escala do contentView) — NÃO re-renderiza
+            // (alinha com Android: evita custo e descarte do cache; a nitidez vem do render
+            //  base em alta resolução = RenderScale × escala da tela).
+        };
+
+        pv.OnScrollIdle = page =>
+        {
+            // Fim do scroll: garante a limpeza do guard programático e faz o trim agressivo
+            // do cache/views fora da janela (o caminho contínuo do scroll nunca corta).
+            if (_syncingPage) { _syncingPage = false; _targetPage = -1; ReportPage(page); }
+            TrimAndPrefetch(page);
         };
 
         ApplyCache();
@@ -92,6 +129,7 @@ public sealed class PdfViewerHandler
 
         pv.OnPageChanged = null;
         pv.OnZoomChanged = null;
+        pv.OnScrollIdle  = null;
         pv.ClearDocument();
 
         _engine?.Dispose(); _engine = null;
@@ -179,8 +217,11 @@ public sealed class PdfViewerHandler
                     }
                     pv.SetDocument(_engine!, _cacheRef, count,
                         (nfloat)vv.PageSpacing, vv.PageBackgroundColor.ToPlatform());
-                    ApplyZoomLimits();
-                    ApplyZoomEnabled();
+                    Agile.Maui.PdfViewerLog.Write("Pdf/iOS",
+                        $"loaded pages={count} pvFrame={pv.Frame.Width:F0}x{pv.Frame.Height:F0} svFrame={pv.ScrollView.Frame.Width:F0} minZoom={vv.MinZoom} maxZoom={vv.MaxZoom} pinch={vv.IsPinchZoomEnabled}");
+                    ApplyZoomLimits();      // Min/Max abertos → permite voltar a 1.0
+                    ResetZoomTo100();       // todo documento abre em 100% (paridade com Android)
+                    ApplyZoomEnabled();     // se pinch off, trava no 1.0 recém-aplicado
                     vv.RaiseDocumentLoaded(count);
                     TrimAndPrefetch(0);
                 });
@@ -225,25 +266,57 @@ public sealed class PdfViewerHandler
 
     // ── Prefetch ──────────────────────────────────────────────────────────────
 
+    /// <summary>Janela ativa [start, end] de páginas a manter/renderizar em torno do centro.</summary>
+    private (int start, int end) Window(int centerPage)
+    {
+        int above = VirtualView!.EnablePageCaching ? VirtualView.PrefetchAbove : 0;
+        int below = VirtualView.EnablePageCaching ? VirtualView.PrefetchBelow : 0;
+        int total = _engine!.PageCount;
+        return (Math.Max(0, centerPage - above), Math.Min(total - 1, centerPage + below));
+    }
+
+    /// <summary>
+    /// Prefetch contínuo durante o scroll, SEM recortar o cache. Deduplicado por centro: o
+    /// scrollViewDidScroll dispara dezenas de vezes por segundo e PageAtOffset repete o mesmo
+    /// índice enquanto se rola dentro de uma página — sem o guard, cada frame cancelaria e
+    /// reiniciaria o render, deixando páginas em branco. O trim fica para TrimAndPrefetch (idle).
+    /// </summary>
+    private void Prefetch(int centerPage)
+    {
+        if (_engine is null || _cache is null || VirtualView is null) return;
+        if (centerPage == _lastPrefetchCenter) return;
+        _lastPrefetchCenter = centerPage;
+        var (start, end) = Window(centerPage);
+        StartRenderWindow(centerPage, start, end);
+    }
+
+    /// <summary>
+    /// Recorta o cache/views para a janela ativa e agenda o render. Usado no idle/load —
+    /// não no scroll contínuo, para não cortar páginas que estão entrando na viewport.
+    /// </summary>
     private void TrimAndPrefetch(int centerPage)
     {
         if (_engine is null || _cache is null || VirtualView is null) return;
-        // Dedup: o scrollViewDidScroll dispara dezenas de vezes no mesmo centro; só refaz a
-        // janela/prefetch quando o centro realmente muda. ReRenderAll/LoadDocument resetam p/ -1.
-        if (centerPage == _lastPrefetchCenter) return;
-        _lastPrefetchCenter = centerPage;
-
-        int above = VirtualView.EnablePageCaching ? VirtualView.PrefetchAbove : 0;
-        int below = VirtualView.EnablePageCaching ? VirtualView.PrefetchBelow : 0;
-        int total = _engine.PageCount;
-        int aS    = Math.Max(0, centerPage - above);
-        int aE    = Math.Min(total - 1, centerPage + below);
+        var (start, end) = Window(centerPage);
 
         // ORDEM IMPORTA: remover as views primeiro desmarca as páginas como exibidas
         // (e solta a referência da UIImage), então TrimToWindow pode dispor com segurança
         // as imagens fora da janela. O inverso disporia imagem ainda em uso → crash.
-        PlatformView?.RemovePageViewsOutside(aS, aE);
-        _cache.TrimToWindow(aS, aE);
+        PlatformView?.RemovePageViewsOutside(start, end);
+        _cache.TrimToWindow(start, end);
+
+        _lastPrefetchCenter = centerPage;   // sincroniza o dedup com a janela recém-recortada
+        StartRenderWindow(centerPage, start, end);
+    }
+
+    /// <summary>
+    /// Agenda (em background, cancelável) o render das páginas da janela: centro primeiro,
+    /// depois alternando abaixo/acima. Caminho único de Prefetch e TrimAndPrefetch.
+    /// </summary>
+    private void StartRenderWindow(int centerPage, int start, int end)
+    {
+        int above = VirtualView!.EnablePageCaching ? VirtualView.PrefetchAbove : 0;
+        int below = VirtualView.EnablePageCaching ? VirtualView.PrefetchBelow : 0;
 
         _prefetchCts?.Cancel(); _prefetchCts?.Dispose();
         var cts = new CancellationTokenSource();
@@ -252,22 +325,24 @@ public sealed class PdfViewerHandler
         var order = new List<int> { centerPage };
         for (int d = 1; d <= Math.Max(above, below); d++)
         {
-            if (d <= below && centerPage + d <= aE) order.Add(centerPage + d);
-            if (d <= above && centerPage - d >= aS) order.Add(centerPage - d);
+            if (d <= below && centerPage + d <= end)   order.Add(centerPage + d);
+            if (d <= above && centerPage - d >= start) order.Add(centerPage - d);
         }
 
-        double renderScale  = VirtualView?.RenderScale ?? 1.5;
+        double renderScale  = VirtualView.RenderScale;
         float  nativeScale  = (float)UIScreen.MainScreen.Scale;
         double scale        = renderScale * nativeScale;
-        var    engine       = _engine;
-        var    cache        = _cache;
+        var    engine       = _engine!;
+        var    cache        = _cache!;
         var    pv           = PlatformView;
-        var    bgColor      = VirtualView?.PageBackgroundColor ?? Colors.White;
-        // CRÍTICO: captura a largura AQUI (main thread). Acessar pv.ScrollView.Frame dentro do
-        // Task.Run (thread de background) é acesso a UIKit fora da main thread → lança exceção,
-        // que era engolida pelo catch e impedia QUALQUER página de renderizar (tela branca).
+        var    bgColor      = VirtualView.PageBackgroundColor;
+        // CRÍTICO: capturar a largura AQUI (main thread). Ler pv.ScrollView.Frame dentro do
+        // Task.Run é acesso a UIKit fora da main thread → exceção engolida pelo catch que
+        // impediria QUALQUER página de renderizar (tela branca).
         nfloat viewW = pv is null ? 375 : (nfloat)pv.ScrollView.Frame.Width;
         if (viewW < 1) viewW = 375;
+        Agile.Maui.PdfViewerLog.Write("Pdf/iOS",
+            $"render center={centerPage} viewW={viewW:F0} renderScale={renderScale:F2} nativeScale={nativeScale:F1} → scale={scale:F2} zoomScale={(pv is null ? 0 : pv.ScrollView.ZoomScale):F3}");
 
         _ = Task.Run(async () =>
         {
@@ -282,6 +357,8 @@ public sealed class PdfViewerHandler
                     double ratio = pageSize.Height / Math.Max(1, pageSize.Width);
                     int    w     = (int)(viewW * scale);
                     int    h     = (int)(w * ratio);
+                    Agile.Maui.PdfViewerLog.Write("Pdf/iOS",
+                        $"  page {idx}: render {w}x{h}px  pageSize={pageSize.Width:F0}x{pageSize.Height:F0}");
 
                     var img = await engine.RenderUIImageAsync(idx, w, h, bgColor, cts.Token);
                     if (img is null) continue;
@@ -297,7 +374,7 @@ public sealed class PdfViewerHandler
                     });
                 }
                 catch (OperationCanceledException) { break; }
-                catch (Exception ex) { PdfViewerLog.Write("Pdf/iOS", $"Prefetch render ERRO idx={idx}: {ex.Message}"); }
+                catch { }
             }
         }, cts.Token);
     }
@@ -318,20 +395,53 @@ public sealed class PdfViewerHandler
 
     // ── Property sync ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Reporta a página atual ao controle MAUI marcando a origem como "scroll do usuário".
+    /// O guard _reportingPage impede que o setter de CurrentPage dispare SyncPage de volta
+    /// (que rolaria de novo competindo com o scroll em curso → jank/loop).
+    /// </summary>
+    private void ReportPage(int page)
+    {
+        _reportingPage = true;
+        VirtualView?.RaisePageChanged(page);
+        _reportingPage = false;
+    }
+
     private void SyncPage()
     {
-        if (_syncingPage || PlatformView is null || VirtualView is null) return;
+        if (_reportingPage || _syncingPage || PlatformView is null || VirtualView is null || _engine is null) return;
+        int count = _engine.PageCount;
+        if (count <= 0) return;
+        // Mantém _syncingPage TRUE até a página alvo ser atingida (limpo em OnPageChanged ao
+        // chegar, ou no OnScrollIdle/scrollViewDidEndScrollingAnimation). Setar/limpar de forma
+        // síncrona seria inócuo: o scroll é animado (assíncrono) e seus eventos chegam depois.
+        _targetPage  = Math.Clamp(VirtualView.CurrentPage, 0, count - 1);
         _syncingPage = true;
-        PlatformView.ScrollToPage(VirtualView.CurrentPage, animated: true);
-        _syncingPage = false;
+        PlatformView.ScrollToPage(_targetPage, animated: true);
     }
 
     private void SyncZoom()
     {
         if (_syncingZoom || PlatformView is null || VirtualView is null) return;
+        Agile.Maui.PdfViewerLog.Write("Pdf/iOS", $"SyncZoom (binding/API) zoomFactor={VirtualView.ZoomFactor:F3}");
         _syncingZoom = true;
         PlatformView.ScrollView.SetZoomScale((nfloat)VirtualView.ZoomFactor, animated: true);
         _syncingZoom = false;
+    }
+
+    /// <summary>Reseta o zoom para 100% (escala nativa e ZoomFactor) — chamado ao abrir cada documento.</summary>
+    private void ResetZoomTo100()
+    {
+        if (PlatformView is null || VirtualView is null) return;
+        var sv = PlatformView.ScrollView;
+        Agile.Maui.PdfViewerLog.Write("Pdf/iOS",
+            $"ResetZoom BEFORE min={sv.MinimumZoomScale:F2} max={sv.MaximumZoomScale:F2} scale={sv.ZoomScale:F3} svFrameW={sv.Frame.Width:F0}");
+        _syncingZoom = true;
+        sv.SetZoomScale(1f, animated: false);
+        VirtualView.ZoomFactor = 1.0;
+        _syncingZoom = false;
+        Agile.Maui.PdfViewerLog.Write("Pdf/iOS",
+            $"ResetZoom AFTER scale={sv.ZoomScale:F3} zoomFactor={VirtualView.ZoomFactor:F3}");
     }
 
     private void ApplyZoomLimits()
@@ -392,6 +502,12 @@ public sealed class PdfScrollContainer : UIView, IUIScrollViewDelegate
     private int                    _pageCount;
     private nfloat                 _spacing = 8;
     private UIColor                _bgColor = UIColor.White;
+
+    // Cinza de leitor do "deck" (atrás das páginas), igual ao Android (#525659). O espaçamento
+    // entre folhas (PageSpacing) e o overscroll mostram esta cor, separando visualmente as
+    // páginas — sem isso o gap fica invisível (fundo igual à folha branca).
+    private static readonly UIColor ReaderBg =
+        UIColor.FromRGB((byte)0x52, (byte)0x56, (byte)0x59);
     private nfloat[]               _pageHeights  = Array.Empty<nfloat>();
     private nfloat[]               _pageOffsets  = Array.Empty<nfloat>();
 
@@ -400,6 +516,7 @@ public sealed class PdfScrollContainer : UIView, IUIScrollViewDelegate
 
     public Action<int>?    OnPageChanged { get; set; }
     public Action<double>? OnZoomChanged { get; set; }
+    public Action<int>?    OnScrollIdle  { get; set; }
 
     public nfloat PageSpacing
     {
@@ -409,7 +526,7 @@ public sealed class PdfScrollContainer : UIView, IUIScrollViewDelegate
 
     public PdfScrollContainer()
     {
-        BackgroundColor = UIColor.SystemBackground;
+        BackgroundColor = ReaderBg;
         ClipsToBounds   = true;
 
         _contentView = new UIView { BackgroundColor = UIColor.Clear };
@@ -419,6 +536,7 @@ public sealed class PdfScrollContainer : UIView, IUIScrollViewDelegate
             MinimumZoomScale    = 0.9f,
             MaximumZoomScale    = 8f,
             BouncesZoom         = true,
+            BackgroundColor     = ReaderBg,
             ShowsVerticalScrollIndicator   = true,
             ShowsHorizontalScrollIndicator = false,
         };
@@ -580,11 +698,16 @@ public sealed class PdfScrollContainer : UIView, IUIScrollViewDelegate
     [Export("scrollViewDidZoom:")]
     public void DidZoom(UIScrollView sv)
     {
-        nfloat ox = (nfloat)Math.Max((double)((sv.Bounds.Width  - _contentView.Frame.Width)  / 2), 0.0);
-        nfloat oy = (nfloat)Math.Max((double)((sv.Bounds.Height - _contentView.Frame.Height) / 2), 0.0);
+        // Durante o zoom o _contentView tem um transform aplicado pelo UIScrollView; nesse
+        // estado o seu Frame é "undefined" (Apple) e NÃO pode ser usado para cálculo — usá-lo
+        // fazia a centralização falhar ao reduzir o zoom (a página saía do centro e parte
+        // ficava fora da área visível). A receita oficial usa sv.ContentSize (= base × zoom):
+        // quando o conteúdo é menor que a viewport, centraliza; quando maior, encosta na origem.
+        nfloat ox = (nfloat)Math.Max((double)((sv.Bounds.Width  - sv.ContentSize.Width)  / 2), 0.0);
+        nfloat oy = (nfloat)Math.Max((double)((sv.Bounds.Height - sv.ContentSize.Height) / 2), 0.0);
         _contentView.Center = new CGPoint(
-            _contentView.Frame.Width  / 2 + ox,
-            _contentView.Frame.Height / 2 + oy);
+            sv.ContentSize.Width  / 2 + ox,
+            sv.ContentSize.Height / 2 + oy);
     }
 
     [Export("scrollViewDidEndZooming:withView:atScale:")]
@@ -594,6 +717,26 @@ public sealed class PdfScrollContainer : UIView, IUIScrollViewDelegate
     [Export("scrollViewDidScroll:")]
     public void Scrolled(UIScrollView sv)
         => OnPageChanged?.Invoke(PageAtOffset(sv.ContentOffset.Y));
+
+    // ── "Scroll idle": equivalentes iOS do SCROLL_STATE_IDLE do Android ─────────
+    // Disparam o trim agressivo do cache só quando o movimento realmente termina.
+
+    // Fim do arrasto sem inércia (willDecelerate=false) → já está parado.
+    [Export("scrollViewDidEndDragging:willDecelerate:")]
+    public void DraggingEnded(UIScrollView sv, bool willDecelerate)
+    {
+        if (!willDecelerate) OnScrollIdle?.Invoke(PageAtOffset(sv.ContentOffset.Y));
+    }
+
+    // Fim da desaceleração (após arrasto com inércia).
+    [Export("scrollViewDidEndDecelerating:")]
+    public void DecelerationEnded(UIScrollView sv)
+        => OnScrollIdle?.Invoke(PageAtOffset(sv.ContentOffset.Y));
+
+    // Fim de um scroll programático animado (SetContentOffset/ScrollToPage animated:true).
+    [Export("scrollViewDidEndScrollingAnimation:")]
+    public void ScrollAnimationEnded(UIScrollView sv)
+        => OnScrollIdle?.Invoke(PageAtOffset(sv.ContentOffset.Y));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -603,26 +746,26 @@ public sealed class PdfScrollContainer : UIView, IUIScrollViewDelegate
 
 internal sealed class CgPdfEngine : IPdfEngine
 {
-    // CoreGraphics (CGPDFDocument), NÃO PdfKit: render via CGContext.DrawPDFPage num
-    // CGBitmapContext é THREAD-SAFE em background. PdfKit (PdfPage.Draw/UIGraphicsImageRenderer)
-    // é UIKit e só roda na main thread → causava "UIKit Consistency error" no prefetch (tela branca).
-    private CGPDFDocument? _doc;
-    private bool           _disposed;
+    private PdfDocument? _doc;
+    private bool         _disposed;
+    // Serializa acesso a _doc (GetPage/Draw) x Dispose. Dispose AGUARDA o render
+    // em andamento soltar o lock antes de liberar _doc → elimina EXC_BAD_ACCESS
+    // quando troca de Source/disconnect ocorre durante render em background.
     private readonly object _docLock = new();
 
     public bool IsOpen    => _doc is not null && !_disposed;
-    public int  PageCount => (int)(_doc?.Pages ?? 0);
+    public int  PageCount => (int)(_doc?.PageCount ?? 0);
 
     public CgPdfEngine(string path)
     {
-        try { _doc = CGPDFDocument.FromFile(path); }
+        try { _doc = new PdfDocument(NSUrl.FromFilename(path)); }
         catch { _doc = null; }
     }
 
     public Task<bool> OpenAsync(string path, string? pw = null, CancellationToken ct = default)
     {
         _doc?.Dispose();
-        try { _doc = CGPDFDocument.FromFile(path); } catch { _doc = null; }
+        try { _doc = new PdfDocument(NSUrl.FromFilename(path)); } catch { _doc = null; }
         return Task.FromResult(IsOpen);
     }
 
@@ -633,13 +776,20 @@ internal sealed class CgPdfEngine : IPdfEngine
 
     public SizeF GetPageSize(int idx)
     {
+        // Mesmo lock do render: evita acesso a _doc disposto a partir do prefetch.
         lock (_docLock)
         {
             if (!IsOpen || idx < 0 || idx >= PageCount) return SizeF.Zero;
-            var page = _doc!.GetPage(idx + 1);   // CGPDF: páginas são 1-based
+            var page = _doc!.GetPage((nint)idx);
             if (page is null) return SizeF.Zero;
-            var box = page.GetBoxRect(CGPDFBox.Media);
-            return new SizeF((float)box.Width, (float)box.Height);
+            var bounds = page.GetBoundsForBox(PdfDisplayBox.Media);
+            // /Rotate 90/270: as dimensões VISUAIS são trocadas. Retornar o tamanho efetivo
+            // (rotacionado) mantém a altura da célula e a proporção do render corretas para
+            // páginas paisagem-por-rotação (PDFs escaneados, etc.).
+            bool swap = (page.Rotation % 180) != 0;
+            float w = (float)(swap ? bounds.Height : bounds.Width);
+            float h = (float)(swap ? bounds.Width  : bounds.Height);
+            return new SizeF(w, h);
         }
     }
 
@@ -648,33 +798,57 @@ internal sealed class CgPdfEngine : IPdfEngine
     {
         return Task.Run<UIImage?>(() =>
         {
+            // Lock garante que _doc não será disposto enquanto page.Draw executa.
+            // Dispose() concorrente bloqueia até este bloco terminar (drenagem).
             lock (_docLock)
             {
                 try
                 {
                     if (ct.IsCancellationRequested || !IsOpen) return null;
-                    var page = _doc!.GetPage(idx + 1);   // 1-based
+                    if (widthPx < 1 || heightPx < 1) return null;
+                    var page = _doc!.GetPage((nint)idx);
                     if (page is null) return null;
 
-                    var box = page.GetBoxRect(CGPDFBox.Media);
-                    nfloat scX = (nfloat)(widthPx  / Math.Max(1.0, box.Width));
-                    nfloat scY = (nfloat)(heightPx / Math.Max(1.0, box.Height));
+                    var bounds = page.GetBoundsForBox(PdfDisplayBox.Media);
+                    bool   swap = (page.Rotation % 180) != 0;
+                    double effW = swap ? bounds.Height : bounds.Width;   // dimensões visuais
+                    double effH = swap ? bounds.Width  : bounds.Height;  // (após /Rotate)
+                    nfloat scX  = (nfloat)(widthPx  / Math.Max(1.0, effW));
+                    nfloat scY  = (nfloat)(heightPx / Math.Max(1.0, effH));
 
-                    // CGBitmapContext + DrawPDFPage: render por CoreGraphics, thread-safe em background.
+                    // CGBitmapContext (CoreGraphics puro) é THREAD-SAFE em background — ao
+                    // contrário do UIGraphicsImageRenderer (UIKit), que lança "UIKit
+                    // Consistency error"/tela branca fora da main thread. Renderizamos a
+                    // PdfPage do PdfKit aqui via page.Draw(box, ctx).
                     using var cs  = CGColorSpace.CreateDeviceRGB();
                     using var ctx = new CGBitmapContext(
                         IntPtr.Zero, widthPx, heightPx, 8, widthPx * 4, cs,
                         CGImageAlphaInfo.PremultipliedLast);
 
+                    // Qualidade máxima: anti-aliasing de vetores/texto, suavização e
+                    // posicionamento subpixel de fontes, interpolação alta para imagens.
+                    ctx.SetAllowsAntialiasing(true);
+                    ctx.SetShouldAntialias(true);
+                    ctx.InterpolationQuality = CGInterpolationQuality.High;
+                    ctx.SetAllowsFontSmoothing(true);
+                    ctx.SetShouldSmoothFonts(true);
+                    ctx.SetAllowsFontSubpixelQuantization(true);
+                    ctx.SetShouldSubpixelPositionFonts(true);
+
+                    // Fundo da página (ex.: branco) — preenche antes do conteúdo.
                     ctx.SetFillColor((nfloat)bgColor.Red, (nfloat)bgColor.Green,
                                      (nfloat)bgColor.Blue, (nfloat)bgColor.Alpha);
                     ctx.FillRect(new CGRect(0, 0, widthPx, heightPx));
 
-                    // Página PDF tem origem inferior-esquerda; flip Y p/ a UIImage sair na orientação certa.
+                    // CGBitmapContext tem origem inferior-esquerda; a UIImage espera origem
+                    // superior-esquerda → flip em Y. A escala mapeia o tamanho efetivo para o
+                    // bitmap. page.Draw aplica internamente a transform da box (origem) e a
+                    // rotação /Rotate, então NÃO transladamos pela origem da box aqui.
                     ctx.TranslateCTM(0, heightPx);
                     ctx.ScaleCTM(scX, -scY);
-                    ctx.TranslateCTM(-(nfloat)box.X, -(nfloat)box.Y);
-                    ctx.DrawPDFPage(page);
+
+                    if (ct.IsCancellationRequested) return null;
+                    page.Draw(PdfDisplayBox.Media, ctx);
 
                     using var cgImage = ctx.ToImage();
                     return cgImage is null ? null : UIImage.FromImage(cgImage);
@@ -698,7 +872,15 @@ internal sealed class CgPdfEngine : IPdfEngine
         => RenderPageAsync(idx, tw, th, 0xFFFFFFFF, ct);
 
     public Task<string> ExtractTextAsync(int idx, CancellationToken ct = default)
-        => Task.FromResult(string.Empty); // CGPDFDocument não expõe texto; reservado para o futuro.
+    {
+        // PDFKit: extração de texto via PdfPage.AttributedString (futura extensão)
+        lock (_docLock)
+        {
+            if (!IsOpen) return Task.FromResult(string.Empty);
+            var page = _doc?.GetPage((nint)idx);
+            return Task.FromResult(page?.AttributedString?.Value ?? string.Empty);
+        }
+    }
 
     public void Dispose()
     {
