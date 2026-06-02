@@ -178,6 +178,11 @@ public sealed class PdfViewerHandler
         _engine?.Dispose();   _engine  = null;
         _lastPrefetchCenter = -1;
 
+        // Descarta as páginas do documento anterior: o cache é keyed por índice de página e o
+        // novo PDF reusa os mesmos índices — sem esvaziar, as primeiras páginas do PDF antigo
+        // apareceriam (cache hit) ao abrir o novo documento.
+        _cache?.EvictAll();
+
         // O engine anterior já foi disposed acima (fecha renderer + pfd → libera o arquivo),
         // então é seguro deletar o temp anterior agora, na UI thread. O novo temp tem nome
         // único (Guid) e só é registrado em _tempFilePath na UI thread (ver MainThread abaixo),
@@ -461,9 +466,17 @@ public sealed class PdfViewerHandler
     private void SyncPage()
     {
         if (_reportingPage || _syncingPage || PlatformView is null || VirtualView is null || _adapter is null) return;
+        if (PlatformView.Rv.GetLayoutManager() is not LinearLayoutManager lm) return;
+
         _targetPage  = Math.Clamp(VirtualView.CurrentPage, 0, _adapter.ItemCount - 1);
         _syncingPage = true;
-        PlatformView.Rv.SmoothScrollToPosition(_targetPage);
+
+        // SmoothScrollToPosition apenas torna o item VISÍVEL; numa lista de páginas de tela
+        // cheia isso deixa a página anterior ainda como "primeira visível", e o OnScrollIdle
+        // reporta de volta a página antiga — anulando a navegação por botão. Usamos um
+        // LinearSmoothScroller com SNAP_TO_START para ALINHAR a página de destino ao topo.
+        var scroller = new SnapToStartSmoothScroller(Context) { TargetPosition = _targetPage };
+        lm.StartSmoothScroll(scroller);
     }
 
     private void SyncZoom()
@@ -776,6 +789,16 @@ internal sealed class PdfDoubleTapListener : GestureDetector.SimpleOnGestureList
         if (e2 is not null && e2.PointerCount > 1) return false;
         return _o.PanHorizontal(distanceX);
     }
+}
+
+// Scroller que alinha a página de destino ao TOPO da viewport (não apenas "torná-la visível").
+// Essencial para a navegação por botões prev/próxima numa lista de páginas de tela cheia.
+internal sealed class SnapToStartSmoothScroller : LinearSmoothScroller
+{
+    protected SnapToStartSmoothScroller(IntPtr h, JniHandleOwnership t) : base(h, t) { }
+    public SnapToStartSmoothScroller(Context context) : base(context) { }
+
+    protected override int VerticalSnapPreference => SnapToStart;
 }
 
 internal sealed class PdfScrollListener : RecyclerView.OnScrollListener
