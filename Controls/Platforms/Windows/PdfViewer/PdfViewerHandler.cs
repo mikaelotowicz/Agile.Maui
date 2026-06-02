@@ -59,9 +59,11 @@ public sealed class PdfViewerHandler
     private PdfWinLruCache?          _cache;
     private CancellationTokenSource?      _loadCts;
     private CancellationTokenSource?      _prefetchCts;
+    private CancellationTokenSource?      _zoomSettleCts;   // debounce: render só quando o zoom assenta
     private bool                          _syncingPage;
     private bool                          _syncingZoom;
     private float                         _lastZoom = 1f;   // último ZoomFactor visto (detecta zoom vs scroll)
+    private float                         _renderedZoom = 1f; // zoom no qual as bitmaps atuais foram rasterizadas
     private double[]                      _pageOffsets    = Array.Empty<double>();
     private double[]                      _pageHeights    = Array.Empty<double>();
     private double                        _pageWidth;   // largura base da folha (metade da viewport:
@@ -71,6 +73,9 @@ public sealed class PdfViewerHandler
     // Guarda quais páginas têm Image control ativo no canvas
     private readonly HashSet<int>         _activeImages   = new();
     private readonly object               _activeImgLock  = new();
+
+    // Itens da barra de miniaturas (para destacar a página atual com borda azul)
+    private List<PdfThumbItem>?           _thumbItems;
 
     public PdfViewerHandler() : base(Mapper) { }
 
@@ -102,6 +107,7 @@ public sealed class PdfViewerHandler
     {
         _loadCts?.Cancel();    _loadCts?.Dispose();    _loadCts    = null;
         _prefetchCts?.Cancel();_prefetchCts?.Dispose();_prefetchCts = null;
+        _zoomSettleCts?.Cancel();_zoomSettleCts?.Dispose();_zoomSettleCts = null;
 
         pv.ScrollViewer.ViewChanged          -= OnViewChanged;
         pv.SizeChanged                        -= OnSizeChanged;
@@ -132,14 +138,28 @@ public sealed class PdfViewerHandler
         _loadCts = cts;
 
         _prefetchCts?.Cancel();
+        _zoomSettleCts?.Cancel();
         PlatformView.PagesCanvas.Children.Clear();
         _pageOffsets = Array.Empty<double>();
         _pageHeights = Array.Empty<double>();
         lock (_activeImgLock) _activeImages.Clear();
         _pdfDoc = null;
 
-        // Garante o cache mesmo sem o consumidor setar MaxCacheMB.
+        // Limpa a barra de miniaturas do documento anterior.
+        _thumbItems = null;
+        PlatformView.ThumbnailHost.Visibility = global::Microsoft.UI.Xaml.Visibility.Collapsed;
+        PlatformView.ThumbnailList.ItemsSource = null;
+
+        // Garante o cache mesmo sem o consumidor setar MaxCacheMB e DESCARTA as páginas do
+        // documento anterior: o cache é keyed por índice de página e o novo PDF reusa os
+        // mesmos índices — sem esvaziar, as primeiras páginas do PDF antigo apareceriam (cache hit).
         EnsureCache();
+        _cache?.EvictAll();
+        _renderedZoom = 1f;
+        _lastZoom     = 1f;
+
+        // Volta o scroll/zoom ao início para o novo documento abrir em 100%, no topo.
+        PlatformView.ScrollViewer.ChangeView(0, 0, 1f, disableAnimation: true);
 
         var source = VirtualView.Source;
         var stream = VirtualView.PdfStream;
@@ -243,15 +263,27 @@ public sealed class PdfViewerHandler
         var    canvas  = PlatformView.PagesCanvas;
         canvas.Children.Clear();
         lock (_activeImgLock) _activeImages.Clear();
+        // Layout recomeçando do zero (load/resize/spacing) → o "100%" é a base de rasterização.
+        _renderedZoom = 1f;
 
         // Usa a largura da ÁREA DE VISUALIZAÇÃO (ScrollViewer), não do Grid inteiro — senão a
         // barra de miniaturas é incluída e a página fica larga demais. A página recebe uma
         // margem lateral e é centralizada, deixando o deck cinza aparecer dos dois lados.
-        double viewportW = PlatformView.ScrollViewer.ActualWidth > 1 ? PlatformView.ScrollViewer.ActualWidth : 800;
-        // Em zoom 1 (100%) a página ocupa 50% da largura disponível (centralizada, com o deck
-        // cinza nas laterais). Renderizada em alta resolução → nítida; o zoom in amplia a partir daí.
-        _pageWidth       = Math.Max(50, viewportW * 0.5);
-        double spacing   = VirtualView.PageSpacing;
+        double viewportW = PlatformView.ScrollViewer.ActualWidth  > 1 ? PlatformView.ScrollViewer.ActualWidth  : 800;
+        double viewportH = PlatformView.ScrollViewer.ActualHeight > 1 ? PlatformView.ScrollViewer.ActualHeight : viewportW * 1.3;
+
+        // "100%" = mostrar ~80% da ALTURA da página na viewport (não exceder 50% da largura).
+        // Antes era só 50% da largura, ignorando a altura — em telas largas a página A4 ficava
+        // alta demais e só ~⅔ dela aparecia. Dimensiona a folha pela proporção da 1ª página:
+        // para 80% visível, a altura da página = viewportH / 0,80 → largura = altura / proporção.
+        const double visibleFraction = 0.80;
+        double firstRatio;
+        using (var p0 = _pdfDoc.GetPage(0))
+            firstRatio = p0.Size.Height / Math.Max(1, p0.Size.Width);
+        double byWidth  = viewportW * 0.5;                                  // limite de largura (deck nas laterais)
+        double byHeight = viewportH / (visibleFraction * firstRatio);       // ~80% da altura visível
+        _pageWidth      = Math.Max(50, Math.Min(byWidth, byHeight));
+        double spacing  = VirtualView.PageSpacing;
 
         _pageOffsets = new double[count];
         _pageHeights = new double[count];
@@ -345,7 +377,7 @@ public sealed class PdfViewerHandler
         return false;
     }
 
-    private void RenderVisible()
+    private void RenderVisible(bool force = false)
     {
         if (!ComputeWindow(out int firstVis, out int lastVis, out int activeStart, out int activeEnd))
             return;
@@ -371,21 +403,33 @@ public sealed class PdfViewerHandler
 
         // Só renderiza páginas que ainda não têm imagem (a folha já está na tela).
         // RenderVisible roda ao PARAR o scroll, então não há rajada que cause render duplicado.
+        // force=true (re-render por mudança de zoom): rerasteriza mesmo com imagem presente —
+        // a imagem antiga (outra escala) permanece visível até a nova chegar (substitui in-place,
+        // sem flash). O cache já foi esvaziado pelo chamador, então não há lease da escala antiga.
         foreach (int idx in order.Distinct())
-            if (!HasImage(idx)) _ = RenderPageAsync(idx, cts.Token);
+            if (force || !HasImage(idx)) _ = RenderPageAsync(idx, cts.Token);
     }
 
-    // Largura-alvo de renderização da página em PIXELS FÍSICOS: largura da viewport × DPI do
-    // monitor (RasterizationScale) × RenderScale. Considerar o DPI é o que dá a nitidez do
-    // Chrome em telas 125–150%. Teto para não estourar a memória do cache em DPI muito alto.
+    // Largura-alvo de renderização da página em PIXELS FÍSICOS, na resolução REAL de exibição
+    // da página no ZOOM ATUAL: _pageWidth (DIPs de exibição) × zoom × DPI do monitor
+    // (RasterizationScale) × RenderScale (supersampling).
+    //
+    // Basear no _pageWidth (e não na largura da viewport) mantém a razão bitmap/exibição
+    // ~constante (≈ RenderScale). Antes, renderizando pela largura da viewport e exibindo num
+    // Border bem menor (_pageWidth), a GPU fazia um downscale grande (3–4×) com interpolação
+    // bilinear — o que BORRAVA. Combinado com o re-render ao mudar o zoom (ScheduleRenderAfterZoom),
+    // a página é sempre rasterizada (vetorialmente) na escala em que é exibida → nitidez tipo Chrome.
     private double RenderTargetWidth()
     {
-        double vpW    = PlatformView is not null && PlatformView.ScrollViewer.ActualWidth > 1
-                            ? PlatformView.ScrollViewer.ActualWidth : 800;
         double raster = PlatformView?.XamlRoot?.RasterizationScale ?? 1.0;
         if (raster < 1.0) raster = 1.0;
         double rScale = VirtualView?.RenderScale ?? 1.5;
-        return Math.Min(vpW * raster * rScale, 4800);
+        float  zoom   = PlatformView is not null ? PlatformView.ScrollViewer.ZoomFactor : 1f;
+        if (zoom < 0.0001f) zoom = 1f;
+
+        double target = _pageWidth * zoom * raster * rScale;
+        double minW   = Math.Max(1, _pageWidth * raster);   // nunca abaixo da exibição base
+        return Math.Clamp(target, minW, 5000);              // teto p/ não estourar memória
     }
 
     private async Task RenderPageAsync(int idx, CancellationToken ct)
@@ -494,11 +538,15 @@ public sealed class PdfViewerHandler
         var ni = new NativeImage { HorizontalAlignment = WinHAlign.Stretch };
         var border = new WinBorder
         {
-            Tag        = idx,
-            Background = bgBrush,
-            Width      = _pageWidth,
-            Height     = _pageHeights[idx],
-            Child      = ni,
+            Tag             = idx,
+            Background      = bgBrush,
+            Width           = _pageWidth,
+            Height          = _pageHeights[idx],
+            Child           = ni,
+            // Contorno sutil para destacar a folha branca sobre o deck claro (estilo Acrobat/Edge).
+            BorderBrush     = new global::Microsoft.UI.Xaml.Media.SolidColorBrush(
+                                  global::Windows.UI.Color.FromArgb(0xFF, 0xCF, 0xCF, 0xD3)),
+            BorderThickness = new WinThickness(1),
         };
 
         global::Microsoft.UI.Xaml.Controls.Canvas.SetLeft(border, 0);
@@ -541,10 +589,11 @@ public sealed class PdfViewerHandler
             // (mais pesado) fica para quando o scroll parar (evento não-intermediário).
             if (ComputeWindow(out _, out _, out int aStart, out int aEnd))
                 EnsurePlaceholders(aStart, aEnd);
+            // Atualiza o número da página atual continuamente (barra inferior fluida). É leve —
+            // só uma comparação de offsets; não rola a barra de miniaturas a cada frame.
+            ReportCurrentPage(syncThumbnailScroll: false);
             return;
         }
-        RenderVisible();
-
         // Detecta se ESTE evento foi uma mudança de zoom (vs. scroll puro). Comparar com o
         // último zoom visto cobre todas as origens: slider, pinch e Ctrl+roda.
         float curZoom = PlatformView is not null ? PlatformView.ScrollViewer.ZoomFactor : _lastZoom;
@@ -560,40 +609,110 @@ public sealed class PdfViewerHandler
             _syncingZoom = false;
         }
 
-        // Ao dar zoom, o VerticalOffset muda e o cálculo de página "pularia" de página
-        // (avançar/voltar). Só atualizamos a página em SCROLL puro, não durante o zoom.
-        if (zoomChanged) return;
+        if (zoomChanged)
+        {
+            // Durante o zoom NÃO renderiza: chamar RenderVisible a cada passo cancela e
+            // reinicia o render das páginas visíveis (flicker) e acumula trabalho (trava).
+            // Mostra só as folhas (placeholders, leve) e agenda UM render ao ASSENTAR.
+            // Também não atualizamos a página aqui — o cálculo "pularia" durante o zoom.
+            if (ComputeWindow(out _, out _, out int zStart, out int zEnd))
+                EnsurePlaceholders(zStart, zEnd);
+            ScheduleRenderAfterZoom();
+            return;
+        }
 
-        // Page changed?
+        // Scroll puro (zoom estável): render completo das páginas visíveis.
+        RenderVisible();
+
+        // Página atual + sincroniza a rolagem da barra de miniaturas (só ao assentar o scroll).
+        ReportCurrentPage(syncThumbnailScroll: true);
+    }
+
+    // Calcula a página no CENTRO da viewport e notifica o controle. Leve (só comparação de
+    // offsets) → pode rodar a cada frame de scroll para manter a barra inferior fluida.
+    // 'syncThumbnailScroll' rola a barra de miniaturas até a página atual (evitado durante o
+    // scroll contínuo para não brigar com o gesto do usuário; só no settle).
+    private void ReportCurrentPage(bool syncThumbnailScroll)
+    {
         if (_syncingPage || _pageOffsets.Length == 0 || PlatformView is null) return;
+
         // VerticalOffset está no espaço escalado; converte para o espaço do canvas (ver RenderVisible).
-        float  pgZoom    = PlatformView.ScrollViewer.ZoomFactor;
+        float pgZoom = PlatformView.ScrollViewer.ZoomFactor;
         if (pgZoom < 0.0001f) pgZoom = 1f;
-        double scrollTop = PlatformView.ScrollViewer.VerticalOffset / pgZoom;
+        // A "página atual" é a que está no CENTRO da viewport, não no topo. O zoom é centrado:
+        // ao ampliar, o ponto no topo desliza para outra página (mudando o número de página
+        // sem o usuário rolar), mas o ponto central permanece na mesma página → estável.
+        double viewportH = PlatformView.ScrollViewer.ViewportHeight / pgZoom;
+        if (viewportH < 1) viewportH = PlatformView.ActualHeight / pgZoom;
+        double centerBase = PlatformView.ScrollViewer.VerticalOffset / pgZoom + viewportH / 2;
         int page = 0;
         for (int i = 0; i < _pageOffsets.Length; i++)
         {
-            if (_pageOffsets[i] <= scrollTop + 1) page = i;
+            if (_pageOffsets[i] <= centerBase) page = i;
             else break;
         }
         _syncingPage = true;
         VirtualView?.RaisePageChanged(page);
         _syncingPage = false;
 
-        // Mantém a miniatura da página atual destacada e visível na barra (quando ativa).
-        var tl = PlatformView.ThumbnailList;
-        if (tl.Visibility == global::Microsoft.UI.Xaml.Visibility.Visible && tl.SelectedIndex != page)
+        // Mantém a miniatura da página atual destacada (borda azul) e visível na barra.
+        if (PlatformView.ThumbnailHost.Visibility == global::Microsoft.UI.Xaml.Visibility.Visible)
         {
-            tl.SelectedIndex = page;
-            if (tl.SelectedItem is not null) tl.ScrollIntoView(tl.SelectedItem);
+            var tl = PlatformView.ThumbnailList;
+            if (tl.SelectedIndex != page)
+            {
+                tl.SelectedIndex = page;
+                if (syncThumbnailScroll && tl.SelectedItem is not null) tl.ScrollIntoView(tl.SelectedItem);
+            }
+            HighlightThumb(page);
         }
+    }
+
+    // Debounce do render durante o zoom: cada passo do zoom reagenda; quando o zoom para
+    // (nenhum passo por ~150 ms), renderiza UMA vez na nova escala (nítido, sem flicker/trava).
+    private void ScheduleRenderAfterZoom()
+    {
+        _zoomSettleCts?.Cancel(); _zoomSettleCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _zoomSettleCts = cts;
+        _ = Task.Delay(150, cts.Token).ContinueWith(t =>
+        {
+            if (t.IsCanceled || cts.IsCancellationRequested) return;
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (cts.IsCancellationRequested || PlatformView is null) return;
+
+                float z = PlatformView.ScrollViewer.ZoomFactor;
+                if (z < 0.0001f) z = 1f;
+
+                // O zoom mudou o bastante desde a última rasterização? As bitmaps atuais foram
+                // geradas em outra escala; exibidas agora, ficam super/sub-amostradas (borradas).
+                // Re-rasteriza (vetorial) na escala atual para nitidez. Limiar de 15% evita
+                // re-render a cada micro-passo.
+                double ratio = Math.Max(z / _renderedZoom, _renderedZoom / Math.Max(0.0001f, z));
+                if (ratio > 1.15)
+                {
+                    _renderedZoom = z;
+                    _cache?.EvictAll();             // streams da escala antiga → obsoletos
+                    RenderVisible(force: true);     // re-render in-place (sem remover imagens → sem flash)
+                }
+                else
+                {
+                    RenderVisible();
+                }
+            });
+        }, TaskScheduler.Default);
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
         if (_pdfDoc is null) return;
-        // Recalcula layout quando o container é redimensionado
-        InitVirtualCanvas((int)_pdfDoc.PageCount);
+        // Recalcula layout quando o container é redimensionado. _pageWidth muda → a resolução
+        // das bitmaps cacheadas fica obsoleta; esvazia o cache e re-renderiza na nova escala.
+        InitVirtualCanvas((int)_pdfDoc.PageCount);   // limpa as imagens (canvas.Children.Clear)
+        _cache?.EvictAll();
+        float z = PlatformView is not null ? PlatformView.ScrollViewer.ZoomFactor : 1f;
+        _renderedZoom = z < 0.0001f ? 1f : z;
         RenderVisible();
     }
 
@@ -615,16 +734,40 @@ public sealed class PdfViewerHandler
 
         if (!ctrlDown) return;
 
-        double delta = props.MouseWheelDelta > 0 ? 1.15 : 1.0 / 1.15;
+        // Passo PROPORCIONAL ao delta: um notch de mouse vale 120 (→ fator 1.15). Sem isso,
+        // um touchpad de precisão dispara dezenas de micro-eventos por gesto e, aplicando 1.15
+        // fixo a cada um, o zoom dispara muito além do pretendido (1.15^n).
+        double steps  = props.MouseWheelDelta / 120.0;
+        double factor = Math.Pow(1.15, steps);
         if (PlatformView is not null)
         {
             float newZ = Math.Clamp(
-                PlatformView.ScrollViewer.ZoomFactor * (float)delta,
+                PlatformView.ScrollViewer.ZoomFactor * (float)factor,
                 PlatformView.ScrollViewer.MinZoomFactor,
                 PlatformView.ScrollViewer.MaxZoomFactor);
-            PlatformView.ScrollViewer.ChangeView(null, null, newZ, disableAnimation: false);
+            ZoomToCenter(newZ, animate: false);
         }
         e.Handled = true;
+    }
+
+    // Aplica uma nova escala ANCORANDO o ponto central da viewport — sem isso o ChangeView
+    // mantém o VerticalOffset numérico e, como o conteúdo escala, o ponto visível desliza
+    // (o documento "rola" para outra página ao ampliar). Recalcula o offset para que o que
+    // está no centro continue no centro.
+    private void ZoomToCenter(float newZ, bool animate)
+    {
+        if (PlatformView is null) return;
+        var sv = PlatformView.ScrollViewer;
+        float z0 = sv.ZoomFactor;
+        if (z0 < 0.0001f) z0 = 1f;
+
+        // Ponto central atual em coordenadas BASE (não escaladas).
+        double centerBase = (sv.VerticalOffset + sv.ViewportHeight / 2.0) / z0;
+        // Offset que recoloca esse mesmo ponto no centro após a nova escala.
+        double newOffset  = centerBase * newZ - sv.ViewportHeight / 2.0;
+        if (newOffset < 0) newOffset = 0;
+
+        sv.ChangeView(null, newOffset, newZ, disableAnimation: !animate);
     }
 
     // ── Property sync ─────────────────────────────────────────────────────────
@@ -646,7 +789,9 @@ public sealed class PdfViewerHandler
     {
         if (_syncingZoom || PlatformView is null || VirtualView is null) return;
         _syncingZoom = true;
-        PlatformView.ScrollViewer.ChangeView(null, null, (float)VirtualView.ZoomFactor, disableAnimation: false);
+        // Ancora no centro (igual ao Ctrl+roda) e ANIMA a transição — o slider/API dá saltos
+        // grandes (ex.: 10%), e animar evita o "pulo"/pisca da troca instantânea de escala.
+        ZoomToCenter((float)VirtualView.ZoomFactor, animate: true);
         _syncingZoom = false;
     }
 
@@ -690,21 +835,53 @@ public sealed class PdfViewerHandler
     private void ApplyThumbnailBar()
     {
         if (PlatformView is null || VirtualView is null) return;
+        var host = PlatformView.ThumbnailHost;
         var list = PlatformView.ThumbnailList;
 
         if (!VirtualView.EnableThumbnailBar || _pdfDoc is null)
         {
-            list.Visibility  = global::Microsoft.UI.Xaml.Visibility.Collapsed;
+            host.Visibility  = global::Microsoft.UI.Xaml.Visibility.Collapsed;
             list.ItemsSource = null;
+            _thumbItems      = null;
             return;
         }
 
         int count = (int)_pdfDoc.PageCount;
+        // Largura fixa da miniatura (igual ao DestinationWidth do render → imagem nítida e
+        // sem reescala). A altura segue a proporção real de cada página (retrato/paisagem).
+        const double thumbW = 130;
         var items = new List<PdfThumbItem>(count);
-        for (int i = 0; i < count; i++) items.Add(new PdfThumbItem(i));
+        for (int i = 0; i < count; i++)
+            items.Add(new PdfThumbItem(i, thumbW, thumbW * PageRatio(i)));
+        _thumbItems       = items;
         list.ItemsSource  = items;
-        list.SelectedIndex = Math.Clamp(VirtualView.CurrentPage, 0, Math.Max(0, count - 1));
-        list.Visibility   = global::Microsoft.UI.Xaml.Visibility.Visible;
+        int cur = Math.Clamp(VirtualView.CurrentPage, 0, Math.Max(0, count - 1));
+        list.SelectedIndex = cur;
+        HighlightThumb(cur);
+        host.Visibility   = global::Microsoft.UI.Xaml.Visibility.Visible;
+    }
+
+    // Marca a página atual na sidebar (borda/rótulo azul) — independente do realce de seleção.
+    private void HighlightThumb(int page)
+    {
+        var items = _thumbItems;
+        if (items is null) return;
+        for (int i = 0; i < items.Count; i++)
+            items[i].IsCurrent = (i == page);
+    }
+
+    // Proporção altura/largura da página idx. Reaproveita o layout já calculado
+    // (_pageHeights/_pageWidth) quando disponível; senão consulta o tamanho real da página.
+    private double PageRatio(int idx)
+    {
+        if (_pageWidth > 0 && idx < _pageHeights.Length && _pageHeights[idx] > 0)
+            return _pageHeights[idx] / _pageWidth;
+        if (_pdfDoc is not null && (uint)idx < _pdfDoc.PageCount)
+        {
+            using var p = _pdfDoc.GetPage((uint)idx);
+            return p.Size.Height / Math.Max(1, p.Size.Width);
+        }
+        return 1.414; // A4 retrato como fallback
     }
 
     // Renderiza a miniatura sob demanda (virtualização do ListView).
@@ -721,7 +898,14 @@ public sealed class PdfViewerHandler
     private void OnThumbClick(object sender, global::Microsoft.UI.Xaml.Controls.ItemClickEventArgs e)
     {
         if (e.ClickedItem is PdfThumbItem item && VirtualView is not null)
+        {
+            // Destaca a miniatura IMEDIATAMENTE (borda azul) — sem isso, a seleção só aparecia
+            // ao FIM do scroll (no OnViewChanged), dando a impressão de que a página carrega
+            // antes de selecionar. Aqui o feedback é instantâneo; o scroll vem em seguida.
+            if (PlatformView is not null) PlatformView.ThumbnailList.SelectedIndex = item.PageIndex;
+            HighlightThumb(item.PageIndex);
             VirtualView.CurrentPage = item.PageIndex;
+        }
     }
 
     private async Task RenderThumbAsync(PdfThumbItem item)
@@ -760,28 +944,96 @@ public sealed class PdfWinContainer : global::Microsoft.UI.Xaml.Controls.Grid
     public   readonly ScrollViewer                                ScrollViewer;
     internal readonly global::Microsoft.UI.Xaml.Controls.Canvas   PagesCanvas;
     public   readonly global::Microsoft.UI.Xaml.Controls.ListView ThumbnailList;
+    public   readonly global::Microsoft.UI.Xaml.Controls.Grid     ThumbnailHost;   // sidebar "Páginas"
+
+    // Elementos de "chrome" da barra de miniaturas que seguem o tema (claro/escuro).
+    private readonly global::Microsoft.UI.Xaml.Controls.TextBlock _thumbHeaderText;
+    private readonly WinBorder                                    _thumbHeaderDivider;
+    private readonly WinBorder                                    _thumbVDivider;
+
+    private static global::Microsoft.UI.Xaml.Media.SolidColorBrush Brush(byte r, byte g, byte b) =>
+        new(global::Windows.UI.Color.FromArgb(0xFF, r, g, b));
 
     public PdfWinContainer()
     {
-        // Coluna 0: barra de miniaturas (Auto/colapsável). Coluna 1: visualizador.
+        // O PdfViewer não tem modo escuro: força toda a subárvore nativa (sidebar de
+        // miniaturas, divisores, rótulos, chrome das scrollbars) para o tema CLARO,
+        // ignorando o tema do sistema. Sem isto, ActualTheme acompanha o Windows e a
+        // barra de páginas/scrollbars ficavam escuras destoando do deck claro.
+        RequestedTheme = global::Microsoft.UI.Xaml.ElementTheme.Light;
+
+        // Coluna 0: sidebar de páginas (Auto/colapsável). Coluna 1: visualizador.
         ColumnDefinitions.Add(new global::Microsoft.UI.Xaml.Controls.ColumnDefinition
             { Width = global::Microsoft.UI.Xaml.GridLength.Auto });
         ColumnDefinitions.Add(new global::Microsoft.UI.Xaml.Controls.ColumnDefinition
             { Width = new global::Microsoft.UI.Xaml.GridLength(1, global::Microsoft.UI.Xaml.GridUnitType.Star) });
 
+        // ── Sidebar de páginas (fundo claro, estilo Acrobat/Edge) ──
         ThumbnailList = new global::Microsoft.UI.Xaml.Controls.ListView
         {
-            Width              = 272,
-            Visibility         = global::Microsoft.UI.Xaml.Visibility.Collapsed,
             SelectionMode      = global::Microsoft.UI.Xaml.Controls.ListViewSelectionMode.Single,
             IsItemClickEnabled = true,
-            // Barra estreita e escura (estilo do visualizador do Chrome).
-            Background         = new global::Microsoft.UI.Xaml.Media.SolidColorBrush(
-                                     global::Windows.UI.Color.FromArgb(0xFF, 0x3C, 0x3C, 0x3C)),
+            Background         = new global::Microsoft.UI.Xaml.Media.SolidColorBrush(global::Microsoft.UI.Colors.Transparent),
+            Padding            = new WinThickness(0, 2, 0, 8),
             ItemTemplate       = (global::Microsoft.UI.Xaml.DataTemplate)
                                      global::Microsoft.UI.Xaml.Markup.XamlReader.Load(ThumbItemTemplateXaml),
+            ItemContainerStyle = (global::Microsoft.UI.Xaml.Style)
+                                     global::Microsoft.UI.Xaml.Markup.XamlReader.Load(ThumbItemContainerStyleXaml),
         };
-        global::Microsoft.UI.Xaml.Controls.Grid.SetColumn(ThumbnailList, 0);
+        // Remove o realce de seleção padrão (a página atual é marcada por BORDA AZUL no template).
+        var clear = new global::Microsoft.UI.Xaml.Media.SolidColorBrush(global::Microsoft.UI.Colors.Transparent);
+        foreach (var key in new[] { "ListViewItemBackgroundSelected", "ListViewItemBackgroundSelectedPointerOver",
+                                    "ListViewItemBackgroundSelectedPressed", "ListViewItemBackgroundSelectedDisabled" })
+            ThumbnailList.Resources[key] = clear;
+        // Barra de rolagem da sidebar sempre visível/ativa (não some no hover-out).
+        ScrollViewer.SetVerticalScrollBarVisibility(ThumbnailList, WinScrollBarVis.Visible);
+        global::Microsoft.UI.Xaml.Controls.Grid.SetRow(ThumbnailList, 1);
+
+        // Cabeçalho "Páginas"
+        _thumbHeaderText = new global::Microsoft.UI.Xaml.Controls.TextBlock
+        {
+            Text              = "Páginas",
+            VerticalAlignment = WinVAlign.Center,
+            FontSize          = 13,
+            FontWeight        = global::Microsoft.UI.Text.FontWeights.SemiBold,
+        };
+        var header = new WinBorder
+        {
+            Height  = 42,
+            Padding = new WinThickness(14, 0, 14, 0),
+            Child   = _thumbHeaderText,
+        };
+        global::Microsoft.UI.Xaml.Controls.Grid.SetRow(header, 0);
+        _thumbHeaderDivider = new WinBorder
+        {
+            Height            = 1,
+            VerticalAlignment = WinVAlign.Bottom,
+        };
+        global::Microsoft.UI.Xaml.Controls.Grid.SetRow(_thumbHeaderDivider, 0);
+
+        ThumbnailHost = new global::Microsoft.UI.Xaml.Controls.Grid
+        {
+            Width      = 210,
+            Visibility = global::Microsoft.UI.Xaml.Visibility.Collapsed,
+        };
+        ThumbnailHost.RowDefinitions.Add(new global::Microsoft.UI.Xaml.Controls.RowDefinition
+            { Height = global::Microsoft.UI.Xaml.GridLength.Auto });
+        ThumbnailHost.RowDefinitions.Add(new global::Microsoft.UI.Xaml.Controls.RowDefinition
+            { Height = new global::Microsoft.UI.Xaml.GridLength(1, global::Microsoft.UI.Xaml.GridUnitType.Star) });
+        ThumbnailHost.Children.Add(ThumbnailList);
+        ThumbnailHost.Children.Add(header);
+        ThumbnailHost.Children.Add(_thumbHeaderDivider);
+
+        // Divisor vertical entre a sidebar e o visualizador.
+        _thumbVDivider = new WinBorder
+        {
+            Width               = 1,
+            HorizontalAlignment = WinHAlign.Right,
+        };
+        global::Microsoft.UI.Xaml.Controls.Grid.SetRow(_thumbVDivider, 0);
+        global::Microsoft.UI.Xaml.Controls.Grid.SetRowSpan(_thumbVDivider, 2);
+        ThumbnailHost.Children.Add(_thumbVDivider);
+        global::Microsoft.UI.Xaml.Controls.Grid.SetColumn(ThumbnailHost, 0);
 
         // HorizontalAlignment=Center: o ScrollViewer centraliza o canvas (largura da página)
         // quando há folga e dá scroll ao ampliar além da viewport — margem que não escala.
@@ -796,44 +1048,138 @@ public sealed class PdfWinContainer : global::Microsoft.UI.Xaml.Controls.Grid
             ZoomMode                      = ZoomMode.Enabled,
             HorizontalScrollMode          = WinScrollMode.Enabled,
             HorizontalScrollBarVisibility = WinScrollBarVis.Auto,
-            VerticalScrollBarVisibility   = WinScrollBarVis.Auto,
+            // Barra de rolagem vertical sempre visível/ativa (não some quando o ponteiro sai).
+            VerticalScrollBarVisibility   = WinScrollBarVis.Visible,
             HorizontalContentAlignment    = WinHAlign.Center,
-            // Deck cinza escuro (estilo do visualizador do Chrome).
-            Background                    = new global::Microsoft.UI.Xaml.Media.SolidColorBrush(
-                                                global::Windows.UI.Color.FromArgb(0xFF, 0x52, 0x56, 0x59)),
+            // Deck CLARO (estilo Acrobat/Edge) — a folha branca se destaca com leve sombra.
+            Background                    = Brush(0xE6, 0xE6, 0xE8),
             Content                       = PagesCanvas,
         };
         global::Microsoft.UI.Xaml.Controls.Grid.SetColumn(ScrollViewer, 1);
 
-        Children.Add(ThumbnailList);
+        Children.Add(ThumbnailHost);
         Children.Add(ScrollViewer);
+
+        // A barra de miniaturas segue o tema (claro/escuro). Aplica o estado inicial e
+        // reage a mudanças de tema em runtime.
+        ApplyThumbnailTheme();
+        Loaded             += (_, __) => ApplyThumbnailTheme();
+        ActualThemeChanged += (_, __) => ApplyThumbnailTheme();
+    }
+
+    // Pinta o "chrome" da barra de miniaturas conforme o tema atual e notifica os itens.
+    internal void ApplyThumbnailTheme()
+    {
+        bool dark = ActualTheme == global::Microsoft.UI.Xaml.ElementTheme.Dark;
+
+        ThumbnailHost.Background       = dark ? Brush(0x1C, 0x1C, 0x1E) : Brush(0xFA, 0xFA, 0xFA);
+        _thumbHeaderText.Foreground    = dark ? Brush(0xEB, 0xEB, 0xEF) : Brush(0x3C, 0x3C, 0x42);
+        _thumbHeaderDivider.Background = dark ? Brush(0x3A, 0x3A, 0x3C) : Brush(0xE2, 0xE2, 0xE2);
+        _thumbVDivider.Background      = dark ? Brush(0x3A, 0x3A, 0x3C) : Brush(0xD8, 0xD8, 0xD8);
+
+        PdfThumbItem.DarkTheme = dark;
+        if (ThumbnailList.ItemsSource is global::System.Collections.IEnumerable items)
+            foreach (var it in items)
+                (it as PdfThumbItem)?.RefreshTheme();
     }
 
     // Template do item da barra: folha branca com a miniatura + número da página.
+    // O Border tem a dimensão da PÁGINA (ThumbWidth×ThumbHeight, com a proporção real de cada
+    // página) e serve de placeholder branco ENQUANTO a miniatura ainda não renderizou. Sem
+    // dimensões, o Image com Stretch=Uniform e Source=null mede largura 0, o Border colapsa e
+    // aparece o fundo escuro do ListView ao rolar. Com a folha dimensionada, o usuário vê a
+    // folha branca na proporção certa de imediato e a imagem preenche depois.
     private const string ThumbItemTemplateXaml =
         "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\">" +
-          "<StackPanel Margin=\"2,5,2,0\">" +
-            "<Border Background=\"White\" BorderBrush=\"#1A1A1A\" BorderThickness=\"1\" HorizontalAlignment=\"Center\">" +
-              "<Image Source=\"{Binding Image}\" Stretch=\"Uniform\" Height=\"150\"/>" +
+          "<StackPanel Margin=\"0,6,0,2\">" +
+            "<Border Background=\"White\" CornerRadius=\"2\" " +
+                   "BorderBrush=\"{Binding BorderBrush}\" BorderThickness=\"{Binding BorderThickness}\" " +
+                   "Width=\"{Binding ThumbWidth}\" Height=\"{Binding ThumbHeight}\" HorizontalAlignment=\"Center\">" +
+              "<Image Source=\"{Binding Image}\" Stretch=\"Uniform\"/>" +
             "</Border>" +
             "<TextBlock Text=\"{Binding Label}\" HorizontalAlignment=\"Center\" " +
-                      "FontSize=\"11\" Margin=\"0,3,0,4\" Foreground=\"#CCCCCC\"/>" +
+                      "FontSize=\"11\" Margin=\"0,4,0,4\" Foreground=\"{Binding LabelBrush}\"/>" +
           "</StackPanel>" +
         "</DataTemplate>";
+
+    // Container do item: remove padding/realce padrão para a borda azul do template ser o
+    // único indicador da página atual (e ocupar a largura toda, centralizando a miniatura).
+    private const string ThumbItemContainerStyleXaml =
+        "<Style xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" " +
+               "TargetType=\"ListViewItem\">" +
+          "<Setter Property=\"Padding\" Value=\"0\"/>" +
+          "<Setter Property=\"MinHeight\" Value=\"0\"/>" +
+          "<Setter Property=\"Margin\" Value=\"0\"/>" +
+          "<Setter Property=\"HorizontalContentAlignment\" Value=\"Stretch\"/>" +
+          "<Setter Property=\"Background\" Value=\"Transparent\"/>" +
+        "</Style>";
 }
 
 // Item da barra de miniaturas. A miniatura (Image) é renderizada sob demanda quando o
 // ListView realiza o container (virtualização), e notifica o binding ao ficar pronta.
 internal sealed class PdfThumbItem : global::System.ComponentModel.INotifyPropertyChanged
 {
-    public int    PageIndex { get; }
-    public string Label     { get; }
+    // Página atual: azul accent — legível tanto no tema claro quanto no escuro.
+    private static readonly global::Microsoft.UI.Xaml.Media.SolidColorBrush CurrentStroke =
+        new(global::Windows.UI.Color.FromArgb(0xFF, 0x1A, 0x73, 0xE8));
+    private static readonly global::Microsoft.UI.Xaml.Media.SolidColorBrush CurrentText =
+        new(global::Windows.UI.Color.FromArgb(0xFF, 0x1A, 0x73, 0xE8));
+    // Estado normal: borda/rótulo seguem o tema (claro vs escuro).
+    private static readonly global::Microsoft.UI.Xaml.Media.SolidColorBrush NormalStrokeLight =
+        new(global::Windows.UI.Color.FromArgb(0xFF, 0xCC, 0xCC, 0xD0));
+    private static readonly global::Microsoft.UI.Xaml.Media.SolidColorBrush NormalStrokeDark =
+        new(global::Windows.UI.Color.FromArgb(0xFF, 0x48, 0x48, 0x4A));
+    private static readonly global::Microsoft.UI.Xaml.Media.SolidColorBrush NormalTextLight =
+        new(global::Windows.UI.Color.FromArgb(0xFF, 0x60, 0x60, 0x66));
+    private static readonly global::Microsoft.UI.Xaml.Media.SolidColorBrush NormalTextDark =
+        new(global::Windows.UI.Color.FromArgb(0xFF, 0xA0, 0xA0, 0xA6));
 
-    public PdfThumbItem(int pageIndex)
+    // Tema atual da barra, definido pelo container conforme ActualTheme.
+    internal static bool DarkTheme;
+
+    public int    PageIndex   { get; }
+    public string Label       { get; }
+    // Dimensões da folha (placeholder e moldura da miniatura) com a PROPORÇÃO REAL da página:
+    // largura fixa, altura proporcional. Mantém retrato/paisagem corretos por página.
+    public double ThumbWidth  { get; }
+    public double ThumbHeight { get; }
+
+    public PdfThumbItem(int pageIndex, double width, double height)
     {
-        PageIndex = pageIndex;
-        Label     = (pageIndex + 1).ToString();
+        PageIndex   = pageIndex;
+        Label       = (pageIndex + 1).ToString();
+        ThumbWidth  = width;
+        ThumbHeight = height;
     }
+
+    // Página atual → borda/rótulo azul (estilo Acrobat). Demais → cinza.
+    private bool _isCurrent;
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set
+        {
+            if (_isCurrent == value) return;
+            _isCurrent = value;
+            Raise(nameof(BorderBrush));
+            Raise(nameof(BorderThickness));
+            Raise(nameof(LabelBrush));
+        }
+    }
+
+    public global::Microsoft.UI.Xaml.Media.Brush BorderBrush     => _isCurrent ? CurrentStroke : (DarkTheme ? NormalStrokeDark : NormalStrokeLight);
+    public global::Microsoft.UI.Xaml.Thickness   BorderThickness => _isCurrent ? new(2) : new(1);
+    public global::Microsoft.UI.Xaml.Media.Brush LabelBrush      => _isCurrent ? CurrentText : (DarkTheme ? NormalTextDark : NormalTextLight);
+
+    // Reavalia BorderBrush/LabelBrush quando o tema muda (chamado pelo container).
+    internal void RefreshTheme()
+    {
+        Raise(nameof(BorderBrush));
+        Raise(nameof(LabelBrush));
+    }
+
+    private void Raise(string name) =>
+        PropertyChanged?.Invoke(this, new global::System.ComponentModel.PropertyChangedEventArgs(name));
 
     private global::Microsoft.UI.Xaml.Media.ImageSource? _image;
     public global::Microsoft.UI.Xaml.Media.ImageSource? Image
@@ -957,6 +1303,22 @@ internal sealed class PdfWinLruCache : IDisposable
             if (e.RefCount > 0) e.RefCount--;
             // Só dispõe quando a entrada já saiu do cache E não há mais leases ativos.
             if (e.Evicted && e.RefCount <= 0) e.Stream.Dispose();
+        }
+    }
+
+    // Esvazia todo o cache (ex.: mudança de escala de render → streams obsoletos). Respeita os
+    // leases: stream com lease ativo só é disposto no último Release (Evicted=true marca isso).
+    public void EvictAll()
+    {
+        lock (_lock)
+        {
+            if (_disposed) return;
+            foreach (var (_, e) in _map)
+            {
+                e.Evicted = true;
+                if (e.RefCount <= 0) e.Stream.Dispose();
+            }
+            _map.Clear(); _order.Clear(); _usedBytes = 0;
         }
     }
 

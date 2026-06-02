@@ -1,127 +1,162 @@
 using Agile.Maui;
 using System.ComponentModel;
-using System.Text;
 
 namespace sample;
 
+/// <summary>
+/// Página de demonstração do <see cref="PdfViewer"/>: navbar personalizada (menu lateral,
+/// título, imprimir/compartilhar/⋮), visualizador com zoom e barra inferior de navegação.
+/// Carrega automaticamente um PDF de exemplo empacotado na primeira aparição.
+/// </summary>
 [QueryProperty(nameof(FilePath), "path")]
 public partial class PdfViewerPage : ContentPage
 {
-    private string?        _filePath;
-    private Timer?         _statsTimer;
-    private volatile bool  _isAlive;   // página viva entre OnAppearing/OnDisappearing
-    private readonly StringBuilder _logBuffer = new();
+    private const string BundledSample        = "NT_2016_002.pdf";
+    private const string BundledSampleDisplay = "NT_2016_002_v1 61.pdf";
+
+    private string? _filePath;
+    private bool    _autoLoadTried;
 
     public PdfViewerPage()
     {
         InitializeComponent();
-        ShowEmptyState();
+        ShowLoading("Carregando…");   // o PDF de exemplo é auto-carregado em OnAppearing
     }
 
-    // Recebe caminho via QueryProperty quando navegado via Shell
+    /// <summary>Caminho ou URL recebido por navegação Shell (<c>?path=...</c>).</summary>
     public string? FilePath
     {
         set
         {
-            if (string.IsNullOrEmpty(value)) return;
-            var path = Uri.UnescapeDataString(value);
-            FileNameLabel.Text = Path.GetFileName(path);
-            LoadPdf(path);
+            if (!string.IsNullOrEmpty(value))
+                LoadPdf(Uri.UnescapeDataString(value));
         }
     }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    // ── Ciclo de vida ───────────────────────────────────────────────────────────
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        _isAlive = true;
-        ApplyIcons();
-        if (Application.Current is not null)
-            Application.Current.RequestedThemeChanged += OnThemeChanged;
         Viewer.PropertyChanged += OnViewerPropertyChanged;
-
-        PdfViewerLog.Received += OnLogReceived;
-
-        _statsTimer = new Timer(_ => UpdateCacheStats(), null,
-            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
-
-        PdfViewerLog.Write("Pdf/Sample", "OnAppearing");
+        TryAutoLoadBundled();
     }
 
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        _isAlive = false;
-        PdfViewerLog.Write("Pdf/Sample", "OnDisappearing");
-
-        if (Application.Current is not null)
-            Application.Current.RequestedThemeChanged -= OnThemeChanged;
         Viewer.PropertyChanged -= OnViewerPropertyChanged;
-        PdfViewerLog.Received  -= OnLogReceived;
-
-        _statsTimer?.Dispose();
-        _statsTimer = null;
     }
 
-    private void OnThemeChanged(object? sender, AppThemeChangedEventArgs e) => ApplyIcons();
-
-    private void ApplyIcons()
+    // Copia o PDF de exemplo empacotado para o cache e o abre. Só na primeira aparição e
+    // apenas se nenhum documento já tiver sido aberto (ex.: via navegação com ?path=).
+    private async void TryAutoLoadBundled()
     {
-        bool dark  = Application.Current?.RequestedTheme == AppTheme.Dark;
-        string suf = dark ? "_dark" : "";
-        BackButton.Source = ImageSource.FromFile($"ic_back{suf}.svg");
+        if (_autoLoadTried || _filePath is not null) return;
+        _autoLoadTried = true;
+
+        try
+        {
+            var dest = Path.Combine(FileSystem.CacheDirectory, BundledSample);
+            using (var src = await FileSystem.OpenAppPackageFileAsync(BundledSample))
+            using (var fs  = File.Create(dest))
+                await src.CopyToAsync(fs);
+
+            LoadPdf(dest, BundledSampleDisplay);
+        }
+        catch
+        {
+            ShowEmptyState("Use o menu ⋮ para abrir um PDF.");
+        }
     }
 
-    // ── Carregar PDF ──────────────────────────────────────────────────────────
+    // ── Carregar PDF ──────────────────────────────────────────────────────────────
 
-    private void LoadPdf(string pathOrUrl)
+    private void LoadPdf(string pathOrUrl, string? displayName = null)
     {
         ShowLoading("Carregando PDF…");
-        PdfViewerLog.Write("Pdf/Sample", $"LoadPdf: '{pathOrUrl[..Math.Min(80, pathOrUrl.Length)]}'");
 
         Viewer.Source = pathOrUrl;
+        _filePath     = pathOrUrl;
 
-        string name = pathOrUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
-            ? Path.GetFileName(pathOrUrl.Split('?')[0])
-            : Path.GetFileName(pathOrUrl);
-
-        FileNameLabel.Text = string.IsNullOrEmpty(name) ? "PDF" : name;
+        FileNameLabel.Text = displayName ?? ResolveFileName(pathOrUrl);
         StatsLabel.Text    = string.Empty;
-        _filePath          = pathOrUrl;
 
         UpdatePageControls(0, 0);
         UpdateZoomLabel(1.0);
     }
 
-    // ── Chips de URL rápida ───────────────────────────────────────────────────
+    private static string ResolveFileName(string pathOrUrl)
+    {
+        bool   isUrl = pathOrUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+        string name  = Path.GetFileName(isUrl ? pathOrUrl.Split('?')[0] : pathOrUrl);
+        return string.IsNullOrEmpty(name) ? "PDF" : name;
+    }
 
-    private void OnLoadSampleSmall(object? sender, EventArgs e)
-        => LoadPdf("https://www.africau.edu/images/default/sample.pdf");
+    // ── Eventos do PdfViewer ────────────────────────────────────────────────────
 
-    private void OnLoadSampleMedium(object? sender, EventArgs e)
-        => LoadPdf("https://www.ietf.org/rfc/rfc2616.txt.pdf");
+    private void OnDocumentLoaded(object? sender, PdfDocumentLoadedEventArgs e)
+    {
+        LoadingOverlay.IsVisible = false;
+        UpdatePageControls(0, e.PageCount);
+        UpdateZoomLabel(Viewer.ZoomFactor);
+        StatsLabel.Text = $"{e.PageCount} páginas";
+    }
 
-    private void OnLoadSampleLarge(object? sender, EventArgs e)
-        => LoadPdf("https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf");
+    private async void OnDocumentLoadFailed(object? sender, PdfDocumentLoadFailedEventArgs e)
+    {
+        LoadingOverlay.IsVisible = false;
+        ShowEmptyState("Erro ao carregar.");
+        await DisplayAlert("Erro ao abrir PDF", e.Message, "OK");
+    }
 
-    // ── Picker de arquivo ─────────────────────────────────────────────────────
+    private void OnPageChanged(object? sender, PdfPageChangedEventArgs e)
+        => UpdatePageControls(e.Page, Viewer.PageCount);
 
-    private async void OnPickFileClicked(object? sender, EventArgs e)
+    private void OnViewerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PdfViewer.ZoomFactor))
+            UpdateZoomLabel(Viewer.ZoomFactor);
+    }
+
+    // ── NavBar: menu lateral (flyout) e overflow (⋮) ──────────────────────────────
+
+    private void OnFlyoutClicked(object? sender, EventArgs e)
+    {
+        if (Shell.Current is not null)
+            Shell.Current.FlyoutIsPresented = true;
+    }
+
+    // Reúne as ações "secundárias" num action sheet. A barra de miniaturas só existe no desktop.
+    private async void OnMenuClicked(object? sender, EventArgs e)
+    {
+        const string openLabel = "Abrir PDF";
+        bool   isDesktop  = DeviceInfo.Current.Idiom == DeviceIdiom.Desktop;
+        string thumbLabel = Viewer.EnableThumbnailBar ? "Ocultar miniaturas" : "Mostrar miniaturas";
+
+        string[] options = isDesktop ? [openLabel, thumbLabel] : [openLabel];
+        string   choice  = await DisplayActionSheet("Opções", "Cancelar", null, options);
+
+        if (choice == openLabel)        await PickFileAsync();
+        else if (choice == thumbLabel)  ToggleThumbnails();
+    }
+
+    // ── Abrir arquivo ─────────────────────────────────────────────────────────────
+
+    private async Task PickFileAsync()
     {
         try
         {
             var result = await FilePicker.PickAsync(new PickOptions
             {
                 PickerTitle = "Selecione um PDF",
-                FileTypes   = new FilePickerFileType(
-                    new Dictionary<DevicePlatform, IEnumerable<string>>
-                    {
-                        { DevicePlatform.WinUI,       new[] { ".pdf" } },
-                        { DevicePlatform.iOS,          new[] { "com.adobe.pdf" } },
-                        { DevicePlatform.Android,      new[] { "application/pdf" } },
-                        { DevicePlatform.MacCatalyst,  new[] { "com.adobe.pdf" } },
-                    }),
+                FileTypes   = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    { DevicePlatform.WinUI,       new[] { ".pdf" } },
+                    { DevicePlatform.iOS,         new[] { "com.adobe.pdf" } },
+                    { DevicePlatform.Android,     new[] { "application/pdf" } },
+                    { DevicePlatform.MacCatalyst, new[] { "com.adobe.pdf" } },
+                }),
             });
 
             if (result is null) return;
@@ -129,10 +164,9 @@ public partial class PdfViewerPage : ContentPage
             string path = result.FullPath;
 
 #if ANDROID
-            if (path.StartsWith("content://", StringComparison.OrdinalIgnoreCase) ||
-                !File.Exists(path))
+            // O Android entrega um content:// sem caminho de arquivo real; copia para o cache.
+            if (path.StartsWith("content://", StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
             {
-                PdfViewerLog.Write("Pdf/Sample", $"Android: copiando content:// → cache  {result.FileName}");
                 var dest = Path.Combine(FileSystem.CacheDirectory, result.FileName);
                 await using var src  = await result.OpenReadAsync();
                 await using var file = File.Create(dest);
@@ -144,169 +178,74 @@ public partial class PdfViewerPage : ContentPage
         }
         catch (Exception ex)
         {
-            PdfViewerLog.Write("Pdf/Sample", $"OnPickFileClicked ERRO: {ex.Message}");
             await DisplayAlert("Erro", ex.Message, "OK");
         }
     }
 
-    // ── Eventos do PdfViewer ─────────────────────────────────────────────
+    // ── Imprimir / Compartilhar ────────────────────────────────────────────────────
 
-    private void OnDocumentLoaded(object? sender, PdfDocumentLoadedEventArgs e)
+    private async void OnPrintClicked(object? sender, EventArgs e)
+        => await DisplayAlert("Imprimir", "A impressão ainda não está disponível neste exemplo.", "OK");
+
+    private async void OnShareClicked(object? sender, EventArgs e)
     {
-        PdfViewerLog.Write("Pdf/Sample", $"DocumentLoaded  pages={e.PageCount}");
-        LoadingOverlay.IsVisible = false;
-        UpdatePageControls(0, e.PageCount);
-        UpdateZoomLabel(Viewer.ZoomFactor);
-        StatsLabel.Text = $"{e.PageCount} páginas  ·  cache ≤{Viewer.MaxCacheMB} MB";
+        if (string.IsNullOrEmpty(_filePath))
+        {
+            await DisplayAlert("Compartilhar", "Nenhum documento aberto para compartilhar.", "OK");
+            return;
+        }
+
+        try
+        {
+            // URL remota: compartilha o link. Arquivo local: compartilha o próprio PDF.
+            if (_filePath.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                await Share.RequestAsync(new ShareTextRequest { Uri = _filePath, Title = FileNameLabel.Text });
+            else
+                await Share.RequestAsync(new ShareFileRequest { Title = FileNameLabel.Text, File = new ShareFile(_filePath) });
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Erro", ex.Message, "OK");
+        }
     }
 
-    private async void OnDocumentLoadFailed(object? sender, PdfDocumentLoadFailedEventArgs e)
-    {
-        PdfViewerLog.Write("Pdf/Sample", $"DocumentLoadFailed: {e.Message}");
-        LoadingOverlay.IsVisible = false;
-        ShowEmptyState("Erro ao carregar.");
-        await DisplayAlert("Erro ao abrir PDF", e.Message, "OK");
-    }
+    // ── Miniaturas ─────────────────────────────────────────────────────────────────
 
-    private void OnPageChanged(object? sender, PdfPageChangedEventArgs e)
-    {
-        UpdatePageControls(e.Page, Viewer.PageCount);
-    }
+    private void OnToggleThumbnailsClicked(object? sender, EventArgs e) => ToggleThumbnails();
 
-    private void OnViewerPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(PdfViewer.ZoomFactor))
-            UpdateZoomLabel(Viewer.ZoomFactor);
-    }
+    private void ToggleThumbnails() => Viewer.EnableThumbnailBar = !Viewer.EnableThumbnailBar;
 
-    // ── Navegação ─────────────────────────────────────────────────────────────
+    // ── Navegação de páginas ─────────────────────────────────────────────────────
 
     private void OnPrevClicked(object? sender, EventArgs e)
     {
-        if (Viewer.CurrentPage <= 0) return;
-        Viewer.CurrentPage--;
+        if (Viewer.CurrentPage > 0) Viewer.CurrentPage--;
     }
 
     private void OnNextClicked(object? sender, EventArgs e)
     {
-        if (Viewer.CurrentPage >= Viewer.PageCount - 1) return;
-        Viewer.CurrentPage++;
+        if (Viewer.CurrentPage < Viewer.PageCount - 1) Viewer.CurrentPage++;
     }
 
-    // ── Log ───────────────────────────────────────────────────────────────────
+    // ── Zoom (botões − / +) ─────────────────────────────────────────────────────
 
-    private void OnLogClicked(object? sender, EventArgs e)
+    // Passo do zoom pelos botões: 25% no mobile, 10% no desktop (mais fino com mouse).
+    private double ZoomStep => DeviceInfo.Current.Idiom == DeviceIdiom.Desktop ? 0.10 : 0.25;
+
+    private void OnZoomInClicked(object? sender, EventArgs e)  => StepZoom(+1);
+    private void OnZoomOutClicked(object? sender, EventArgs e) => StepZoom(-1);
+    private void OnResetZoomClicked(object? sender, EventArgs e) => Viewer.ZoomFactor = 1.0;
+
+    // Aplica um passo de zoom arredondando para o múltiplo do passo (100/125/150…) e limita
+    // ao intervalo [MinZoom, MaxZoom].
+    private void StepZoom(int direction)
     {
-        LogPanel.IsVisible = !LogPanel.IsVisible;
-        // Esconde configurações ao abrir log e vice-versa
-        if (LogPanel.IsVisible) SettingsPanel.IsVisible = false;
+        double step   = ZoomStep;
+        double target = Math.Round((Viewer.ZoomFactor + direction * step) / step) * step;
+        Viewer.ZoomFactor = Math.Clamp(target, Viewer.MinZoom, Viewer.MaxZoom);
     }
 
-    private void OnClearLogClicked(object? sender, EventArgs e)
-    {
-        _logBuffer.Clear();
-        LogLabel.Text = string.Empty;
-    }
-
-    private async void OnCopyLogClicked(object? sender, EventArgs e)
-    {
-        try
-        {
-            await Clipboard.SetTextAsync(_logBuffer.ToString());
-            await DisplayAlert(null, "Log copiado para a área de transferência.", "OK");
-        }
-        catch { /* Clipboard pode falhar em algumas plataformas */ }
-    }
-
-    private void OnLogReceived(string line)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            _logBuffer.AppendLine(line);
-
-            // Mantém as últimas 120 linhas
-            var text = _logBuffer.ToString();
-            int nl   = text.AsSpan().Count('\n');
-            if (nl > 120)
-            {
-                int cut = 0;
-                for (int i = 0; i < nl - 120; i++)
-                    cut = text.IndexOf('\n', cut) + 1;
-                _logBuffer.Clear().Append(text.AsSpan(cut));
-            }
-
-            LogLabel.Text = _logBuffer.ToString();
-
-            if (LogPanel.IsVisible)
-                _ = LogScrollView.ScrollToAsync(0, double.MaxValue, animated: false);
-        });
-    }
-
-    // ── Painel de configurações ────────────────────────────────────────────────
-
-    private void OnSettingsClicked(object? sender, EventArgs e)
-    {
-        SettingsPanel.IsVisible = !SettingsPanel.IsVisible;
-        if (SettingsPanel.IsVisible) LogPanel.IsVisible = false;
-    }
-
-    private void OnCacheMBChanged(object? sender, ValueChangedEventArgs e)
-    {
-        int mb = (int)Math.Round(e.NewValue / 10.0) * 10;
-        Viewer.MaxCacheMB  = mb;
-        CacheMBLabel.Text  = $"{mb} MB";
-    }
-
-    private void OnRenderScaleChanged(object? sender, ValueChangedEventArgs e)
-    {
-        double scale = Math.Round(e.NewValue * 4) / 4;
-        Viewer.RenderScale    = scale;
-        RenderScaleLabel.Text = $"{scale:F2}×";
-    }
-
-    // ── Estatísticas (timer) ──────────────────────────────────────────────────
-
-    private void UpdateCacheStats()
-    {
-        // O callback do Timer roda em thread-pool e pode disparar depois do Dispose
-        // (OnDisappearing não espera o callback em voo). Curto-circuita se a página morreu.
-        if (!_isAlive) return;
-
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            // Re-checa na UI thread: a página pode ter saído da tela enquanto o invoke
-            // estava enfileirado. Evita NRE ao tocar controles já liberados.
-            if (!_isAlive || Viewer is null || !SettingsPanel.IsVisible || Viewer.PageCount == 0)
-                return;
-
-            PrefetchLabel.Text = $"{Viewer.PrefetchAbove} / {Viewer.PrefetchBelow}";
-
-            CacheStatsLabel.Text =
-                $"Páginas: {Viewer.PageCount}   " +
-                $"Zoom: {Viewer.ZoomFactor:F2}×   " +
-                $"Scale: {Viewer.RenderScale:F1}×\n" +
-                $"Cache max: {Viewer.MaxCacheMB} MB   " +
-                $"Prefetch: ▲{Viewer.PrefetchAbove} ▼{Viewer.PrefetchBelow}";
-        });
-    }
-
-    // ── Top bar ───────────────────────────────────────────────────────────────
-
-    private async void OnBackClicked(object? sender, EventArgs e)
-    {
-        // async void: envolve em try/catch para não vazar exceção não observada
-        // (GoToAsync pode falhar se a navegação Shell estiver em estado inválido).
-        try
-        {
-            await Shell.Current.GoToAsync("..");
-        }
-        catch (Exception ex)
-        {
-            PdfViewerLog.Write("Pdf/Sample", $"OnBackClicked ERRO: {ex.Message}");
-        }
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── UI helpers ──────────────────────────────────────────────────────────────
 
     private void ShowLoading(string message)
     {
@@ -316,7 +255,7 @@ public partial class PdfViewerPage : ContentPage
         LoadingOverlay.IsVisible = true;
     }
 
-    private void ShowEmptyState(string message = "Selecione um PDF acima")
+    private void ShowEmptyState(string message)
     {
         LoadingLabel.Text        = message;
         LoadingSpinner.IsVisible = false;
@@ -326,18 +265,10 @@ public partial class PdfViewerPage : ContentPage
 
     private void UpdatePageControls(int current, int total)
     {
-        if (total <= 0)
-        {
-            PageLabel.Text       = "—";
-            PrevButton.IsEnabled = false;
-            NextButton.IsEnabled = false;
-        }
-        else
-        {
-            PageLabel.Text       = $"{current + 1} / {total}";
-            PrevButton.IsEnabled = current > 0;
-            NextButton.IsEnabled = current < total - 1;
-        }
+        bool hasDoc = total > 0;
+        PageLabel.Text       = hasDoc ? $"{current + 1} / {total}" : "—";
+        PrevButton.IsEnabled = hasDoc && current > 0;
+        NextButton.IsEnabled = hasDoc && current < total - 1;
     }
 
     private void UpdateZoomLabel(double zoom)

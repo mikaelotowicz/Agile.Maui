@@ -5,10 +5,8 @@ namespace sample
         public AppShell()
         {
             InitializeComponent();
-            Routing.RegisterRoute("pdfviewer", typeof(PdfViewerPage));
-            // Demais demos acessíveis por rota (o menu/flyout do Shell crasha no Android .NET 10).
-            Routing.RegisterRoute("virtualized", typeof(VirtualizedListPage));
-            Routing.RegisterRoute("collectionview", typeof(CollectionViewPage));
+            // As páginas são itens do flyout (ShellContent no XAML), navegáveis pelas suas
+            // próprias rotas (MainPage, PdfViewerPage, VirtualizedListPage, CollectionViewPage).
         }
     }
 }

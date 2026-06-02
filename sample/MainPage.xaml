@@ -70,44 +70,6 @@
                 Placeholder="dotnet_bot"
                 Source="https://picsum.photos/seed/maui2/400/700" />
 
-            <!--  ── 3. Imagem local ───────────────────────────────────  -->
-            <Label
-                Margin="2,20,0,6"
-                FontAttributes="Bold"
-                FontSize="12"
-                Text="Imagem local · CenterCrop · MaxZoom 4×"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}" />
-
-            <controls:ImageView
-                AspectMode="CenterCrop"
-                EnableFullscreen="True"
-                HeightRequest="180"
-                ImageFailedCommand="{Binding ImageFailedCommand}"
-                ImageLoadedCommand="{Binding ImageLoadedCommand}"
-                IsUrl="False"
-                MaxZoom="4"
-                Source="dotnet_bot" />
-
-            <!--  ── 4. URL inválida — placeholder + fullscreen off ────  -->
-            <Label
-                Margin="2,20,0,6"
-                FontAttributes="Bold"
-                FontSize="12"
-                Text="URL inválida · Placeholder ativo · Fullscreen desabilitado"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}" />
-
-            <controls:ImageView
-                AspectMode="CenterCrop"
-                EnableFullscreen="False"
-                HeightRequest="140"
-                ImageFailedCommand="{Binding ImageFailedCommand}"
-                ImageLoadedCommand="{Binding ImageLoadedCommand}"
-                IsUrl="True"
-                Placeholder="dotnet_bot"
-                Source="https://url-invalida.local/sem-imagem.jpg" />
-
             <!--  ══ GalleryView ══════════════════════════════════════  -->
             <Label
                 Margin="0,32,0,4"
@@ -145,50 +107,7 @@
                 ShowIndicator="True" />
 
 
-            <!--  ── Log de eventos ────────────────────────────────────  -->
-            <Border
-                Margin="0,24,0,0"
-                Padding="14,10"
-                BackgroundColor="{AppThemeBinding Light={StaticResource Gray100},
-                                                  Dark={StaticResource Gray950}}"
-                Stroke="{AppThemeBinding Light={StaticResource Gray200},
-                                         Dark={StaticResource Gray600}}"
-                StrokeShape="RoundRectangle 8">
 
-                <VerticalStackLayout Spacing="6">
-                    <Label
-                        FontAttributes="Bold"
-                        FontSize="11"
-                        Text="LOG DE EVENTOS"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                                    Dark={StaticResource Gray400}}" />
-                    <Label
-                        FontSize="12"
-                        LineBreakMode="WordWrap"
-                        Text="{Binding LogText}" />
-                </VerticalStackLayout>
-            </Border>
-
-            <!--  ── PdfViewer ──────────────────────────────────────────  -->
-            <Label
-                Margin="0,16,0,8"
-                Style="{StaticResource Headline}"
-                Text="PdfViewer" />
-
-            <Label
-                Margin="0,0,0,12"
-                FontSize="13"
-                HorizontalTextAlignment="Center"
-                Text="Virtualização · Cache LRU MB · Prefetch · Zoom 0.5×–8×"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}" />
-
-            <Button
-                Clicked="OnOpenPdfClicked"
-                HorizontalOptions="Fill"
-                Text="Abrir PdfViewer Demo" />
-
-            <BoxView HeightRequest="32" Color="Transparent" />
 
         </VerticalStackLayout>
     </ScrollView>

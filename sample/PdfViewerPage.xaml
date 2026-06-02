@@ -4,36 +4,40 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:controls="clr-namespace:Agile.Maui;assembly=Agile.Maui"
-    Shell.NavBarIsVisible="False">
+    xmlns:local="clr-namespace:sample"
+    Shell.NavBarIsVisible="False"
+    Title="PDF Viewer">
 
     <ContentPage.Resources>
 
-        <Style x:Key="ChipBtn" TargetType="Button">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Padding" Value="10,6" />
-            <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="HeightRequest" Value="32" />
-            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}" />
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}" />
-            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
-            <Setter Property="BorderWidth" Value="1" />
+        <!--  Estilos de botões  -->
+        <Style x:Key="IconBtn" TargetType="ImageButton">
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="Aspect" Value="Center" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="HeightRequest" Value="40" />
+            <Setter Property="WidthRequest" Value="40" />
+            <Setter Property="CornerRadius" Value="20" />
         </Style>
 
-        <Style x:Key="NavBtn" TargetType="Button">
+        <Style x:Key="NavBtn" TargetType="ImageButton">
             <Setter Property="BackgroundColor" Value="Transparent" />
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
-            <Setter Property="FontSize" Value="20" />
-            <Setter Property="HeightRequest" Value="44" />
-            <Setter Property="WidthRequest" Value="44" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="Aspect" Value="Center" />
+            <Setter Property="Padding" Value="7" />
+            <Setter Property="HeightRequest" Value="34" />
+            <Setter Property="WidthRequest" Value="34" />
+            <Setter Property="CornerRadius" Value="17" />
             <Setter Property="VisualStateManager.VisualStateGroups">
                 <VisualStateGroupList>
                     <VisualStateGroup x:Name="CommonStates">
-                        <VisualState x:Name="Normal" />
+                        <VisualState x:Name="Normal">
+                            <VisualState.Setters>
+                                <Setter Property="Opacity" Value="1" />
+                            </VisualState.Setters>
+                        </VisualState>
                         <VisualState x:Name="Disabled">
                             <VisualState.Setters>
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
+                                <Setter Property="Opacity" Value="0.3" />
                             </VisualState.Setters>
                         </VisualState>
                     </VisualStateGroup>
@@ -41,423 +45,298 @@
             </Setter>
         </Style>
 
+        <Style x:Key="ToolBtn" TargetType="ImageButton">
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="Aspect" Value="Center" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="HeightRequest" Value="34" />
+            <Setter Property="WidthRequest" Value="34" />
+            <Setter Property="CornerRadius" Value="10" />
+        </Style>
+
+        <Style x:Key="FloatToolBtn" TargetType="ImageButton">
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="Aspect" Value="Center" />
+            <Setter Property="Padding" Value="7" />
+            <Setter Property="HeightRequest" Value="38" />
+            <Setter Property="WidthRequest" Value="38" />
+            <Setter Property="CornerRadius" Value="10" />
+        </Style>
+
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="0">
+    <Grid
+        BackgroundColor="{StaticResource BackdropLight}"
+        RowDefinitions="Auto,*,Auto"
+        RowSpacing="0">
 
-        <!--  ── Top bar ─────────────────────────────────────────────────────  -->
+        <!--  ── NavBar personalizada (substitui a do Shell) ─────────────────  -->
         <Grid
             Grid.Row="0"
-            Padding="4,0"
-            BackgroundColor="{AppThemeBinding Light={StaticResource White},
-                                              Dark={StaticResource OffBlack}}"
-            ColumnDefinitions="48,*,Auto"
-            ColumnSpacing="0">
+            Padding="2,0,4,0"
+            BackgroundColor="{StaticResource SurfaceLight}"
+            ColumnDefinitions="Auto,*,Auto"
+            HeightRequest="56">
 
-            <BoxView
-                Grid.ColumnSpan="3"
-                HeightRequest="1"
-                VerticalOptions="End"
-                Color="{AppThemeBinding Light={StaticResource Gray100},
-                                        Dark={StaticResource Gray600}}" />
-
+            <!--  Esquerda: abrir menu lateral (flyout)  -->
             <ImageButton
-                x:Name="BackButton"
                 Grid.Column="0"
-                Padding="12"
-                BackgroundColor="Transparent"
-                Clicked="OnBackClicked"
-                HeightRequest="44"
-                HorizontalOptions="Center"
-                VerticalOptions="Center"
-                WidthRequest="44" />
+                Clicked="OnFlyoutClicked"
+                Style="{StaticResource IconBtn}">
+                <ImageButton.Source>
+                    <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Hamburger}" Size="24"
+                        Color="{StaticResource IconLight}" />
+                </ImageButton.Source>
+            </ImageButton>
 
+            <!--  Centro: título (nome do arquivo + stats)  -->
             <VerticalStackLayout
                 Grid.Column="1"
+                Padding="6,0"
                 Spacing="0"
                 VerticalOptions="Center">
-
                 <Label
                     x:Name="FileNameLabel"
-                    Margin="4,0"
                     FontAttributes="Bold"
-                    FontSize="14"
+                    FontSize="15"
                     LineBreakMode="TailTruncation"
                     Text="PdfViewer"
-                    VerticalOptions="Center" />
-
+                    TextColor="{StaticResource OnSurfaceLight}" />
                 <Label
                     x:Name="StatsLabel"
-                    Margin="4,0"
-                    FontSize="10"
-                    Text=""
-                    TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                                Dark={StaticResource Gray400}}"
-                    VerticalOptions="Center" />
-
+                    FontSize="10.5"
+                    LineBreakMode="TailTruncation"
+                    Text="Nenhum documento aberto"
+                    TextColor="{StaticResource OnSurfaceVariantLight}" />
             </VerticalStackLayout>
 
-            <!--  Botão de log / configurações  -->
+            <!--  Direita: ações (imprimir, compartilhar, menu ⋮)  -->
             <HorizontalStackLayout
                 Grid.Column="2"
                 Spacing="0"
                 VerticalOptions="Center">
-                <Button
-                    x:Name="LogButton"
-                    Padding="8,0"
-                    BackgroundColor="Transparent"
-                    Clicked="OnLogClicked"
-                    FontSize="16"
-                    HeightRequest="44"
-                    Text="📋"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                                Dark={StaticResource Gray400}}" />
-                <Button
-                    x:Name="SettingsButton"
-                    Padding="8,0"
-                    BackgroundColor="Transparent"
-                    Clicked="OnSettingsClicked"
-                    FontSize="16"
-                    HeightRequest="44"
-                    Text="⚙"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                                Dark={StaticResource Gray400}}" />
+                <ImageButton Clicked="OnPrintClicked" Style="{StaticResource IconBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Print}" Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
+                <ImageButton Clicked="OnShareClicked" Style="{StaticResource IconBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Share}" Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
+                <ImageButton Clicked="OnMenuClicked" Style="{StaticResource IconBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Menu}" Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
             </HorizontalStackLayout>
 
+            <!--  Divisória inferior da navbar  -->
+            <BoxView
+                Grid.ColumnSpan="3"
+                HeightRequest="1"
+                VerticalOptions="End"
+                Color="{StaticResource OutlineLight}" />
         </Grid>
 
-        <!--  ── Seletor de fonte (URLs rápidas + picker) ───────────────────  -->
-        <Grid
-            x:Name="SourceBar"
-            Grid.Row="1"
-            Padding="8,6"
-            BackgroundColor="{AppThemeBinding Light={StaticResource Gray100},
-                                              Dark={StaticResource Gray900}}">
-
-            <ScrollView HorizontalScrollBarVisibility="Never" Orientation="Horizontal">
-                <HorizontalStackLayout Spacing="6">
-
-                    <Button
-                        Clicked="OnPickFileClicked"
-                        Style="{StaticResource ChipBtn}"
-                        Text="📂 Arquivo" />
-
-                    <Button
-                        Clicked="OnLoadSampleSmall"
-                        Style="{StaticResource ChipBtn}"
-                        Text="PDF pequeno (2 pág.)" />
-
-                    <Button
-                        Clicked="OnLoadSampleMedium"
-                        Style="{StaticResource ChipBtn}"
-                        Text="PDF médio (~50 pág.)" />
-
-                    <Button
-                        Clicked="OnLoadSampleLarge"
-                        Style="{StaticResource ChipBtn}"
-                        Text="PDF grande (~100 pág.)" />
-
-                </HorizontalStackLayout>
-            </ScrollView>
-
-        </Grid>
-
-        <!--  ── Viewer + overlays ─────────────────────────────────────────  -->
-        <Grid Grid.Row="2" RowDefinitions="*,Auto">
+        <!--  ── Viewer + overlays + controles flutuantes ───────────────────  -->
+        <Grid Grid.Row="1">
 
             <controls:PdfViewer
                 x:Name="Viewer"
-                Grid.Row="0"
                 DocumentLoadFailed="OnDocumentLoadFailed"
                 DocumentLoaded="OnDocumentLoaded"
-                EnableThumbnailBar="True"
+                EnableThumbnailBar="{OnIdiom Default=False, Desktop=True}"
                 IsPinchZoomEnabled="True"
                 MaxCacheMB="200"
-                MaxZoom="8"
-                MinZoom="0.9"
+                MaxZoom="3"
+                MinZoom="1"
                 PageBackgroundColor="White"
                 PageChanged="OnPageChanged"
                 PageSpacing="8"
                 PrefetchAbove="2"
                 PrefetchBelow="3"
-                RenderScale="1.5"
+                RenderScale="2.5"
                 ZoomFactor="1" />
 
-            <!--  Overlay: loading / estado vazio  -->
-            <Grid x:Name="LoadingOverlay" Grid.Row="0">
-
-                <Grid.Background>
-                    <SolidColorBrush Color="{AppThemeBinding Light=White, Dark=#FF1C1C1E}" />
-                </Grid.Background>
-
-                <VerticalStackLayout
-                    HorizontalOptions="Center"
-                    Spacing="16"
-                    VerticalOptions="Center">
-
-                    <ActivityIndicator
-                        x:Name="LoadingSpinner"
-                        HeightRequest="36"
-                        IsRunning="True"
-                        IsVisible="True"
-                        WidthRequest="36" />
-
-                    <Label
-                        x:Name="LoadingLabel"
-                        FontSize="14"
-                        HorizontalTextAlignment="Center"
-                        Text="Selecione um PDF acima"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                                    Dark={StaticResource Gray400}}" />
-
-                </VerticalStackLayout>
-            </Grid>
-
-            <!--  Painel de configurações (deslizante de baixo)  -->
+            <!--  Toolbar flutuante de ferramentas (direita)  -->
             <Border
-                x:Name="SettingsPanel"
-                Grid.Row="0"
-                BackgroundColor="{AppThemeBinding Light=White,
-                                                  Dark=#FF2C2C2E}"
-                IsVisible="False"
+                Margin="0,0,14,0"
+                Padding="4"
+                BackgroundColor="{StaticResource SurfaceLight}"
+                HorizontalOptions="End"
+                IsVisible="{OnPlatform Default=False, WinUI=True}"
                 StrokeThickness="0"
-                VerticalOptions="End">
-
+                VerticalOptions="Center">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="14" />
+                </Border.StrokeShape>
                 <Border.Shadow>
                     <Shadow
                         Brush="Black"
-                        Opacity="0.12"
-                        Radius="8"
-                        Offset="0,-2" />
+                        Opacity="0.22"
+                        Radius="14"
+                        Offset="0,2" />
                 </Border.Shadow>
+                <VerticalStackLayout Spacing="2">
 
-                <VerticalStackLayout Padding="16,12" Spacing="10">
+                    <ImageButton Clicked="OnZoomInClicked" Style="{StaticResource FloatToolBtn}">
+                        <ImageButton.Source>
+                            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.ZoomIn}" Size="22"
+                                Color="{StaticResource IconLight}" />
+                        </ImageButton.Source>
+                    </ImageButton>
 
-                    <Label
-                        FontAttributes="Bold"
-                        FontSize="13"
-                        Text="CONFIGURAÇÕES" />
+                    <ImageButton Clicked="OnZoomOutClicked" Style="{StaticResource FloatToolBtn}">
+                        <ImageButton.Source>
+                            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.ZoomOut}" Size="22"
+                                Color="{StaticResource IconLight}" />
+                        </ImageButton.Source>
+                    </ImageButton>
 
-                    <!--  MaxCacheMB  -->
-                    <Grid ColumnDefinitions="*,Auto">
-                        <Label
-                            FontSize="13"
-                            Text="Cache máximo (MB)"
-                            VerticalOptions="Center" />
-                        <Label
-                            x:Name="CacheMBLabel"
-                            Grid.Column="1"
-                            FontAttributes="Bold"
-                            FontSize="13"
-                            Text="200 MB"
-                            TextColor="{StaticResource Primary}"
-                            VerticalOptions="Center" />
-                    </Grid>
+                    <BoxView
+                        Margin="6,2"
+                        HeightRequest="1"
+                        Color="{StaticResource OutlineLight}" />
 
-                    <Slider
-                        x:Name="CacheMBSlider"
-                        Maximum="400"
-                        Minimum="50"
-                        ValueChanged="OnCacheMBChanged"
-                        Value="200" />
-
-                    <!--  RenderScale  -->
-                    <Grid ColumnDefinitions="*,Auto">
-                        <Label
-                            FontSize="13"
-                            Text="Escala de render"
-                            VerticalOptions="Center" />
-                        <Label
-                            x:Name="RenderScaleLabel"
-                            Grid.Column="1"
-                            FontAttributes="Bold"
-                            FontSize="13"
-                            Text="1.5×"
-                            TextColor="{StaticResource Primary}"
-                            VerticalOptions="Center" />
-                    </Grid>
-
-                    <Slider
-                        x:Name="RenderScaleSlider"
-                        Maximum="3.0"
-                        Minimum="0.5"
-                        ValueChanged="OnRenderScaleChanged"
-                        Value="1.5" />
-
-                    <!--  Prefetch  -->
-                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                        <Label
-                            FontSize="13"
-                            Text="Prefetch acima / abaixo"
-                            VerticalOptions="Center" />
-                        <Label
-                            x:Name="PrefetchLabel"
-                            Grid.Column="1"
-                            FontAttributes="Bold"
-                            FontSize="13"
-                            Text="2 / 3"
-                            TextColor="{StaticResource Primary}"
-                            VerticalOptions="Center" />
-                        <Label
-                            Grid.Column="2"
-                            FontSize="11"
-                            Text="pág."
-                            TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                                        Dark={StaticResource Gray400}}"
-                            VerticalOptions="Center" />
-                    </Grid>
-
-                    <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray600}}" />
-
-                    <!--  Estatísticas de cache em tempo real  -->
-                    <Label
-                        x:Name="CacheStatsLabel"
-                        FontFamily="monospace"
-                        FontSize="11"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                                    Dark={StaticResource Gray400}}" />
+                    <ImageButton Clicked="OnResetZoomClicked" Style="{StaticResource FloatToolBtn}">
+                        <ImageButton.Source>
+                            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Fit}" Size="22"
+                                Color="{StaticResource IconLight}" />
+                        </ImageButton.Source>
+                    </ImageButton>
 
                 </VerticalStackLayout>
             </Border>
 
-            <!--  ── Painel de log ────────────────────────────────────────────  -->
-            <Border
-                x:Name="LogPanel"
-                Grid.Row="1"
-                BackgroundColor="#E5000000"
-                HeightRequest="230"
-                IsVisible="False"
-                StrokeThickness="0">
-
-                <Grid RowDefinitions="34,*">
-
-                    <!--  Header  -->
-                    <Grid
-                        Grid.Row="0"
-                        Padding="10,0"
-                        BackgroundColor="#CC000000">
-
-                        <Label
-                            FontAttributes="Bold"
-                            FontSize="11"
-                            Text="LOG  ·  PdfViewer"
-                            TextColor="#AAAAAA"
-                            VerticalOptions="Center" />
-
-                        <HorizontalStackLayout HorizontalOptions="End" Spacing="4">
-                            <Button
-                                x:Name="CopyLogButton"
-                                Padding="8,0"
-                                BackgroundColor="Transparent"
-                                Clicked="OnCopyLogClicked"
-                                FontSize="10"
-                                HeightRequest="28"
-                                Text="Copiar"
-                                TextColor="#8888FF" />
-                            <Button
-                                Padding="8,0"
-                                BackgroundColor="Transparent"
-                                Clicked="OnClearLogClicked"
-                                FontSize="10"
-                                HeightRequest="28"
-                                Text="Limpar"
-                                TextColor="#666666" />
-                        </HorizontalStackLayout>
-
-                    </Grid>
-
-                    <!--  Conteúdo  -->
-                    <ScrollView x:Name="LogScrollView" Grid.Row="1">
-                        <Label
-                            x:Name="LogLabel"
-                            Padding="8,4"
-                            FontFamily="monospace"
-                            FontSize="9.5"
-                            LineBreakMode="CharacterWrap"
-                            Text=""
-                            TextColor="#CCCCCC" />
-                    </ScrollView>
-
-                </Grid>
-            </Border>
+            <!--  Overlay: loading / estado vazio  -->
+            <Grid x:Name="LoadingOverlay" BackgroundColor="{StaticResource BackdropLight}">
+                <VerticalStackLayout
+                    HorizontalOptions="Center"
+                    Spacing="18"
+                    VerticalOptions="Center">
+                    <ActivityIndicator
+                        x:Name="LoadingSpinner"
+                        HeightRequest="40"
+                        IsRunning="True"
+                        IsVisible="True"
+                        WidthRequest="40"
+                        Color="{StaticResource Accent}" />
+                    <Label
+                        x:Name="LoadingLabel"
+                        FontSize="14.5"
+                        HorizontalTextAlignment="Center"
+                        Text="Carregando…"
+                        TextColor="{StaticResource OnSurfaceVariantLight}" />
+                </VerticalStackLayout>
+            </Grid>
 
         </Grid>
 
-        <!--  ── Bottom bar ─────────────────────────────────────────────────  -->
+        <!--  ── Bottom bar (largura total, estilo leitor) ──────────────────  -->
         <Grid
-            Grid.Row="3"
+            Grid.Row="2"
             Padding="8,0"
-            BackgroundColor="{AppThemeBinding Light={StaticResource White},
-                                              Dark={StaticResource OffBlack}}"
-            ColumnDefinitions="44,*,44,1,*,52"
-            ColumnSpacing="0">
+            BackgroundColor="{StaticResource SurfaceLight}"
+            ColumnDefinitions="Auto,*,Auto"
+            HeightRequest="48">
 
             <BoxView
-                Grid.ColumnSpan="6"
+                Grid.ColumnSpan="3"
                 HeightRequest="1"
                 VerticalOptions="Start"
-                Color="{AppThemeBinding Light={StaticResource Gray100},
-                                        Dark={StaticResource Gray600}}" />
+                Color="{StaticResource OutlineLight}" />
 
-            <Button
-                x:Name="PrevButton"
+            <!--  Esquerda: alternar barra de miniaturas  -->
+            <HorizontalStackLayout
                 Grid.Column="0"
-                Clicked="OnPrevClicked"
-                IsEnabled="False"
-                Style="{StaticResource NavBtn}"
-                Text="‹" />
+                Spacing="2"
+                VerticalOptions="Center">
+                <ImageButton
+                    Clicked="OnToggleThumbnailsClicked"
+                    IsVisible="{OnIdiom Default=False, Desktop=True}"
+                    Style="{StaticResource IconBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Thumbnails}" Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
+            </HorizontalStackLayout>
 
-            <Label
-                x:Name="PageLabel"
+            <!--  Centro: zoom + página  -->
+            <HorizontalStackLayout
                 Grid.Column="1"
-                FontSize="13"
-                HorizontalTextAlignment="Center"
-                Text="—"
-                VerticalOptions="Center" />
+                HorizontalOptions="Center"
+                Spacing="4"
+                VerticalOptions="Center">
 
-            <Button
-                x:Name="NextButton"
-                Grid.Column="2"
-                Clicked="OnNextClicked"
-                IsEnabled="False"
-                Style="{StaticResource NavBtn}"
-                Text="›" />
+                <ImageButton Clicked="OnZoomOutClicked" Style="{StaticResource ToolBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.ZoomOut}" Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
 
-            <BoxView
-                Grid.Column="3"
-                Margin="0,0,6,0"
-                HeightRequest="22"
-                VerticalOptions="Center"
-                WidthRequest="1"
-                Color="{AppThemeBinding Light={StaticResource Gray200},
-                                        Dark={StaticResource Gray600}}" />
+                <Label
+                    x:Name="ZoomLabel"
+                    FontSize="12.5"
+                    HorizontalTextAlignment="Center"
+                    MinimumWidthRequest="46"
+                    Text="100%"
+                    TextColor="{StaticResource OnSurfaceLight}"
+                    VerticalOptions="Center" />
 
-            <Slider
-                x:Name="ZoomSlider"
-                Grid.Column="4"
-                Margin="0,0,4,0"
-                Maximum="8.0"
-                VerticalOptions="Center"
-                Value="{Binding Source={x:Reference Viewer}, Path=ZoomFactor, Mode=TwoWay}">
-                <!--  Windows: mínimo 100% (o ajuste base já é 50% da largura); demais até 90%.  -->
-                <Slider.Minimum>
-                    <OnPlatform x:TypeArguments="x:Double">
-                        <On Platform="WinUI" Value="1.0" />
-                        <On Platform="Android,iOS,MacCatalyst" Value="0.9" />
-                    </OnPlatform>
-                </Slider.Minimum>
-            </Slider>
+                <ImageButton Clicked="OnZoomInClicked" Style="{StaticResource ToolBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.ZoomIn}" Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
 
-            <Label
-                x:Name="ZoomLabel"
-                Grid.Column="5"
-                Padding="0,0,4,0"
-                FontSize="12"
-                HorizontalTextAlignment="End"
-                Text="100%"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}"
-                VerticalOptions="Center" />
+                <BoxView
+                    Margin="8,0"
+                    HeightRequest="22"
+                    VerticalOptions="Center"
+                    WidthRequest="1"
+                    Color="{StaticResource OutlineLight}" />
+
+                <ImageButton
+                    x:Name="PrevButton"
+                    Clicked="OnPrevClicked"
+                    IsEnabled="False"
+                    Style="{StaticResource NavBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Prev}" Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
+
+                <Label
+                    x:Name="PageLabel"
+                    FontAttributes="Bold"
+                    FontSize="12.5"
+                    HorizontalTextAlignment="Center"
+                    MinimumWidthRequest="60"
+                    Text="—"
+                    TextColor="{StaticResource OnSurfaceLight}"
+                    VerticalOptions="Center" />
+
+                <ImageButton
+                    x:Name="NextButton"
+                    Clicked="OnNextClicked"
+                    IsEnabled="False"
+                    Style="{StaticResource NavBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Next}" Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
+
+            </HorizontalStackLayout>
 
         </Grid>
 
