@@ -1,30 +1,30 @@
 # PROFILING — VirtualizedCollectionView (Android)
 
-Referência de benchmarks e instruções para medir performance no Android.
+Benchmark reference and instructions for measuring performance on Android.
 
 ---
 
-## Baselines medidos (dispositivo: Pixel 6, Android 14)
+## Measured baselines (device: Pixel 6, Android 14)
 
-| Métrica | Antes | Depois |
+| Metric | Before | After |
 |---|---|---|
-| Frame mais lento (Davey) | 2170 ms | 758 ms |
-| deltaY máximo visível | 19.328 px | 1.002 px |
-| Heap médio em idle (50 itens) | ~18 MB | ~11 MB |
-| Rebinds desnecessários ao rolar | frequentes | eliminados (ViewCache) |
+| Slowest frame (Davey) | 2170 ms | 758 ms |
+| Maximum visible deltaY | 19,328 px | 1,002 px |
+| Average heap at idle (50 items) | ~18 MB | ~11 MB |
+| Unnecessary rebinds while scrolling | frequent | eliminated (ViewCache) |
 
-**Antes**: `LinearLayoutManager` padrão com estimativas lineares de scroll.  
-**Depois**: `CachingLinearLayoutManager` com cache progressivo de alturas reais.
+**Before**: default `LinearLayoutManager` with linear scroll estimates.  
+**After**: `CachingLinearLayoutManager` with progressive caching of actual heights.
 
 ---
 
-## Ferramentas de medição
+## Measurement tools
 
 ### Android Studio Profiler
 
 1. `Run > Profile 'app'`
-2. Aba **CPU** → gravar com **System Trace** enquanto rola a lista
-3. Procurar por `RecyclerView#onMeasure`, `inflate`, `bind` e `draw` nas threads de UI
+2. **CPU** tab → record with **System Trace** while scrolling the list
+3. Look for `RecyclerView#onMeasure`, `inflate`, `bind`, and `draw` on the UI threads
 
 ### `adb shell dumpsys gfxinfo`
 
@@ -32,46 +32,46 @@ Referência de benchmarks e instruções para medir performance no Android.
 adb shell dumpsys gfxinfo <package> framestats
 ```
 
-Mostra histograma de frames, Janky frames % e contagem de Davey frames (> 700 ms).
+Shows a frame histogram, Janky frames %, and the Davey frame count (> 700 ms).
 
-### Logcat — heurístico de cache
+### Logcat — cache heuristic
 
 ```bash
 adb logcat -s VrHandler
 ```
 
-Imprime a decisão de cache/pool a cada reconfiguração:
+Prints the cache/pool decision on every reconfiguration:
 ```
 D/VrHandler: RAM=4096MB cols=1 → cache=5 pool=12
 ```
 
-### Logcat — frames lentos (MAUI)
+### Logcat — slow frames (MAUI)
 
 ```bash
 adb logcat -s Choreographer
 ```
 
-Linhas `Skipped N frames!` indicam trabalho excessivo na thread de UI.
+`Skipped N frames!` lines indicate excessive work on the UI thread.
 
 ---
 
-## Como medir deltaY
+## How to measure deltaY
 
-O `VrScrollListener` repassa `dx/dy` para `VirtualView.RaiseScrolled`. Para logar:
+The `VrScrollListener` forwards `dx/dy` to `VirtualView.RaiseScrolled`. To log it:
 
 ```csharp
 virtualizedList.Scrolled += (_, e) =>
     System.Diagnostics.Debug.WriteLine($"scrollY={e.VerticalOffset:F0}");
 ```
 
-Um deltaY > 5000 px em um único frame indica estimativa de scroll incorreta — confirmar que `CachingLinearLayoutManager` está ativo (ItemSizingStrategy=Dynamic).
+A deltaY > 5000 px in a single frame indicates an incorrect scroll estimate — confirm that `CachingLinearLayoutManager` is active (ItemSizingStrategy=Dynamic).
 
 ---
 
-## Checklist antes de reportar regressão
+## Checklist before reporting a regression
 
-- [ ] `ItemSizingStrategy` é `Dynamic` e `Span=1`? → `CachingLinearLayoutManager` ativo
-- [ ] Log `VrHandler` aparece no Logcat após scrollar?
-- [ ] `adb shell dumpsys gfxinfo` mostra Janky frames > 15%?
-- [ ] Heap cresce linearmente ao adicionar itens ou estabiliza depois de ~50?
-- [ ] `VrRecyclerListener` cancela CTSes? (adicionar log em `OnViewRecycled` para confirmar)
+- [ ] Is `ItemSizingStrategy` set to `Dynamic` with `Span=1`? → `CachingLinearLayoutManager` active
+- [ ] Does the `VrHandler` log appear in Logcat after scrolling?
+- [ ] Does `adb shell dumpsys gfxinfo` show Janky frames > 15%?
+- [ ] Does the heap grow linearly as items are added, or does it stabilize after ~50?
+- [ ] Does `VrRecyclerListener` cancel the CTSes? (add a log in `OnViewRecycled` to confirm)

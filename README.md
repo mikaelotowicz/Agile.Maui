@@ -4,7 +4,7 @@
 
 <img src="agile.png" alt="Agile.Maui" width="160" />
 
-**Componentes nativos e modulares para .NET MAUI**
+**Native, modular components for .NET MAUI**
 
 [![Gallery NuGet](https://img.shields.io/nuget/v/Agile.Maui.Gallery?label=Agile.Maui.Gallery)](https://www.nuget.org/packages/Agile.Maui.Gallery)
 [![PDF NuGet](https://img.shields.io/nuget/v/Agile.Maui.Pdf?label=Agile.Maui.Pdf)](https://www.nuget.org/packages/Agile.Maui.Pdf)
@@ -17,83 +17,57 @@
 
 `ImageView` / `GalleryView` | `PdfViewer` / `PdfReaderView` | `VirtualizedCollectionView`
 
-[Visao geral](#visao-geral) | [Recursos](#recursos) | [Inicio rapido](#inicio-rapido) | [Projetos](#projetos) | [Plataformas](#plataformas) | [Documentacao](#documentacao-adicional)
+[Overview](#overview) | [Features](#features) | [Projects](#projects) | [Platforms](#platforms) | [Documentation](#additional-documentation)
 
 </div>
 
-Biblioteca de componentes .NET MAUI com implementacoes nativas para Android, iOS,
-macOS Catalyst e Windows. A solucao atual e modular: cada componente vive em seu
-proprio projeto/pacote, mas todos compartilham o namespace C# `Agile.Maui`.
+A .NET MAUI component library with native implementations for Android, iOS,
+macOS Catalyst, and Windows. The current solution is modular: each component lives in its
+own project/package, but they all share the C# namespace `Agile.Maui`.
 
-## Visao geral
+## Overview
 
-Agile.Maui e uma colecao de controles MAUI nativos para cenarios comuns de apps
-mobile e desktop: imagens com zoom, galerias, leitura de PDF e listas virtualizadas.
-Cada modulo pode ser instalado separadamente, entao o app consome apenas o que usa.
+Agile.Maui is a collection of native MAUI controls for common mobile and desktop app
+scenarios: zoomable images, galleries, PDF reading, and virtualized lists.
+Each module can be installed separately, so the app consumes only what it uses.
 
-### Por que usar
+### Why use it
 
-- Controles nativos por plataforma; o PDF nao depende de `WebView` e imagens usam views nativas.
-- Pacotes independentes com o mesmo namespace C#.
-- APIs bindaveis para XAML e MVVM.
-- Handlers especificos para Android, iOS, macOS Catalyst e Windows.
-- App sample e documentacao por componente.
+- Native controls per platform; the PDF viewer does not rely on `WebView` and images use native views.
+- Independent packages sharing the same C# namespace.
+- Bindable APIs for XAML and MVVM.
+- Platform-specific handlers for Android, iOS, macOS Catalyst, and Windows.
+- Sample app and per-component documentation.
 
-## Recursos
+## Features
 
-| Modulo | Recursos principais |
+| Module | Key features |
 |---|---|
-| `Agile.Maui.Gallery` | `ImageView` com zoom/fullscreen nas plataformas suportadas e `GalleryView` com navegacao por imagens. |
-| `Agile.Maui.Pdf` | `PdfViewer` base e `PdfReaderView` pronto com busca, print/share, zoom, miniaturas e navegacao. |
-| `Agile.Maui.VirtualizedCollection` | Lista virtualizada de alto desempenho para grandes volumes de itens. |
+| `Agile.Maui.Gallery` | `ImageView` with zoom/fullscreen on supported platforms and `GalleryView` with image navigation. |
+| `Agile.Maui.Pdf` | Base `PdfViewer` and a ready-to-use `PdfReaderView` with search, print/share, zoom, thumbnails, and navigation. |
+| `Agile.Maui.VirtualizedCollection` | High-performance virtualized list for large volumes of items. |
 
-## Requisitos
+## Requirements
 
 - .NET MAUI / .NET 10.0.
-- Android, iOS, macOS Catalyst ou Windows.
-- Registro do pacote usado no `MauiProgram.cs`.
+- Android, iOS, macOS Catalyst, or Windows.
+- Registration of the package used in `MauiProgram.cs`.
 
-## Inicio rapido
+## Projects
 
-Instale o pacote do componente que voce precisa:
-
-```powershell
-dotnet add package Agile.Maui.Pdf
-```
-
-Registre o handler:
-
-```csharp
-using Agile.Maui;
-
-builder
-    .UseMauiApp<App>()
-    .UseAgilePdfViewer();
-```
-
-Use no XAML:
-
-```xml
-xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
-
-<pdf:PdfReaderView Source="manual.pdf" />
-```
-
-## Projetos
-
-| Projeto | Pacote / Assembly | Componentes | Documentacao |
+| Project | Package / Assembly | Components | Documentation |
 |---|---|---|---|
 | `GalleryView` | `Agile.Maui.Gallery` | `ImageView`, `GalleryView` | [docs/GalleryView.md](docs/GalleryView.md) |
 | `PDFViewer` | `Agile.Maui.Pdf` | `PdfViewer`, `PdfReaderView` | [docs/PDFViewer.md](docs/PDFViewer.md) |
 | `VirtualizedCollectionView` | `Agile.Maui.VirtualizedCollection` | `VirtualizedCollectionView` | [docs/VirtualizedCollectionView.md](docs/VirtualizedCollectionView.md) |
-| `sample` | aplicativo de exemplo | demos de todos os componentes | [docs/Sample.md](docs/Sample.md) |
+| `sample` | sample application | demos of all components | [docs/Sample.md](docs/Sample.md) |
 
-`Controls_old` e uma copia legada do antigo projeto monolitico e nao faz parte da
-solucao ativa.
+`Controls_old` is a legacy copy of the old monolithic project and is not part of the
+active solution.
 
-## Instalacao
+## Installation
 
-Instale somente os pacotes que sua aplicacao realmente usa:
+Install only the packages your application actually uses:
 
 ```powershell
 dotnet add package Agile.Maui.Gallery
@@ -101,7 +75,7 @@ dotnet add package Agile.Maui.Pdf
 dotnet add package Agile.Maui.VirtualizedCollection
 ```
 
-Depois registre os handlers no `MauiProgram.cs`:
+Then register the handlers in `MauiProgram.cs`:
 
 ```csharp
 using Agile.Maui;
@@ -113,12 +87,12 @@ builder
     .UseAgileVirtualizedCollectionView();
 ```
 
-Cada metodo e independente. Se a aplicacao usa apenas PDF, por exemplo, chame
-somente `UseAgilePdfViewer()`.
+Each method is independent. If the application uses only PDF, for example, call
+only `UseAgilePdfViewer()`.
 
 ## XAML
 
-O namespace C# e o mesmo, mas o assembly XAML muda por pacote:
+The C# namespace is the same, but the XAML assembly changes per package:
 
 ```xml
 xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
@@ -126,7 +100,7 @@ xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
 xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
 ```
 
-Exemplo:
+Example:
 
 ```xml
 <gallery:ImageView Source="photo" />
@@ -136,28 +110,28 @@ Exemplo:
 <virtualized:VirtualizedCollectionView ItemsSource="{Binding Items}" />
 ```
 
-## Plataformas
+## Platforms
 
-| Componente | Android | iOS / MacCatalyst | Windows |
+| Component | Android | iOS / MacCatalyst | Windows |
 |---|---|---|---|
-| `ImageView` | `Android.Widget.ImageView` + Glide + zoom fullscreen nativo | `UIImageView` + `UIScrollView` fullscreen | `Microsoft.UI.Xaml.Controls.Image` |
-| `GalleryView` | `ViewPager2` + `RecyclerView` | `UIScrollView` paginado + `UIPageControl` | `FlipView` |
-| `PdfViewer` | `PdfRenderer` para render + PDFium para texto/busca | `PdfKit.PdfView` | PDFium |
+| `ImageView` | `Android.Widget.ImageView` + Glide + native fullscreen zoom | `UIImageView` + `UIScrollView` fullscreen | `Microsoft.UI.Xaml.Controls.Image` |
+| `GalleryView` | `ViewPager2` + `RecyclerView` | paginated `UIScrollView` + `UIPageControl` | `FlipView` |
+| `PdfViewer` | `PdfRenderer` for rendering + PDFium for text/search | `PdfKit.PdfView` | PDFium |
 | `VirtualizedCollectionView` | `RecyclerView` | `UICollectionViewCompositionalLayout` | MAUI `CollectionView` |
 
 ## Performance
 
-- `VirtualizedCollectionView` usa handlers nativos e virtualizacao para reduzir custo em listas grandes.
-- `PdfViewer` renderiza paginas sob demanda e possui cache/prefetch configuravel.
-- `GalleryView` e `ImageView` usam carregamento nativo por plataforma e cache onde aplicavel.
+- `VirtualizedCollectionView` uses native handlers and virtualization to reduce cost on large lists.
+- `PdfViewer` renders pages on demand and provides a configurable cache/prefetch.
+- `GalleryView` and `ImageView` use native per-platform loading and cache where applicable.
 
-## Solucao de problemas
+## Troubleshooting
 
-- Se um controle nao renderizar, confirme se o metodo `UseAgile...()` correspondente foi chamado.
-- Se XAML nao encontrar o controle, confira o assembly no namespace (`Agile.Maui.Pdf`, `Agile.Maui.Gallery` ou `Agile.Maui.VirtualizedCollection`).
-- Para PDFs empacotados, use `MauiAsset` e consulte [docs/PDFViewer.md](docs/PDFViewer.md).
+- If a control does not render, confirm that the corresponding `UseAgile...()` method was called.
+- If XAML cannot find the control, check the assembly in the namespace (`Agile.Maui.Pdf`, `Agile.Maui.Gallery`, or `Agile.Maui.VirtualizedCollection`).
+- For bundled PDFs, use `MauiAsset` and refer to [docs/PDFViewer.md](docs/PDFViewer.md).
 
-## Estrutura
+## Structure
 
 ```text
 Agile.Maui.slnx
@@ -180,20 +154,20 @@ dotnet build -f net10.0-maccatalyst
 dotnet build -f net10.0-windows10.0.19041.0
 ```
 
-## Documentacao adicional
+## Additional documentation
 
-- [GalleryView e ImageView](docs/GalleryView.md)
-- [PDFViewer e PdfReaderView](docs/PDFViewer.md)
+- [GalleryView and ImageView](docs/GalleryView.md)
+- [PDFViewer and PdfReaderView](docs/PDFViewer.md)
 - [VirtualizedCollectionView](docs/VirtualizedCollectionView.md)
-- [Aplicativo sample](docs/Sample.md)
-- [Tuning de performance](TUNING.md)
-- [Profiling Android do VirtualizedCollectionView](PROFILING.md)
+- [Sample application](docs/Sample.md)
+- [Performance tuning](TUNING.md)
+- [Android profiling of VirtualizedCollectionView](PROFILING.md)
 
-## Licenca
+## License
 
-Distribuido sob licenca MIT.
+Distributed under the MIT license.
 
-## Suporte
+## Support
 
-Use o issue tracker do repositorio para relatar bugs, tirar duvidas ou sugerir
-novos recursos.
+Use the repository issue tracker to report bugs, ask questions, or suggest
+new features.
