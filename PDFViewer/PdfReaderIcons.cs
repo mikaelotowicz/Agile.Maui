@@ -2,7 +2,7 @@ namespace Agile.Maui;
 
 /// <summary>
 /// Glifos (Material Design Icons) usados pelo <see cref="PdfReaderView"/>. A fonte é empacotada na
-/// biblioteca como <c>AgilePdfIcons</c> e registrada por <c>builder.UsePdfViewer()</c>.
+/// biblioteca como <c>AgilePdfIcons</c> e registrada por <c>builder.UseAgilePdfViewer()</c>.
 /// </summary>
 public static class PdfReaderIcons
 {
@@ -21,4 +21,5 @@ public static class PdfReaderIcons
     public const string Next      = "\U000f0142";   // chevron-right
     public const string Up        = "\U000f0143";   // chevron-up
     public const string Down      = "\U000f0140";   // chevron-down
+    public const string Close     = "\U000f0156";   // close
 }

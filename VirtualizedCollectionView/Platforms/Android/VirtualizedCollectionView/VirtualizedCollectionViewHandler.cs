@@ -13,7 +13,7 @@ using Microsoft.Maui.Platform;
 
 using MauiView            = Microsoft.Maui.Controls.View;
 using AView               = Android.Views.View;
-using ItemsLayoutOrientation = Agile.Maui.ItemsLayoutOrientation;
+using VirtualizedOrientation = Agile.Maui.VirtualizedOrientation;
 using ItemSizingStrategy     = Agile.Maui.ItemSizingStrategy;
 
 namespace Agile.Maui.Platforms.Android;
@@ -122,12 +122,14 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (PlatformView is null) return;
 
-        var horizontal = VirtualView.Orientation == ItemsLayoutOrientation.Horizontal;
+        var horizontal = VirtualView.Orientation == VirtualizedOrientation.Horizontal;
         var direction  = horizontal ? LinearLayoutManager.Horizontal : LinearLayoutManager.Vertical;
         var columns    = VirtualView.Span;
 
         LinearLayoutManager llm;
-        if (columns == 1 && !horizontal && VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureAllItems)
+        if (columns == 1 && !horizontal &&
+            VirtualView.ItemSizingStrategy == ItemSizingStrategy.Dynamic &&
+            VirtualView.ItemHeight <= 0)
         {
             var clm = new CachingLinearLayoutManager(Context!, GetFallbackHeightPx())
             {
@@ -171,7 +173,7 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (PlatformView is null) return;
         ApplyLayoutManager();
-        if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirstItem)
+        if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.Fixed)
             _adapter?.SetFixedHeight(GetFallbackHeightPx());
     }
 
@@ -220,7 +222,7 @@ public sealed class VirtualizedCollectionViewHandler
         _spacingDecoration = new VrSpacingDecoration(
             spacingPx,
             VirtualView.Span,
-            VirtualView.Orientation == ItemsLayoutOrientation.Horizontal);
+            VirtualView.Orientation == VirtualizedOrientation.Horizontal);
         PlatformView.Rv.AddItemDecoration(_spacingDecoration);
     }
 
@@ -279,7 +281,7 @@ public sealed class VirtualizedCollectionViewHandler
         }
 
         var items    = SnapshotItems(VirtualView.ItemsSource);
-        var heightPx = VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirstItem
+        var heightPx = VirtualView.ItemSizingStrategy == ItemSizingStrategy.Fixed
             ? GetFallbackHeightPx()
             : VirtualView.ItemHeight > 0
                 ? (int)Context.ToPixels(VirtualView.ItemHeight)

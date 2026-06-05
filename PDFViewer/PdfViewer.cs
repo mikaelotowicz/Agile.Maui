@@ -360,6 +360,7 @@ public class PdfViewer : View
     public event EventHandler<PdfDocumentLoadedEventArgs>?    DocumentLoaded;
     public event EventHandler<PdfDocumentLoadFailedEventArgs>? DocumentLoadFailed;
     public event EventHandler<PdfPageChangedEventArgs>?        PageChanged;
+    internal event EventHandler?                               PageTapped;
     /// <summary>Disparado quando a busca produz/atualiza resultados (total e índice atual).</summary>
     public event EventHandler<PdfSearchResultEventArgs>?       SearchResultChanged;
     /// <summary>
@@ -468,6 +469,11 @@ public class PdfViewer : View
         var args = new PdfLinkTappedEventArgs(uri, destinationPage);
         LinkTapped?.Invoke(this, args);
         return args;
+    }
+
+    internal void RaisePageTapped()
+    {
+        OnMainThread(() => PageTapped?.Invoke(this, EventArgs.Empty));
     }
 
     // matchCount = total de ocorrências; currentIndex = índice 0-based da atual (-1 se nenhuma).
