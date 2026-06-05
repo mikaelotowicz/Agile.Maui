@@ -10,6 +10,9 @@ namespace Agile.Maui;
 /// </summary>
 public partial class PdfReaderView : ContentView
 {
+    private string? _shareFilePath;
+    private string? _streamShareFilePath;
+
     public PdfReaderView()
     {
         InitializeComponent();
@@ -226,7 +229,11 @@ public partial class PdfReaderView : ContentView
     {
         base.OnPropertyChanged(propertyName);
         if (propertyName == nameof(Source)) ApplySource();
-        else if (propertyName == nameof(PdfStream) && PdfStream is not null) ShowLoading();
+        else if (propertyName == nameof(PdfStream))
+        {
+            _streamShareFilePath = null;
+            if (PdfStream is not null) ShowLoading();
+        }
     }
 
     // Resolve o Source: URL ou arquivo existente → usa direto; senão tenta como ASSET EMPACOTADO
@@ -235,12 +242,25 @@ public partial class PdfReaderView : ContentView
     {
         var s = Source;
         FileNameLabel.Text = ResolveName(s);
+        _shareFilePath = null;
         if (string.IsNullOrEmpty(s)) { Viewer.Source = null; return; }
 
         ShowLoading();
 
-        if (s.StartsWith("http", StringComparison.OrdinalIgnoreCase) || File.Exists(s))
+        if (s.StartsWith("http", StringComparison.OrdinalIgnoreCase))
         {
+            Viewer.Source = s;
+            return;
+        }
+
+        // Só é arquivo local de verdade quando o caminho é ABSOLUTO. No Windows MSIX o working
+        // directory é a pasta de instalação (que contém os MauiAsset), então File.Exists("x.pdf")
+        // retorna true para um asset relativo — mas esse caminho relativo quebra o Share
+        // (StorageFile.GetFileFromPathAsync exige caminho absoluto). Caminhos não-rooted seguem
+        // para o ramo de asset empacotado abaixo, que materializa no cache (caminho absoluto).
+        if (Path.IsPathRooted(s) && File.Exists(s))
+        {
+            _shareFilePath = s;
             Viewer.Source = s;
             return;
         }
@@ -252,6 +272,8 @@ public partial class PdfReaderView : ContentView
             using (var src = await FileSystem.OpenAppPackageFileAsync(s))
             using (var fs  = File.Create(dest))
                 await src.CopyToAsync(fs);
+            if (Source != s) return;
+            _shareFilePath = dest;
             Viewer.Source = dest;
         }
         catch
@@ -278,22 +300,96 @@ public partial class PdfReaderView : ContentView
 
     private async void OnShareClicked(object? sender, EventArgs e)
     {
-        var src = Source;
-        if (string.IsNullOrEmpty(src)) return;
         try
         {
-            if (src.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                await Microsoft.Maui.ApplicationModel.DataTransfer.Share.RequestAsync(
-                    new Microsoft.Maui.ApplicationModel.DataTransfer.ShareTextRequest { Uri = src, Title = FileNameLabel.Text });
-            else if (File.Exists(src))
-                await Microsoft.Maui.ApplicationModel.DataTransfer.Share.RequestAsync(
-                    new Microsoft.Maui.ApplicationModel.DataTransfer.ShareFileRequest
-                    {
-                        Title = FileNameLabel.Text,
-                        File  = new Microsoft.Maui.ApplicationModel.DataTransfer.ShareFile(src),
-                    });
+            var path = await ResolveShareFileAsync();
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                return;
+
+            // ShareFileRequest é cross-platform (Android/iOS/macOS/Windows): o painel
+            // nativo de compartilhamento do sistema recebe o arquivo PDF em si.
+            await Microsoft.Maui.ApplicationModel.DataTransfer.Share.RequestAsync(
+                new Microsoft.Maui.ApplicationModel.DataTransfer.ShareFileRequest
+                {
+                    Title = FileNameLabel.Text,
+                    File  = new Microsoft.Maui.ApplicationModel.DataTransfer.ShareFile(path, "application/pdf"),
+                });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PdfReaderView] Compartilhamento falhou: {ex}");
+        }
+    }
+
+    // Materializa o PDF atual em um caminho de arquivo local compartilhável, cobrindo os três
+    // cenários de origem. Sempre compartilhamos o ARQUIVO (não o link) para que o destinatário
+    // receba o PDF mesmo sem acesso à URL. Resultados são cacheados por Source/PdfStream.
+    private async Task<string?> ResolveShareFileAsync()
+    {
+        var src = Source;
+
+        // 1) Arquivo local ou asset empacotado já materializado em ApplySource (também serve
+        //    de cache do download de URL — ver caso 3).
+        if (!string.IsNullOrEmpty(_shareFilePath) && File.Exists(_shareFilePath))
+            return _shareFilePath;
+
+        // 2) Caminho de arquivo local informado diretamente em Source (precisa ser ABSOLUTO —
+        //    ver nota em ApplySource sobre o working directory no Windows MSIX).
+        if (!string.IsNullOrEmpty(src) && !IsUrl(src) && Path.IsPathRooted(src) && File.Exists(src))
+            return _shareFilePath = src;
+
+        // 3) URL → baixa o PDF para o cache uma única vez por Source.
+        if (!string.IsNullOrEmpty(src) && IsUrl(src))
+            return _shareFilePath = await DownloadToCacheAsync(src);
+
+        // 4) Stream em memória → grava no cache.
+        if (PdfStream is not null)
+            return await EnsureStreamShareFileAsync();
+
+        return null;
+    }
+
+    private static bool IsUrl(string s) => s.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+
+    private static readonly HttpClient _shareHttpClient = new();
+
+    private async Task<string?> DownloadToCacheAsync(string url)
+    {
+        var path = Path.Combine(FileSystem.CacheDirectory, EnsurePdfName(ResolveName(url)));
+
+        using var resp = await _shareHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        resp.EnsureSuccessStatusCode();
+
+        using (var net = await resp.Content.ReadAsStreamAsync())
+        using (var fs  = File.Create(path))
+            await net.CopyToAsync(fs);
+
+        return path;
+    }
+
+    private static string EnsurePdfName(string name)
+        => name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? name : name + ".pdf";
+
+    private async Task<string?> EnsureStreamShareFileAsync()
+    {
+        if (!string.IsNullOrEmpty(_streamShareFilePath) && File.Exists(_streamShareFilePath))
+            return _streamShareFilePath;
+
+        var stream = PdfStream;
+        if (stream is null) return null;
+
+        var path = Path.Combine(FileSystem.CacheDirectory, EnsurePdfName(ResolveName(Source)));
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        using (var fs = File.Create(path))
+            await stream.CopyToAsync(fs);
+
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        _streamShareFilePath = path;
+        return path;
     }
 
     // ── Orientação ────────────────────────────────────────────────────────────────
