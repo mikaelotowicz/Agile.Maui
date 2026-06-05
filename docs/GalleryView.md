@@ -2,8 +2,8 @@
 
 Projeto que entrega dois controles visuais para imagens:
 
-- `ImageView`: imagem unica com carregamento nativo, eventos de carga e zoom fullscreen.
-- `GalleryView`: galeria paginada de imagens com selecao, indicadores e fullscreen.
+- `ImageView`: imagem unica com carregamento nativo, eventos de carga e zoom fullscreen nas plataformas suportadas.
+- `GalleryView`: galeria paginada de imagens com selecao, indicadores e fullscreen nas plataformas suportadas.
 
 Assembly: `Agile.Maui.Gallery`  
 Namespace C#: `Agile.Maui`  
@@ -38,8 +38,8 @@ e, quando permitido, abre uma visualizacao fullscreen com zoom.
 | `IsUrl` | `bool` | `false` | Indica que `Source` e uma URL HTTP/HTTPS. |
 | `Placeholder` | `string?` | `null` | Recurso local exibido durante carga ou erro. |
 | `MaxZoom` | `float` | `5` | Zoom maximo do viewer fullscreen. Minimo aceito: `1`. |
-| `EnableFullscreen` | `bool` | `true` | Abre fullscreen ao tocar na imagem. |
-| `FullscreenSource` | `string?` | `null` | Fonte de maior qualidade para fullscreen. Se nula, usa `Source`. |
+| `EnableFullscreen` | `bool` | `true` | Abre fullscreen ao tocar na imagem nas plataformas suportadas. |
+| `FullscreenSource` | `string?` | `null` | Fonte de maior qualidade para fullscreen. Se nula, usa `Source`. Ignorada onde fullscreen nao e implementado. |
 | `AspectMode` | `ZoomImageAspect` | `CenterCrop` | `CenterCrop` ou `AspectFit`. |
 | `ImageLoadedCommand` | `ICommand?` | `null` | Comando executado ao carregar. |
 | `ImageFailedCommand` | `ICommand?` | `null` | Comando executado ao falhar. |
