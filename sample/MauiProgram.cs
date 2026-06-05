@@ -15,7 +15,10 @@ namespace sample
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                    fonts.AddFont("materialdesignicons-webfont.ttf", "MaterialDesignIcons");
                 });
+
+            builder.Services.AddTransient<PdfViewerPage>();
 
 #if DEBUG
             builder.Logging.AddDebug();
