@@ -1,4 +1,4 @@
-# <img src="Controls/agile.png" width="118" height="118" align="center" /> Agile.Maui
+# <img src="agile.png" width="118" height="118" align="center" /> Agile.Maui
 
 .NET MAUI component library with **native** implementations for Android, iOS, macOS Catalyst, and Windows. Every control maps directly to the platform's own scrolling and rendering infrastructure — no WebView, no abstraction layers.
 
