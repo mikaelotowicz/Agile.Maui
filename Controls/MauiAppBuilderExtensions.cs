@@ -18,7 +18,7 @@ namespace Agile.Maui;
 public static class MauiAppBuilderExtensions
 {
     /// <summary>
-    /// Registra os controles Agile.Maui (ImageView, GalleryView, VirtualizedCollectionView) e seus handlers nativos.
+    /// Registra os controles Agile.Maui (ImageView, GalleryView, VirtualizedCollectionView, PdfViewer) e seus handlers nativos.
     /// Chamar em MauiProgram.cs: builder.UseAgileMaui()
     /// </summary>
     public static MauiAppBuilder UseAgileMaui(this MauiAppBuilder builder)
@@ -29,17 +29,20 @@ public static class MauiAppBuilderExtensions
             handlers.AddHandler<ImageView, ImageViewHandler>();
             handlers.AddHandler<GalleryView, GalleryViewHandler>();
             handlers.AddHandler<VirtualizedCollectionView, VirtualizedCollectionViewHandler>();
+            handlers.AddHandler<PdfViewer, PdfViewerHandler>();
 #endif
 #if IOS || MACCATALYST
             handlers.AddHandler<ImageView, ImageViewHandler>();
             handlers.AddHandler<GalleryView, GalleryViewHandler>();
             handlers.AddHandler<VirtualizedCollectionView, VirtualizedCollectionViewHandler>();
+            handlers.AddHandler<PdfViewer, PdfViewerHandler>();
 #endif
 #if WINDOWS
             handlers.AddHandler<ImageView, ImageViewHandler>();
             handlers.AddHandler<GalleryView, GalleryViewHandler>();
             // VirtualizedCollectionView não precisa de handler customizado no Windows:
             // herda de ContentView e usa CollectionView do MAUI como Content.
+            handlers.AddHandler<PdfViewer, PdfViewerHandler>();
 #endif
         });
 

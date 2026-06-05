@@ -4,21 +4,37 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:sample"
+    FlyoutBehavior="Flyout"
     Title="sample">
 
-    <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+    <!--  Cada ShellContent vira um item do menu (flyout). O PdfViewer é um deles.  -->
 
-    <ShellContent
-        Title="Virtualized"
-        ContentTemplate="{DataTemplate local:VirtualizedListPage}"
-        Route="VirtualizedListPage" />
+    <ShellContent Title="Início" Route="MainPage" ContentTemplate="{DataTemplate local:MainPage}">
+        <ShellContent.Icon>
+            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuHome}"
+                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+        </ShellContent.Icon>
+    </ShellContent>
 
-    <ShellContent
-        Title="MAUI CollectionView"
-        ContentTemplate="{DataTemplate local:CollectionViewPage}"
-        Route="CollectionViewPage" />
+    <ShellContent Title="PDF Viewer" Route="PdfViewerPage" ContentTemplate="{DataTemplate local:PdfViewerPage}">
+        <ShellContent.Icon>
+            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuPdf}"
+                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+        </ShellContent.Icon>
+    </ShellContent>
+
+    <ShellContent Title="Lista Virtualizada" Route="VirtualizedListPage" ContentTemplate="{DataTemplate local:VirtualizedListPage}">
+        <ShellContent.Icon>
+            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuList}"
+                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+        </ShellContent.Icon>
+    </ShellContent>
+
+    <ShellContent Title="MAUI CollectionView" Route="CollectionViewPage" ContentTemplate="{DataTemplate local:CollectionViewPage}">
+        <ShellContent.Icon>
+            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuCollection}"
+                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+        </ShellContent.Icon>
+    </ShellContent>
 
 </Shell>
