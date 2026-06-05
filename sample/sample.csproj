@@ -57,9 +57,10 @@
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
 		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
+		<!-- PDFs NÃO são imagens: exclui qualquer .pdf do MauiImage (nomes com hífen/espaço
+		     quebram o Resizetizer). Soltar um .pdf em Resources/Images não deve quebrar o build. -->
+		<MauiImage Remove="Resources\Images\*.pdf" />
 		<!-- PDF de exemplo empacotado (não é imagem): remove do MauiImage e inclui como asset bruto -->
-		<MauiImage Remove="Resources\Images\NT_2016_002_v1 61.pdf" />
-		<MauiAsset Include="Resources\Images\NT_2016_002_v1 61.pdf" LogicalName="NT_2016_002.pdf" />
 		
 		<!-- Custom Fonts -->
 		<MauiFont Include="Resources\Fonts\*" />
@@ -71,12 +72,23 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <None Remove="Resources\Images\InteligenciaArtificial.pdf" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <!-- LogicalName sem o prefixo do diretório → abre por "InteligenciaArtificial.pdf" no OpenAppPackageFileAsync -->
+	  <MauiAsset Include="Resources\Images\InteligenciaArtificial.pdf" LogicalName="InteligenciaArtificial.pdf" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Controls\Controls.csproj" />
+		<ProjectReference Include="..\GalleryView\GalleryView.csproj" />
+		<ProjectReference Include="..\PDFViewer\PDFViewer.csproj" />
+		<ProjectReference Include="..\VirtualizedCollectionView\VirtualizedCollectionView.csproj" />
 	</ItemGroup>
 
 </Project>
