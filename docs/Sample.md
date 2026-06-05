@@ -31,7 +31,6 @@ exemplo, e o servico `IAnchoredMenu`, usado no menu superior do PDF customizado.
 | `MainPage` | Demonstra `ImageView` e `GalleryView`. |
 | `ReaderDemoPage` | Demonstra o `PdfReaderView`, o leitor pronto. |
 | `VirtualizedListPage` | Demonstra `VirtualizedCollectionView` com lista, grade, busca e metricas. |
-| `BenchmarkPage` | Compara `CollectionView` nativa e `VirtualizedCollectionView` com tempo, memoria, scroll e log de iteracoes. |
 
 ## XAML namespaces usados
 
@@ -61,7 +60,6 @@ menu e um `ShellContent`:
 - `Gallery View`: imagens e galeria.
 - `PDF Viewer`: UI pronta com `PdfReaderView`.
 - `Virtualized Collection`: lista virtualizada com busca, grade e metricas.
-- `Benchmark`: comparacao lado a lado com `CollectionView` nativa.
 
 ## ReaderDemoPage
 
@@ -81,21 +79,6 @@ Usa:
 
 Tambem permite alternar entre lista/grade e altura fixa/dinamica para observar
 impacto de performance.
-
-## BenchmarkPage
-
-Compara `CollectionView` nativa e `VirtualizedCollectionView` usando o mesmo
-`ProductItem` e o mesmo template principal da `VirtualizedListPage`, incluindo
-imagem, textos e secoes expansivas. A pagina mede, por iteracao:
-
-- tempo para trocar `ItemsSource` e aguardar a primeira estabilizacao visual;
-- delta de memoria gerenciada reportado por `GC.GetTotalMemory`;
-- proxy de quadros perdidos durante rolagem programatica em passos;
-- quantidade de views nativas realizadas quando a plataforma permite contar;
-- medias, desvio e log de cada rodada.
-
-Os resultados sao uma medicao pratica dentro do app sample, nao um benchmark de
-laboratorio.
 
 ## Build
 
