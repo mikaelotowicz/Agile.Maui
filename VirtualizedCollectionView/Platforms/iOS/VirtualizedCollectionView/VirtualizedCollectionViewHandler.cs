@@ -15,7 +15,7 @@ using Foundation;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 using UIKit;
-using ItemsLayoutOrientation = Agile.Maui.ItemsLayoutOrientation;
+using VirtualizedOrientation = Agile.Maui.VirtualizedOrientation;
 using ItemSizingStrategy     = Agile.Maui.ItemSizingStrategy;
 
 namespace Agile.Maui.Platforms.iOS;
@@ -76,7 +76,7 @@ public sealed class VirtualizedCollectionViewHandler
 
     private void ApplyBounceDirection(UICollectionView cv)
     {
-        var horizontal = VirtualView?.Orientation == ItemsLayoutOrientation.Horizontal;
+        var horizontal = VirtualView?.Orientation == VirtualizedOrientation.Horizontal;
         cv.AlwaysBounceVertical   = !horizontal;
         cv.AlwaysBounceHorizontal = horizontal;
     }
@@ -130,14 +130,14 @@ public sealed class VirtualizedCollectionViewHandler
     {
         var columns    = Math.Max(1, VirtualView?.Span ?? 1);
         var itemHeight = VirtualView?.ItemHeight ?? -1;
-        var horizontal = VirtualView?.Orientation == ItemsLayoutOrientation.Horizontal;
+        var horizontal = VirtualView?.Orientation == VirtualizedOrientation.Horizontal;
 
         // ItemHeight > 0  →  CreateAbsolute(itemHeight): altura explícita, sobrepõe tudo.
         // Fixed            →  CreateAbsolute(ItemHeightRequest): altura fixa sem per-cell measure.
         // Dynamic          →  CreateEstimated(ItemHeightRequest): self-sizing via
         //                     PreferredLayoutAttributesFitting, suporta expanders e conteúdo variável.
         var estimatedH  = (nfloat)Math.Max(44, VirtualView?.ItemHeightRequest ?? 350);
-        var useAbsolute = itemHeight > 0 || VirtualView?.ItemSizingStrategy == ItemSizingStrategy.MeasureFirstItem;
+        var useAbsolute = itemHeight > 0 || VirtualView?.ItemSizingStrategy == ItemSizingStrategy.Fixed;
         var absoluteH   = itemHeight > 0 ? (nfloat)itemHeight : estimatedH;
         var heightDim   = useAbsolute
             ? NSCollectionLayoutDimension.CreateAbsolute(absoluteH)

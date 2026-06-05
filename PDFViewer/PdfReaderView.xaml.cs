@@ -29,6 +29,7 @@ public partial class PdfReaderView : ContentView
             if (e.PropertyName == nameof(PdfViewer.ZoomFactor))
                 UpdateZoomLabel(Viewer.ZoomFactor);
         };
+        Viewer.PageTapped += OnViewerPageTapped;
     }
 
     // ── Pass-through para o PdfViewer ───────────────────────────────────────────
@@ -194,7 +195,7 @@ public partial class PdfReaderView : ContentView
     private void OnDocumentLoaded(object? sender, PdfDocumentLoadedEventArgs e)
     {
         LoadingOverlay.IsVisible = false;
-        StatsLabel.Text = string.Format(PageCountFormat ?? "{0}", e.PageCount);
+        SetStatsText(string.Format(PageCountFormat ?? "{0}", e.PageCount));
         UpdatePageControls(0, e.PageCount);
         UpdateZoomLabel(Viewer.ZoomFactor);
         DocumentLoaded?.Invoke(this, e);
@@ -203,8 +204,15 @@ public partial class PdfReaderView : ContentView
     private void OnDocumentLoadFailed(object? sender, PdfDocumentLoadFailedEventArgs e)
     {
         LoadingOverlay.IsVisible = false;
-        StatsLabel.Text = LoadFailedText;
+        SetStatsText(LoadFailedText);
         DocumentLoadFailed?.Invoke(this, e);
+    }
+
+    private void SetStatsText(string? text)
+    {
+        StatsLabel.Text = string.IsNullOrWhiteSpace(text) ? " " : text;
+        StatsLabel.InvalidateMeasure();
+        ToolbarHost.InvalidateMeasure();
     }
 
     private void OnPageChanged(object? sender, PdfPageChangedEventArgs e)
@@ -340,6 +348,7 @@ public partial class PdfReaderView : ContentView
 
     // ── Busca ──────────────────────────────────────────────────────────────────────
     private bool _searchOpen;
+    private bool _suppressSearchTextChanged;
     private string _lastSearchTerm = string.Empty;
     private CancellationTokenSource? _searchDebounceCts;
 
@@ -348,23 +357,31 @@ public partial class PdfReaderView : ContentView
         if (_searchOpen) { CollapseSearch(); return; }
         _searchOpen = true;
         SearchBar.IsVisible = true;
+        SearchToolbarDismissOverlay.IsVisible = true;
+        SearchDismissOverlay.IsVisible = true;
         SearchEntry.Focus();
     }
 
     private void CollapseSearch()
     {
         _searchOpen = false;
+        _suppressSearchTextChanged = true;
         _searchDebounceCts?.Cancel();
+        SearchToolbarDismissOverlay.IsVisible = false;
+        SearchDismissOverlay.IsVisible = false;
         SearchEntry.Unfocus();
         SearchEntry.Text = string.Empty;
         SearchBar.IsVisible = false;
         SearchCountLabel.Text = string.Empty;
         _lastSearchTerm = string.Empty;
         Viewer.ClearSearch();
+        _suppressSearchTextChanged = false;
     }
 
     private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
+        if (_suppressSearchTextChanged) return;
+
         _searchDebounceCts?.Cancel();
         _searchDebounceCts = new CancellationTokenSource();
         var ct = _searchDebounceCts.Token;
@@ -384,6 +401,41 @@ public partial class PdfReaderView : ContentView
         else                          Viewer.FindNext();
     }
 
+    private void OnSearchEntryFocused(object? sender, FocusEventArgs e)
+    {
+        if (_searchOpen)
+        {
+            SearchToolbarDismissOverlay.IsVisible = true;
+            SearchDismissOverlay.IsVisible = true;
+        }
+    }
+
+    private void OnSearchEntryUnfocused(object? sender, FocusEventArgs e)
+    {
+        SearchToolbarDismissOverlay.IsVisible = false;
+        SearchDismissOverlay.IsVisible = false;
+        if (_searchOpen && string.IsNullOrWhiteSpace(SearchEntry.Text))
+            CollapseSearch();
+    }
+
+    private void OnViewerPageTapped(object? sender, EventArgs e)
+    {
+        if (!_searchOpen) return;
+
+        DismissSearchFocus();
+    }
+
+    private void OnSearchDismissOverlayTapped(object? sender, TappedEventArgs e) => DismissSearchFocus();
+
+    private void DismissSearchFocus()
+    {
+        SearchToolbarDismissOverlay.IsVisible = false;
+        SearchDismissOverlay.IsVisible = false;
+        SearchEntry.Unfocus();
+        if (_searchOpen && string.IsNullOrWhiteSpace(SearchEntry.Text))
+            CollapseSearch();
+    }
+
     private void RunSearch(string term)
     {
         if (string.IsNullOrWhiteSpace(term)) { Viewer.ClearSearch(); _lastSearchTerm = string.Empty; return; }
@@ -392,7 +444,8 @@ public partial class PdfReaderView : ContentView
     }
 
     private void OnSearchPrevClicked(object? sender, EventArgs e) => Viewer.FindPrevious();
-    private void OnSearchNextOrCloseClicked(object? sender, EventArgs e) => Viewer.FindNext();
+    private void OnSearchNextClicked(object? sender, EventArgs e) => Viewer.FindNext();
+    private void OnSearchCloseClicked(object? sender, EventArgs e) => CollapseSearch();
 
     private void OnSearchResultChanged(object? sender, PdfSearchResultEventArgs e)
     {

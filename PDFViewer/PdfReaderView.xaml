@@ -9,7 +9,7 @@
     <!--
         PdfReaderView — leitor de PDF "pronto" (toolbar + busca + barra inferior) sobre o PdfViewer
         base. Autossuficiente: cores próprias e ícones da fonte AgilePdfIcons (empacotada na lib,
-        registrada por UsePdfViewer()). Quem quer customizar usa o PdfViewer diretamente.
+        registrada por UseAgilePdfViewer()). Quem quer customizar usa o PdfViewer diretamente.
     -->
 
     <ContentView.Resources>
@@ -62,16 +62,21 @@
                 VerticalOptions="Center">
                 <Label
                     x:Name="FileNameLabel"
+                    FontAutoScalingEnabled="False"
                     FontAttributes="Bold"
                     FontSize="15"
                     LineBreakMode="TailTruncation"
+                    MaxLines="1"
                     Text="PDF"
                     TextColor="{Binding CaptionColor, Source={x:Reference Root}}" />
                 <Label
                     x:Name="StatsLabel"
+                    FontAutoScalingEnabled="False"
                     FontSize="10.5"
                     LineBreakMode="TailTruncation"
-                    Text=""
+                    MaxLines="1"
+                    MinimumHeightRequest="14"
+                    Text=" "
                     TextColor="{Binding IconColor, Source={x:Reference Root}}" />
             </VerticalStackLayout>
 
@@ -161,6 +166,16 @@
                 </Border>
             </HorizontalStackLayout>
 
+            <Grid
+                x:Name="SearchToolbarDismissOverlay"
+                Grid.ColumnSpan="2"
+                BackgroundColor="Transparent"
+                IsVisible="False">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnSearchDismissOverlayTapped" />
+                </Grid.GestureRecognizers>
+            </Grid>
+
             <!--  Barra de busca (overlay sobre a toolbar)  -->
             <Border
                 x:Name="SearchBar"
@@ -172,7 +187,7 @@
                 Stroke="{StaticResource PdfOutlineBrush}"
                 StrokeShape="RoundRectangle 10"
                 StrokeThickness="1">
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="2">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="2">
                     <Image
                         Grid.Column="0"
                         Margin="6,0"
@@ -191,11 +206,13 @@
                         x:Name="SearchEntry"
                         Grid.Column="1"
                         Completed="OnSearchCompleted"
+                        Focused="OnSearchEntryFocused"
                         FontSize="14"
                         Placeholder="{Binding SearchPlaceholder, Source={x:Reference Root}}"
                         ReturnType="Search"
                         TextChanged="OnSearchTextChanged"
                         TextColor="{StaticResource PdfOnSurface}"
+                        Unfocused="OnSearchEntryUnfocused"
                         VerticalOptions="Center" />
                     <Label
                         x:Name="SearchCountLabel"
@@ -226,13 +243,30 @@
                         Grid.Column="4"
                         Style="{StaticResource PdfIconBtn}">
                         <Border.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnSearchNextOrCloseClicked" />
+                            <TapGestureRecognizer Tapped="OnSearchNextClicked" />
                         </Border.GestureRecognizers>
                         <Image HeightRequest="20" WidthRequest="20">
                             <Image.Source>
                                 <FontImageSource
                                     FontFamily="AgilePdfIcons"
                                     Glyph="{x:Static agile:PdfReaderIcons.Down}"
+                                    Size="20"
+                                    Color="{Binding IconColor, Source={x:Reference Root}}" />
+                            </Image.Source>
+                        </Image>
+                    </Border>
+                    <Border
+                        x:Name="SearchCloseBtn"
+                        Grid.Column="5"
+                        Style="{StaticResource PdfIconBtn}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnSearchCloseClicked" />
+                        </Border.GestureRecognizers>
+                        <Image HeightRequest="20" WidthRequest="20">
+                            <Image.Source>
+                                <FontImageSource
+                                    FontFamily="AgilePdfIcons"
+                                    Glyph="{x:Static agile:PdfReaderIcons.Close}"
                                     Size="20"
                                     Color="{Binding IconColor, Source={x:Reference Root}}" />
                             </Image.Source>
@@ -417,7 +451,18 @@
                         </Image.Source>
                     </Image>
                 </Border>
-            </HorizontalStackLayout>
+                </HorizontalStackLayout>
+        </Grid>
+
+        <Grid
+            x:Name="SearchDismissOverlay"
+            Grid.Row="1"
+            Grid.RowSpan="2"
+            BackgroundColor="Transparent"
+            IsVisible="False">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnSearchDismissOverlayTapped" />
+            </Grid.GestureRecognizers>
         </Grid>
     </Grid>
 </ContentView>

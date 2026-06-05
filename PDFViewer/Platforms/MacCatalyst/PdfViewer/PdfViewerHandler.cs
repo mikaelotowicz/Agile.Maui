@@ -189,6 +189,7 @@ public sealed class PdfViewerHandler
         {
             if (VirtualView is not null) VirtualView.IsThumbnailBarOpen = false;
         };
+        pv.OnPageTapped = () => VirtualView?.RaisePageTapped();
 
         // Link (URL externa) tocado no PDF: dispara LinkTapped; se o app não tratar (Handled),
         // abrimos a URL no app padrão do sistema (comportamento padrão do PdfView).
@@ -215,6 +216,7 @@ public sealed class PdfViewerHandler
         pv.OnPageChanged = null;
         pv.OnZoomChanged = null;
         pv.OnThumbnailDrawerDismissed = null;
+        pv.OnPageTapped = null;
         pv.OnLinkClicked = null;
         pv.Teardown();
         _findCount = 0; _findIndex = -1;
@@ -498,6 +500,7 @@ public sealed class PdfNativeView : UIView
     public Action<double>? OnZoomChanged { get; set; }
     /// <summary>Disparado ao tocar fora (scrim) ou numa miniatura — o handler fecha o drawer.</summary>
     public Action?         OnThumbnailDrawerDismissed { get; set; }
+    public Action?         OnPageTapped { get; set; }
     /// <summary>Disparado ao tocar num link de URL externa no PDF (string da URL).</summary>
     public Action<string>? OnLinkClicked { get; set; }
 
@@ -518,6 +521,12 @@ public sealed class PdfNativeView : UIView
             AutoScales        = true,
         };
         AddSubview(_pdfView);
+
+        _pdfView.AddGestureRecognizer(new UITapGestureRecognizer(() => OnPageTapped?.Invoke())
+        {
+            CancelsTouchesInView = false,
+            NumberOfTapsRequired = 1,
+        });
 
         // Delegate p/ interceptar toque em links de URL (LinkTapped). Links internos (destino de
         // página) o PdfView navega sozinho; este callback dispara só para URLs externas.

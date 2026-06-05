@@ -18,9 +18,9 @@ public static class PDFViewerAppBuilderExtensions
 {
     /// <summary>
     /// Registra PdfViewer e seu handler nativo.
-    /// Chamar em MauiProgram.cs: builder.UsePdfViewer()
+    /// Chamar em MauiProgram.cs: builder.UseAgilePdfViewer()
     /// </summary>
-    public static MauiAppBuilder UsePdfViewer(this MauiAppBuilder builder)
+    public static MauiAppBuilder UseAgilePdfViewer(this MauiAppBuilder builder)
     {
         // Fonte de ícones do PdfReaderView (empacotada na lib). Alias próprio p/ não colidir com
         // fontes do app consumidor.

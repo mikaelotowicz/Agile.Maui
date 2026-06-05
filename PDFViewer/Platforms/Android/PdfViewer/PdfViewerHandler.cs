@@ -1037,6 +1037,8 @@ public sealed class PdfViewerHandler
     // Toque simples: se há seleção, limpa-a (exceto sobre uma alça); senão, tenta ativar um link.
     private void HandleTap(float cx, float cy)
     {
+        VirtualView?.RaisePageTapped();
+
         if (HasSelection)
         {
             if (HandleHitTest(cx, cy) != 0) return;   // tocou alça → não dispensa
