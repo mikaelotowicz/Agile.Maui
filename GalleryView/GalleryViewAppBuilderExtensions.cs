@@ -18,9 +18,9 @@ public static class GalleryViewAppBuilderExtensions
 {
     /// <summary>
     /// Registra ImageView e GalleryView e seus handlers nativos.
-    /// Chamar em MauiProgram.cs: builder.UseGalleryView()
+    /// Chamar em MauiProgram.cs: builder.UseAgileGalleryView()
     /// </summary>
-    public static MauiAppBuilder UseGalleryView(this MauiAppBuilder builder)
+    public static MauiAppBuilder UseAgileGalleryView(this MauiAppBuilder builder)
     {
         builder.ConfigureMauiHandlers(handlers =>
         {

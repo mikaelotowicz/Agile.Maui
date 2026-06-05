@@ -6,27 +6,27 @@ This document describes every internal parameter that affects rendering speed, m
 
 ## VirtualizedCollectionView — Android
 
-### ItemSizeStrategy
+### ItemSizingStrategy
 
 The property controls which `LayoutManager` is created and how cell heights are computed.
 
-| `ItemSizeStrategy` | `ItemHeight` | Android behavior |
+| `ItemSizingStrategy` | `ItemHeight` | Android behavior |
 |---|---|---|
-| `Fixed` | any | `LinearLayoutManager` or `GridLayoutManager`. All cells forced to `ItemHeightRequest` px. Fastest path. |
-| `Dynamic` | `≤ 0` (default `-1`) | `CachingLinearLayoutManager`. Cells use `WrapContent`; heights are measured from content. Only for `ColumnCount=1, Orientation=Vertical`. |
-| `Dynamic` | `> 0` | Same `CachingLinearLayoutManager`, but cells forced to `ItemHeight` px — identical to Fixed in practice. |
+| `Fixed` | any | `LinearLayoutManager` or `GridLayoutManager`. All cells forced to `ItemHeight` when set, otherwise `ItemHeightRequest`. Fastest path. |
+| `Dynamic` | `≤ 0` (default `-1`) | `CachingLinearLayoutManager`. Cells use `WrapContent`; heights are measured from content. Only for `Span=1, Orientation=Vertical`. |
+| `Dynamic` | `> 0` | Explicit `ItemHeight` wins: normal fixed-height layout. |
 
-> **Grid (`ColumnCount > 1`) always uses `GridLayoutManager` with `Fixed` sizing**, regardless of `ItemSizeStrategy`. Dynamic self-sizing is not supported in multi-column mode on Android.
+> **Grid (`Span > 1`) always uses `GridLayoutManager` with fixed sizing**, regardless of `ItemSizingStrategy`. Dynamic self-sizing is not supported in multi-column mode on Android.
 
 ```xml
 <!-- Fixed: all cells exactly 120 dp tall, zero per-item measurement -->
 <agile:VirtualizedCollectionView
-    ItemSizeStrategy="Fixed"
+    ItemSizingStrategy="Fixed"
     ItemHeightRequest="120" />
 
 <!-- Dynamic: cells wrap content, CachingLinearLayoutManager active -->
 <agile:VirtualizedCollectionView
-    ItemSizeStrategy="Dynamic"
+    ItemSizingStrategy="Dynamic"
     ItemHeightRequest="200" />
 ```
 
@@ -36,9 +36,9 @@ Three managers are used, selected automatically:
 
 | Condition | Manager | `InitialPrefetchItemCount` |
 |---|---|---|
-| `Dynamic`, `ColumnCount=1`, vertical | `CachingLinearLayoutManager` | `4` |
-| `Fixed`, `ColumnCount=1` | `LinearLayoutManager` | `6` |
-| `ColumnCount > 1` | `GridLayoutManager` | `ColumnCount × 3` |
+| `Dynamic`, `Span=1`, vertical, `ItemHeight <= 0` | `CachingLinearLayoutManager` | `4` |
+| `Fixed`, `Span=1` | `LinearLayoutManager` | `6` |
+| `Span > 1` | `GridLayoutManager` | `Span × 3` |
 
 `InitialPrefetchItemCount` tells RecyclerView's `GapWorker` how many items to pre-inflate during idle frames. Higher values reduce visible inflate jank at the cost of more CPU on the first frame.
 
@@ -60,7 +60,7 @@ Replaces the default `LinearLayoutManager` in Dynamic mode to eliminate scroll b
 
 ### RecyclerView View Cache and Pool
 
-Sizes are calculated from `ActivityManager.MemoryInfo.TotalMem` each time the handler connects or `ColumnCount` changes. The decision is logged to Logcat:
+Sizes are calculated from `ActivityManager.MemoryInfo.TotalMem` each time the handler connects or `Span` changes. The decision is logged to Logcat:
 
 ```
 D/VrHandler: RAM=4096MB cols=2 → cache=5 pool=12
@@ -75,7 +75,7 @@ D/VrHandler: RAM=4096MB cols=2 → cache=5 pool=12
 | ≥ 1.5 GB | 3 | 8 |
 | < 1.5 GB | 2 | 5 |
 
-**Grid scaling (`ColumnCount > 1`):** both values are multiplied by `ColumnCount / 2`.
+**Grid scaling (`Span > 1`):** both values are multiplied by `Span / 2`.
 
 Example: 3-column grid on a 4 GB device → `cache = 5 × 3/2 = 7`, `pool = 12 × 3/2 = 18`.
 
@@ -112,19 +112,19 @@ Registered via `RecyclerView.AddRecyclerListener`. On each `OnViewRecycled` call
 
 ## VirtualizedCollectionView — iOS / macOS Catalyst
 
-### ItemSizeStrategy and CompositionalLayout
+### ItemSizingStrategy and CompositionalLayout
 
 Every layout change rebuilds a `UICollectionViewCompositionalLayout`. The dimension used for item height is chosen as follows:
 
 | Condition | Dimension | Cell behavior |
 |---|---|---|
-| `ItemHeight > 0` | `CreateAbsolute(ItemHeight)` | Fixed height, overrides `ItemSizeStrategy` |
-| `ItemHeight ≤ 0` and `ItemSizeStrategy = Fixed` | `CreateAbsolute(ItemHeightRequest)` | Fixed height from the request hint |
-| `ItemHeight ≤ 0` and `ItemSizeStrategy = Dynamic` | `CreateEstimated(ItemHeightRequest)` | Self-sizing via `PreferredLayoutAttributesFitting` |
+| `ItemHeight > 0` | `CreateAbsolute(ItemHeight)` | Fixed height, overrides `ItemSizingStrategy` |
+| `ItemHeight ≤ 0` and `ItemSizingStrategy = Fixed` | `CreateAbsolute(ItemHeightRequest)` | Fixed height from the request hint |
+| `ItemHeight ≤ 0` and `ItemSizingStrategy = Dynamic` | `CreateEstimated(ItemHeightRequest)` | Self-sizing via `PreferredLayoutAttributesFitting` |
 
 The estimated height is clamped to a minimum of 44 pt (`Math.Max(44, ItemHeightRequest)`).
 
-> **Important:** `ItemHeight > 0` always wins over `ItemSizeStrategy` on iOS, just as on Android. Set `ItemHeight = -1` (the default) to let `ItemSizeStrategy` control sizing.
+> **Important:** `ItemHeight > 0` always wins over `ItemSizingStrategy` on iOS, just as on Android. Set `ItemHeight = -1` (the default) to let `ItemSizingStrategy` control sizing.
 
 ### Self-Sizing in Dynamic Mode
 
@@ -178,11 +178,11 @@ MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualizat
 |---|---|
 | `ItemsSource` | Forwarded directly to `CollectionView.ItemsSource` |
 | `ItemTemplate` | Forwarded to `CollectionView.ItemTemplate` |
-| `ColumnCount` | Mapped to `GridItemsLayout` (> 1) or `LinearItemsLayout` |
+| `Span` | Mapped to `GridItemsLayout` (> 1) or `LinearItemsLayout` |
 | `ItemSpacing` | Mapped to `HorizontalItemSpacing` / `VerticalItemSpacing` / `ItemSpacing` |
 | `ItemHeight` | **Ignored.** Windows delegates sizing to the MAUI layout engine. |
-| `ItemSizeStrategy` | **Ignored** on Windows. |
-| `ItemHeightRequest` | **Ignored** on Windows. |
+| `ItemSizingStrategy` | Mapped to MAUI `CollectionView.ItemSizingStrategy`: `Fixed` → `MeasureFirstItem`, `Dynamic` → `MeasureAllItems` |
+| `ItemHeightRequest` | **Ignored** on Windows. MAUI `CollectionView` has no estimated item height hint. |
 | `EmptyView` / `EmptyViewTemplate` | Forwarded to `CollectionView` |
 | `RemainingItemsThreshold` | Forwarded; fired by MAUI `CollectionView.RemainingItemsThresholdReached` |
 
@@ -226,7 +226,7 @@ MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualizat
 ## Quick decision guide
 
 ```
-Which ItemSizeStrategy should I use?
+Which ItemSizingStrategy should I use?
 │
 ├─ All items same height?
 │   └─ Fixed + ItemHeightRequest = <that height>
@@ -234,12 +234,12 @@ Which ItemSizeStrategy should I use?
 │
 ├─ Items have variable height (text wrapping, expandable sections)?
 │   ├─ Android:  Dynamic + ItemHeightRequest = <average expected height>
-│   │             ColumnCount must be 1.
+│   │             Span must be 1.
 │   └─ iOS/Mac:  Dynamic + ItemHeightRequest = <average expected height>
-│                 Works with any ColumnCount.
+│                 Works with any Span.
 │
 └─ Windows:
-    ItemHeight / ItemSizeStrategy are ignored.
+    ItemHeight / ItemHeightRequest are ignored; ItemSizingStrategy maps to MAUI CollectionView sizing.
     MAUI CollectionView handles sizing automatically.
 ```
 

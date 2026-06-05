@@ -4,8 +4,8 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
-    xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
     xmlns:local="clr-namespace:sample"
+    xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
     Title="Lista Virtualizada"
     BackgroundColor="{AppThemeBinding Light={StaticResource BackdropLight},
                                       Dark={StaticResource BackdropDark}}">
@@ -86,7 +86,7 @@
             x:Name="ProductList"
             Grid.Row="2"
             ItemHeightRequest="200"
-            ItemSizingStrategy="MeasureAllItems"
+            ItemSizingStrategy="Dynamic"
             ItemsSource="{Binding Items}"
             RemainingItemsThreshold="8"
             RemainingItemsThresholdReached="OnLoadMore"
