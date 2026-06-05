@@ -29,10 +29,9 @@ exemplo, e o servico `IAnchoredMenu`, usado no menu superior do PDF customizado.
 | Pagina | Finalidade |
 |---|---|
 | `MainPage` | Demonstra `ImageView` e `GalleryView`. |
-| `PdfViewerPage` | Demonstra uma UI customizada em torno do `PdfViewer`. |
 | `ReaderDemoPage` | Demonstra o `PdfReaderView`, o leitor pronto. |
 | `VirtualizedListPage` | Demonstra `VirtualizedCollectionView` com lista, grade, busca e metricas. |
-| `CollectionViewPage` | Demonstra o `CollectionView` MAUI para comparacao. |
+| `BenchmarkPage` | Compara `CollectionView` nativa e `VirtualizedCollectionView` com tempo, memoria, scroll e log de iteracoes. |
 
 ## XAML namespaces usados
 
@@ -57,25 +56,17 @@ PDFs em `Resources/Images` sao removidos de `MauiImage` e incluidos como
 ## Menu Shell
 
 O `AppShell.xaml` usa um flyout com cabecalho contendo `agile.png`. Cada item do
-menu e um `ShellContent`, incluindo as duas demos de PDF:
+menu e um `ShellContent`:
 
-- `PDF Viewer`: UI customizada com `PdfViewer`.
-- `PDF (pronto)`: UI pronta com `PdfReaderView`.
+- `Gallery View`: imagens e galeria.
+- `PDF Viewer`: UI pronta com `PdfReaderView`.
+- `Virtualized Collection`: lista virtualizada com busca, grade e metricas.
+- `Benchmark`: comparacao lado a lado com `CollectionView` nativa.
 
-## PdfViewerPage
+## ReaderDemoPage
 
-Essa pagina desliga a NavBar do Shell (`Shell.NavBarIsVisible="False"`) e cria
-uma NavBar propria no topo. Ela mostra como montar uma experiencia customizada
-com:
-
-- menu lateral do Shell;
-- busca;
-- impressao;
-- compartilhamento;
-- alternancia vertical/horizontal;
-- miniaturas;
-- zoom;
-- navegacao por paginas.
+Usa `PdfReaderView` com toolbar, busca, impressao, compartilhamento, alternancia
+vertical/horizontal, miniaturas, zoom e navegacao por paginas.
 
 ## VirtualizedListPage
 
@@ -90,6 +81,21 @@ Usa:
 
 Tambem permite alternar entre lista/grade e altura fixa/dinamica para observar
 impacto de performance.
+
+## BenchmarkPage
+
+Compara `CollectionView` nativa e `VirtualizedCollectionView` usando o mesmo
+`ProductItem` e o mesmo template principal da `VirtualizedListPage`, incluindo
+imagem, textos e secoes expansivas. A pagina mede, por iteracao:
+
+- tempo para trocar `ItemsSource` e aguardar a primeira estabilizacao visual;
+- delta de memoria gerenciada reportado por `GC.GetTotalMemory`;
+- proxy de quadros perdidos durante rolagem programatica em passos;
+- quantidade de views nativas realizadas quando a plataforma permite contar;
+- medias, desvio e log de cada rodada.
+
+Os resultados sao uma medicao pratica dentro do app sample, nao um benchmark de
+laboratorio.
 
 ## Build
 

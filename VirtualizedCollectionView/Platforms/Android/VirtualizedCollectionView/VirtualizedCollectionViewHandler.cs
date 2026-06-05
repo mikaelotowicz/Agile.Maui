@@ -567,25 +567,38 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             if (_cachingLm != null)
             {
                 // WrapContent: o item se dimensiona pelo conteúdo, expanders funcionam.
-                // O Post apenas alimenta o cache do CachingLM para estimativa de scroll.
-                h.ItemView.LayoutParameters = new RecyclerView.LayoutParams(
-                    ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+                // So (re)aloca os LayoutParams quando ainda nao estao no formato esperado —
+                // recriar a cada bind gera lixo e um requestLayout extra por celula no hot path.
+                if (h.ItemView.LayoutParameters is not RecyclerView.LayoutParams lp ||
+                    lp.Height != ViewGroup.LayoutParams.WrapContent ||
+                    lp.Width  != ViewGroup.LayoutParams.MatchParent)
+                {
+                    h.ItemView.LayoutParameters = new RecyclerView.LayoutParams(
+                        ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+                }
 
                 h.MauiView.BindingContext = null;
                 h.MauiView.BindingContext = _items[position];
 
-                h.CancelHeavyBind();
-                h.BindCts = new CancellationTokenSource();
-                var token       = h.BindCts.Token;
-                var capturedLm  = _cachingLm;
-                var capturedPos = position;
-                h.ItemView.Post(() =>
+                // So mede/cacheia a altura na PRIMEIRA vez que a posicao aparece. Em posicoes
+                // ja medidas, evita alocar CTS + closure + Post a cada bind — a maior fonte de
+                // lixo no scroll. O cache alimenta apenas a ESTIMATIVA de scroll (offset/range);
+                // o layout real continua por WrapContent, entao a altura exibida nao e afetada.
+                if (!_cachingLm.HasCachedHeight(position))
                 {
-                    if (token.IsCancellationRequested) return;
-                    int real = h.ItemView.Height;
-                    if (real > 0)
-                        capturedLm.CacheItemHeight(capturedPos, real);
-                });
+                    h.CancelHeavyBind();
+                    h.BindCts = new CancellationTokenSource();
+                    var token       = h.BindCts.Token;
+                    var capturedLm  = _cachingLm;
+                    var capturedPos = position;
+                    h.ItemView.Post(() =>
+                    {
+                        if (token.IsCancellationRequested) return;
+                        int real = h.ItemView.Height;
+                        if (real > 0)
+                            capturedLm.CacheItemHeight(capturedPos, real);
+                    });
+                }
             }
             else
             {
@@ -615,7 +628,8 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     public void IncrementalAdd(int startIndex, List<object> newItems)
     {
         _items.InsertRange(startIndex, newItems);
-        _cachingLm?.InvalidateScrollRange();
+        // Insert desloca os indices a partir de startIndex → invalida as alturas dali em diante.
+        _cachingLm?.InvalidateFrom(startIndex);
         if (newItems.Count == 1)
             NotifyItemInserted(startIndex);
         else
@@ -625,7 +639,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     public void IncrementalRemove(int startIndex, int count)
     {
         _items.RemoveRange(startIndex, count);
-        _cachingLm?.InvalidateScrollRange();
+        _cachingLm?.InvalidateFrom(startIndex);
         if (count == 1)
             NotifyItemRemoved(startIndex);
         else
@@ -636,6 +650,8 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     {
         for (int i = 0; i < newItems.Count && startIndex + i < _items.Count; i++)
             _items[startIndex + i] = newItems[i];
+        // Itens trocados podem ter alturas diferentes; indices nao deslocam.
+        _cachingLm?.InvalidateRange(startIndex, newItems.Count);
         NotifyItemRangeChanged(startIndex, newItems.Count);
     }
 
@@ -644,6 +660,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         var item = _items[from];
         _items.RemoveAt(from);
         _items.Insert(to, item);
+        _cachingLm?.InvalidateFrom(Math.Min(from, to));
         NotifyItemMoved(from, to);
     }
 
@@ -840,9 +857,38 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
         return _avgHeight > 0 ? _avgHeight : _fallbackHeightPx;
     }
 
+    // True quando a posicao ja tem altura REAL medida em cache — o adapter usa isso para
+    // pular o Post de medicao em posicoes ja vistas (corta alocacao no hot path do scroll).
+    public bool HasCachedHeight(int position) => _cache.Get(position, -1) != -1;
+
     // Chamado pelo adapter em IncrementalAdd/Remove — preserva o cache de alturas
     // mas invalida o range total (número de itens mudou).
     public void InvalidateScrollRange() => _cachedScrollRange = -1;
+
+    // Remove as alturas cacheadas das posicoes >= position (que mudaram de indice apos um
+    // insert/remove no meio da lista) — sem isso, com o skip-if-cached do adapter, a
+    // estimativa de scroll ficaria presa em alturas de itens errados. Append no fim
+    // (position == ItemCount) nao remove nada, entao infinite scroll fica intacto.
+    public void InvalidateFrom(int position)
+    {
+        for (int i = _cache.Size() - 1; i >= 0; i--)
+            if (_cache.KeyAt(i) >= position)
+                _cache.RemoveAt(i);
+        _cachedScrollRange = -1;
+    }
+
+    // Remove as alturas cacheadas de um intervalo [start, start+count) — usado no Replace,
+    // onde os itens mudam mas os indices nao deslocam.
+    public void InvalidateRange(int start, int count)
+    {
+        for (int i = _cache.Size() - 1; i >= 0; i--)
+        {
+            int key = _cache.KeyAt(i);
+            if (key >= start && key < start + count)
+                _cache.RemoveAt(i);
+        }
+        _cachedScrollRange = -1;
+    }
 
     public void InvalidateCache()
     {
