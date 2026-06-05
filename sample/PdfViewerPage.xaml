@@ -3,10 +3,10 @@
     x:Class="sample.PdfViewerPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:controls="clr-namespace:Agile.Maui;assembly=Agile.Maui"
+    xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
     xmlns:local="clr-namespace:sample"
-    Shell.NavBarIsVisible="False"
-    Title="PDF Viewer">
+    Title="PDF Viewer"
+    Shell.NavBarIsVisible="False">
 
     <ContentPage.Resources>
 
@@ -72,6 +72,7 @@
 
         <!--  ── NavBar personalizada (substitui a do Shell) ─────────────────  -->
         <Grid
+            x:Name="NavBar"
             Grid.Row="0"
             Padding="2,0,4,0"
             BackgroundColor="{StaticResource SurfaceLight}"
@@ -84,7 +85,10 @@
                 Clicked="OnFlyoutClicked"
                 Style="{StaticResource IconBtn}">
                 <ImageButton.Source>
-                    <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Hamburger}" Size="24"
+                    <FontImageSource
+                        FontFamily="{x:Static local:Icons.FontFamily}"
+                        Glyph="{x:Static local:Icons.Hamburger}"
+                        Size="24"
                         Color="{StaticResource IconLight}" />
                 </ImageButton.Source>
             </ImageButton>
@@ -110,30 +114,148 @@
                     TextColor="{StaticResource OnSurfaceVariantLight}" />
             </VerticalStackLayout>
 
-            <!--  Direita: ações (imprimir, compartilhar, menu ⋮)  -->
+            <!--  Direita: busca + ações (imprimir, compartilhar, menu ⋮)  -->
             <HorizontalStackLayout
                 Grid.Column="2"
                 Spacing="0"
                 VerticalOptions="Center">
+
+                <ImageButton
+                    x:Name="SearchToggleBtn"
+                    Clicked="OnSearchToggleClicked"
+                    Style="{StaticResource IconBtn}">
+                    <ImageButton.Source>
+                        <FontImageSource
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.Search}"
+                            Size="22"
+                            Color="{StaticResource IconLight}" />
+                    </ImageButton.Source>
+                </ImageButton>
+
                 <ImageButton Clicked="OnPrintClicked" Style="{StaticResource IconBtn}">
                     <ImageButton.Source>
-                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Print}" Size="22"
+                        <FontImageSource
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.Print}"
+                            Size="22"
                             Color="{StaticResource IconLight}" />
                     </ImageButton.Source>
                 </ImageButton>
                 <ImageButton Clicked="OnShareClicked" Style="{StaticResource IconBtn}">
                     <ImageButton.Source>
-                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Share}" Size="22"
+                        <FontImageSource
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.Share}"
+                            Size="22"
                             Color="{StaticResource IconLight}" />
                     </ImageButton.Source>
                 </ImageButton>
-                <ImageButton Clicked="OnMenuClicked" Style="{StaticResource IconBtn}">
+                <ImageButton
+                    x:Name="OrientationButton"
+                    Clicked="OnOrientationClicked"
+                    Style="{StaticResource IconBtn}">
                     <ImageButton.Source>
-                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Menu}" Size="22"
+                        <FontImageSource
+                            x:Name="OrientationIcon"
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.ScrollH}"
+                            Size="22"
                             Color="{StaticResource IconLight}" />
                     </ImageButton.Source>
                 </ImageButton>
             </HorizontalStackLayout>
+
+            <!--
+                Busca: overlay que cobre a navbar. Desktop: expande parcial (à direita).
+                Celular: ocupa a navbar inteira ao abrir. WidthRequest é animada no code-behind.
+            -->
+            <Border
+                x:Name="SearchBar"
+                Grid.Column="0"
+                Grid.ColumnSpan="3"
+                Padding="10,0,4,0"
+                BackgroundColor="{StaticResource SurfaceLight}"
+                HorizontalOptions="End"
+                StrokeThickness="0"
+                VerticalOptions="Fill"
+                WidthRequest="0">
+                <Grid
+                    ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto"
+                    ColumnSpacing="0"
+                    VerticalOptions="Center">
+                    <Entry
+                        x:Name="SearchEntry"
+                        Grid.Column="0"
+                        Completed="OnSearchCompleted"
+                        FontSize="14"
+                        HorizontalOptions="Fill"
+                        Placeholder="Buscar"
+                        PlaceholderColor="{StaticResource OnSurfaceVariantLight}"
+                        ReturnType="Search"
+                        TextChanged="OnSearchTextChanged"
+                        TextColor="{StaticResource OnSurfaceLight}"
+                        Unfocused="OnSearchEntryUnfocused"
+                        VerticalOptions="Center" />
+                    <BoxView
+                        Grid.Column="1"
+                        Margin="6,0"
+                        HeightRequest="20"
+                        VerticalOptions="Center"
+                        WidthRequest="1"
+                        Color="{StaticResource OutlineLight}" />
+                    <Label
+                        x:Name="SearchCountLabel"
+                        Grid.Column="2"
+                        FontSize="11"
+                        HorizontalTextAlignment="Center"
+                        MinimumWidthRequest="38"
+                        Text=""
+                        TextColor="{StaticResource OnSurfaceVariantLight}"
+                        VerticalOptions="Center" />
+                    <ImageButton
+                        x:Name="SearchPrevBtn"
+                        Grid.Column="3"
+                        Clicked="OnSearchPrevClicked"
+                        IsEnabled="False"
+                        Style="{StaticResource NavBtn}">
+                        <ImageButton.Source>
+                            <FontImageSource
+                                FontFamily="{x:Static local:Icons.FontFamily}"
+                                Glyph="{x:Static local:Icons.SearchUp}"
+                                Size="18"
+                                Color="{StaticResource IconLight}" />
+                        </ImageButton.Source>
+                    </ImageButton>
+                    <ImageButton
+                        x:Name="SearchNextBtn"
+                        Grid.Column="4"
+                        Clicked="OnSearchNextClicked"
+                        IsEnabled="False"
+                        Style="{StaticResource NavBtn}">
+                        <ImageButton.Source>
+                            <FontImageSource
+                                FontFamily="{x:Static local:Icons.FontFamily}"
+                                Glyph="{x:Static local:Icons.SearchDown}"
+                                Size="18"
+                                Color="{StaticResource IconLight}" />
+                        </ImageButton.Source>
+                    </ImageButton>
+                    <ImageButton
+                        x:Name="SearchCloseBtn"
+                        Grid.Column="5"
+                        Clicked="OnSearchCloseClicked"
+                        Style="{StaticResource NavBtn}">
+                        <ImageButton.Source>
+                            <FontImageSource
+                                FontFamily="{x:Static local:Icons.FontFamily}"
+                                Glyph="{x:Static local:Icons.Close}"
+                                Size="17"
+                                Color="{StaticResource IconLight}" />
+                        </ImageButton.Source>
+                    </ImageButton>
+                </Grid>
+            </Border>
 
             <!--  Divisória inferior da navbar  -->
             <BoxView
@@ -146,13 +268,15 @@
         <!--  ── Viewer + overlays + controles flutuantes ───────────────────  -->
         <Grid Grid.Row="1">
 
-            <controls:PdfViewer
+            <pdf:PdfViewer
                 x:Name="Viewer"
+                CopiedMessageText="Copiado"
+                CopyButtonText="Copiar"
                 DocumentLoadFailed="OnDocumentLoadFailed"
                 DocumentLoaded="OnDocumentLoaded"
-                EnableThumbnailBar="{OnIdiom Default=False, Desktop=True}"
+                EnableThumbnailBar="True"
                 IsPinchZoomEnabled="True"
-                MaxCacheMB="200"
+                MaxCacheMB="350"
                 MaxZoom="3"
                 MinZoom="1"
                 PageBackgroundColor="White"
@@ -160,8 +284,26 @@
                 PageSpacing="8"
                 PrefetchAbove="2"
                 PrefetchBelow="3"
-                RenderScale="2.5"
+                PrintJobName="Documento"
+                RenderScale="2"
+                ThumbnailBarPlacement="Right"
+                ThumbnailBarTitleText="Páginas"
                 ZoomFactor="1" />
+
+            <!--
+                Overlay invisível para fechar a busca: ativo SÓ quando a barra está aberta e vazia.
+                Tocar no documento recolhe a barra. Sem view nativa consumindo o toque, o tap dispara
+                de forma confiável em todas as plataformas — inclusive no Android, onde tocar fora de
+                um Entry NÃO remove o foco sozinho (logo o Unfocused do Entry não dispara).
+            -->
+            <Grid
+                x:Name="SearchDismissOverlay"
+                BackgroundColor="Transparent"
+                IsVisible="False">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnSearchDismissTapped" />
+                </Grid.GestureRecognizers>
+            </Grid>
 
             <!--  Toolbar flutuante de ferramentas (direita)  -->
             <Border
@@ -169,7 +311,8 @@
                 Padding="4"
                 BackgroundColor="{StaticResource SurfaceLight}"
                 HorizontalOptions="End"
-                IsVisible="{OnPlatform Default=False, WinUI=True}"
+                IsVisible="{OnPlatform Default=False,
+                                       WinUI=True}"
                 StrokeThickness="0"
                 VerticalOptions="Center">
                 <Border.StrokeShape>
@@ -186,14 +329,20 @@
 
                     <ImageButton Clicked="OnZoomInClicked" Style="{StaticResource FloatToolBtn}">
                         <ImageButton.Source>
-                            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.ZoomIn}" Size="22"
+                            <FontImageSource
+                                FontFamily="{x:Static local:Icons.FontFamily}"
+                                Glyph="{x:Static local:Icons.ZoomIn}"
+                                Size="22"
                                 Color="{StaticResource IconLight}" />
                         </ImageButton.Source>
                     </ImageButton>
 
                     <ImageButton Clicked="OnZoomOutClicked" Style="{StaticResource FloatToolBtn}">
                         <ImageButton.Source>
-                            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.ZoomOut}" Size="22"
+                            <FontImageSource
+                                FontFamily="{x:Static local:Icons.FontFamily}"
+                                Glyph="{x:Static local:Icons.ZoomOut}"
+                                Size="22"
                                 Color="{StaticResource IconLight}" />
                         </ImageButton.Source>
                     </ImageButton>
@@ -205,7 +354,10 @@
 
                     <ImageButton Clicked="OnResetZoomClicked" Style="{StaticResource FloatToolBtn}">
                         <ImageButton.Source>
-                            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Fit}" Size="22"
+                            <FontImageSource
+                                FontFamily="{x:Static local:Icons.FontFamily}"
+                                Glyph="{x:Static local:Icons.Fit}"
+                                Size="22"
                                 Color="{StaticResource IconLight}" />
                         </ImageButton.Source>
                     </ImageButton>
@@ -251,21 +403,48 @@
                 VerticalOptions="Start"
                 Color="{StaticResource OutlineLight}" />
 
-            <!--  Esquerda: alternar barra de miniaturas  -->
+            <!--  Esquerda: miniaturas. Desktop alterna a sidebar fixa; mobile abre o drawer.  -->
             <HorizontalStackLayout
                 Grid.Column="0"
                 Spacing="2"
                 VerticalOptions="Center">
+                <!--  Desktop: alterna a barra lateral fixa  -->
                 <ImageButton
                     Clicked="OnToggleThumbnailsClicked"
-                    IsVisible="{OnIdiom Default=False, Desktop=True}"
+                    IsVisible="{OnIdiom Default=False,
+                                        Desktop=True}"
                     Style="{StaticResource IconBtn}">
                     <ImageButton.Source>
-                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Thumbnails}" Size="22"
+                        <FontImageSource
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.Thumbnails}"
+                            Size="22"
                             Color="{StaticResource IconLight}" />
                     </ImageButton.Source>
                 </ImageButton>
             </HorizontalStackLayout>
+
+            <!--
+                Mobile (Android/iOS): abre/fecha o drawer sobreposto. A COLUNA (0=esq / 2=dir) e o
+                alinhamento seguem ThumbnailBarPlacement — definidos em code-behind. IsVisible também
+                (visível só no mobile e quando EnableThumbnailBar=true).
+            -->
+            <ImageButton
+                x:Name="ThumbDrawerBtn"
+                Grid.Column="2"
+                Clicked="OnOpenThumbDrawerClicked"
+                HorizontalOptions="End"
+                IsVisible="False"
+                Style="{StaticResource IconBtn}"
+                VerticalOptions="Center">
+                <ImageButton.Source>
+                    <FontImageSource
+                        FontFamily="{x:Static local:Icons.FontFamily}"
+                        Glyph="{x:Static local:Icons.Thumbnails}"
+                        Size="22"
+                        Color="{StaticResource IconLight}" />
+                </ImageButton.Source>
+            </ImageButton>
 
             <!--  Centro: zoom + página  -->
             <HorizontalStackLayout
@@ -276,7 +455,10 @@
 
                 <ImageButton Clicked="OnZoomOutClicked" Style="{StaticResource ToolBtn}">
                     <ImageButton.Source>
-                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.ZoomOut}" Size="22"
+                        <FontImageSource
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.ZoomOut}"
+                            Size="22"
                             Color="{StaticResource IconLight}" />
                     </ImageButton.Source>
                 </ImageButton>
@@ -292,7 +474,10 @@
 
                 <ImageButton Clicked="OnZoomInClicked" Style="{StaticResource ToolBtn}">
                     <ImageButton.Source>
-                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.ZoomIn}" Size="22"
+                        <FontImageSource
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.ZoomIn}"
+                            Size="22"
                             Color="{StaticResource IconLight}" />
                     </ImageButton.Source>
                 </ImageButton>
@@ -310,7 +495,10 @@
                     IsEnabled="False"
                     Style="{StaticResource NavBtn}">
                     <ImageButton.Source>
-                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Prev}" Size="22"
+                        <FontImageSource
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.Prev}"
+                            Size="22"
                             Color="{StaticResource IconLight}" />
                     </ImageButton.Source>
                 </ImageButton>
@@ -331,7 +519,10 @@
                     IsEnabled="False"
                     Style="{StaticResource NavBtn}">
                     <ImageButton.Source>
-                        <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.Next}" Size="22"
+                        <FontImageSource
+                            FontFamily="{x:Static local:Icons.FontFamily}"
+                            Glyph="{x:Static local:Icons.Next}"
+                            Size="22"
                             Color="{StaticResource IconLight}" />
                     </ImageButton.Source>
                 </ImageButton>

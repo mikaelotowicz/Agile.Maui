@@ -10,7 +10,9 @@ namespace sample
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
-                .UseAgileMaui()
+                .UseGalleryView()
+                .UsePdfViewer()
+                .UseVirtualizedCollectionView()
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -18,6 +20,7 @@ namespace sample
                     fonts.AddFont("materialdesignicons-webfont.ttf", "MaterialDesignIcons");
                 });
 
+            builder.Services.AddSingleton<Services.IAnchoredMenu, Services.AnchoredMenu>();
             builder.Services.AddTransient<PdfViewerPage>();
 
 #if DEBUG
