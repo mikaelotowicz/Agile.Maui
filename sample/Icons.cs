@@ -20,6 +20,8 @@ public static class Icons
     public const string Menu       = MaterialDesingIconsFonts.DotsVertical;         // menu de opções (overflow)
     public const string Open       = MaterialDesingIconsFonts.FolderOpenOutline;    // abrir arquivo
     public const string Thumbnails = MaterialDesingIconsFonts.ViewGridOutline;      // grade de miniaturas
+    public const string ScrollV    = MaterialDesingIconsFonts.ViewDayOutline;       // scroll vertical (contínuo)
+    public const string ScrollH    = MaterialDesingIconsFonts.BookOpenOutline;      // scroll horizontal (paginado)
     public const string Log        = MaterialDesingIconsFonts.ScriptTextOutline;    // painel de log
     public const string Settings   = MaterialDesingIconsFonts.CogOutline;           // configurações
 
@@ -31,6 +33,12 @@ public static class Icons
     // ── Navegação ──────────────────────────────────────────────────────────────
     public const string Prev       = MaterialDesingIconsFonts.ChevronLeft;   // página anterior
     public const string Next       = MaterialDesingIconsFonts.ChevronRight;  // próxima página
+
+    // ── Busca ────────────────────────────────────────────────────────────────
+    public const string Search     = MaterialDesingIconsFonts.Magnify;       // lupa
+    public const string SearchUp   = MaterialDesingIconsFonts.ChevronUp;     // ocorrência anterior
+    public const string SearchDown = MaterialDesingIconsFonts.ChevronDown;   // próxima ocorrência
+    public const string Close      = MaterialDesingIconsFonts.Close;         // fechar busca
 
     // ── Visualização ─────────────────────────────────────────────────────────
     public const string Fullscreen = MaterialDesingIconsFonts.Fullscreen;    // tela cheia

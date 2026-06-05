@@ -3,7 +3,8 @@
     x:Class="sample.VirtualizedListPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:controls="clr-namespace:Agile.Maui;assembly=Agile.Maui"
+    xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
+    xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
     xmlns:local="clr-namespace:sample"
     Title="Lista Virtualizada"
     BackgroundColor="{AppThemeBinding Light={StaticResource BackdropLight},
@@ -75,12 +76,13 @@
             x:Name="SearchBar"
             Grid.Row="1"
             Margin="8,6"
-            BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+            BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight},
+                                              Dark={StaticResource SurfaceDark}}"
             Placeholder="Buscar produto..."
             TextChanged="OnSearchTextChanged" />
 
         <!--  ── Lista virtualizada ──────────────────────────────────────  -->
-        <controls:VirtualizedCollectionView
+        <virtualized:VirtualizedCollectionView
             x:Name="ProductList"
             Grid.Row="2"
             ItemHeightRequest="200"
@@ -90,7 +92,7 @@
             RemainingItemsThresholdReached="OnLoadMore"
             Scrolled="OnScrolled">
 
-            <controls:VirtualizedCollectionView.ItemTemplate>
+            <virtualized:VirtualizedCollectionView.ItemTemplate>
                 <DataTemplate x:DataType="local:ProductItem">
                     <Border
                         Margin="8,4"
@@ -107,13 +109,14 @@
                             <Grid ColumnDefinitions="76,*" ColumnSpacing="12">
                                 <Border
                                     Grid.Column="0"
-                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
+                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight},
+                                                                      Dark={StaticResource SurfaceAltDark}}"
                                     HeightRequest="76"
                                     StrokeShape="RoundRectangle 8"
                                     StrokeThickness="0"
                                     VerticalOptions="Center"
                                     WidthRequest="76">
-                                    <controls:ImageView
+                                    <gallery:ImageView
                                         AspectMode="CenterCrop"
                                         EnableFullscreen="True"
                                         FullscreenSource="{Binding FullImageUrl}"
@@ -257,9 +260,9 @@
                         </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
-            </controls:VirtualizedCollectionView.ItemTemplate>
+            </virtualized:VirtualizedCollectionView.ItemTemplate>
 
-        </controls:VirtualizedCollectionView>
+        </virtualized:VirtualizedCollectionView>
 
         <!--  ── Métricas de performance ────────────────────────────────  -->
         <Border

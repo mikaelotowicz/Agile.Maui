@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentView
+    x:Class="Agile.Maui.PdfReaderView"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:agile="clr-namespace:Agile.Maui"
+    x:Name="Root">
+
+    <!--
+        PdfReaderView — leitor de PDF "pronto" (toolbar + busca + barra inferior) sobre o PdfViewer
+        base. Autossuficiente: cores próprias e ícones da fonte AgilePdfIcons (empacotada na lib,
+        registrada por UsePdfViewer()). Quem quer customizar usa o PdfViewer diretamente.
+    -->
+
+    <ContentView.Resources>
+        <!--  Paleta padrão (sobrescrevível por DynamicResource no app, se desejado)  -->
+        <Color x:Key="PdfSurface">#FFFFFF</Color>
+        <Color x:Key="PdfOnSurface">#2A2A2E</Color>
+        <Color x:Key="PdfOnSurfaceVar">#6E6E76</Color>
+        <Color x:Key="PdfIcon">#44444A</Color>
+        <Color x:Key="PdfOutline">#E2E2E6</Color>
+        <Color x:Key="PdfBackdrop">#EDEDEF</Color>
+        <Color x:Key="PdfAccent">#3F51B5</Color>
+        <SolidColorBrush x:Key="PdfOutlineBrush" Color="{StaticResource PdfOutline}" />
+
+        <!--  Botão de ícone (Border tappável de 40x40)  -->
+        <Style x:Key="PdfIconBtn" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="StrokeThickness" Value="0" />
+            <Setter Property="Padding" Value="9" />
+            <Setter Property="HeightRequest" Value="40" />
+            <Setter Property="WidthRequest" Value="40" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 20" />
+        </Style>
+    </ContentView.Resources>
+
+    <Grid
+        BackgroundColor="{StaticResource PdfBackdrop}"
+        RowDefinitions="Auto,*,Auto"
+        RowSpacing="0">
+
+        <!--  ── Toolbar superior ─────────────────────────────────────────────  -->
+        <Grid
+            x:Name="ToolbarHost"
+            Grid.Row="0"
+            Padding="2,0,4,0"
+            BackgroundColor="{Binding ToolbarColor, Source={x:Reference Root}}"
+            ColumnDefinitions="*,Auto"
+            HeightRequest="56">
+
+            <!--  Linha separadora no rodapé da toolbar (igual à da barra inferior)  -->
+            <BoxView
+                Grid.ColumnSpan="2"
+                HeightRequest="1"
+                VerticalOptions="End"
+                Color="{StaticResource PdfOutline}" />
+
+            <VerticalStackLayout
+                Grid.Column="0"
+                Padding="10,0"
+                Spacing="0"
+                VerticalOptions="Center">
+                <Label
+                    x:Name="FileNameLabel"
+                    FontAttributes="Bold"
+                    FontSize="15"
+                    LineBreakMode="TailTruncation"
+                    Text="PDF"
+                    TextColor="{Binding CaptionColor, Source={x:Reference Root}}" />
+                <Label
+                    x:Name="StatsLabel"
+                    FontSize="10.5"
+                    LineBreakMode="TailTruncation"
+                    Text=""
+                    TextColor="{Binding IconColor, Source={x:Reference Root}}" />
+            </VerticalStackLayout>
+
+            <HorizontalStackLayout
+                Grid.Column="1"
+                Spacing="0"
+                VerticalOptions="Center">
+
+                <Border x:Name="SearchBtn" Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnSearchToggleClicked" />
+                    </Border.GestureRecognizers>
+                    <Image HeightRequest="22" WidthRequest="22">
+                        <Image.Source>
+                            <FontImageSource
+                                FontFamily="AgilePdfIcons"
+                                Glyph="{x:Static agile:PdfReaderIcons.Search}"
+                                Size="22"
+                                Color="{Binding IconColor, Source={x:Reference Root}}" />
+                        </Image.Source>
+                    </Image>
+                </Border>
+
+                <Border x:Name="PrintBtn" Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPrintClicked" />
+                    </Border.GestureRecognizers>
+                    <Image HeightRequest="22" WidthRequest="22">
+                        <Image.Source>
+                            <FontImageSource
+                                FontFamily="AgilePdfIcons"
+                                Glyph="{x:Static agile:PdfReaderIcons.Print}"
+                                Size="22"
+                                Color="{Binding IconColor, Source={x:Reference Root}}" />
+                        </Image.Source>
+                    </Image>
+                </Border>
+
+                <Border x:Name="ShareBtn" Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnShareClicked" />
+                    </Border.GestureRecognizers>
+                    <Image HeightRequest="22" WidthRequest="22">
+                        <Image.Source>
+                            <FontImageSource
+                                FontFamily="AgilePdfIcons"
+                                Glyph="{x:Static agile:PdfReaderIcons.Share}"
+                                Size="22"
+                                Color="{Binding IconColor, Source={x:Reference Root}}" />
+                        </Image.Source>
+                    </Image>
+                </Border>
+
+                <Border x:Name="OrientationBtn" Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnOrientationClicked" />
+                    </Border.GestureRecognizers>
+                    <Grid>
+                        <!--  mostra quando ESTÁ vertical → trocar p/ horizontal  -->
+                        <Image
+                            x:Name="IconToHorizontal"
+                            HeightRequest="22"
+                            WidthRequest="22">
+                            <Image.Source>
+                                <FontImageSource
+                                    FontFamily="AgilePdfIcons"
+                                    Glyph="{x:Static agile:PdfReaderIcons.Horizontal}"
+                                    Size="22"
+                                    Color="{Binding IconColor, Source={x:Reference Root}}" />
+                            </Image.Source>
+                        </Image>
+                        <!--  mostra quando ESTÁ horizontal → trocar p/ vertical  -->
+                        <Image
+                            x:Name="IconToVertical"
+                            HeightRequest="22"
+                            IsVisible="False"
+                            WidthRequest="22">
+                            <Image.Source>
+                                <FontImageSource
+                                    FontFamily="AgilePdfIcons"
+                                    Glyph="{x:Static agile:PdfReaderIcons.Vertical}"
+                                    Size="22"
+                                    Color="{Binding IconColor, Source={x:Reference Root}}" />
+                            </Image.Source>
+                        </Image>
+                    </Grid>
+                </Border>
+            </HorizontalStackLayout>
+
+            <!--  Barra de busca (overlay sobre a toolbar)  -->
+            <Border
+                x:Name="SearchBar"
+                Grid.ColumnSpan="2"
+                Margin="8,8"
+                Padding="6,0"
+                BackgroundColor="{StaticResource PdfSurface}"
+                IsVisible="False"
+                Stroke="{StaticResource PdfOutlineBrush}"
+                StrokeShape="RoundRectangle 10"
+                StrokeThickness="1">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="2">
+                    <Image
+                        Grid.Column="0"
+                        Margin="6,0"
+                        HeightRequest="18"
+                        VerticalOptions="Center"
+                        WidthRequest="18">
+                        <Image.Source>
+                            <FontImageSource
+                                FontFamily="AgilePdfIcons"
+                                Glyph="{x:Static agile:PdfReaderIcons.Search}"
+                                Size="18"
+                                Color="{StaticResource PdfOnSurfaceVar}" />
+                        </Image.Source>
+                    </Image>
+                    <Entry
+                        x:Name="SearchEntry"
+                        Grid.Column="1"
+                        Completed="OnSearchCompleted"
+                        FontSize="14"
+                        Placeholder="{Binding SearchPlaceholder, Source={x:Reference Root}}"
+                        ReturnType="Search"
+                        TextChanged="OnSearchTextChanged"
+                        TextColor="{StaticResource PdfOnSurface}"
+                        VerticalOptions="Center" />
+                    <Label
+                        x:Name="SearchCountLabel"
+                        Grid.Column="2"
+                        FontSize="12"
+                        Text=""
+                        TextColor="{StaticResource PdfOnSurfaceVar}"
+                        VerticalOptions="Center" />
+                    <Border
+                        x:Name="SearchPrevBtn"
+                        Grid.Column="3"
+                        Style="{StaticResource PdfIconBtn}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnSearchPrevClicked" />
+                        </Border.GestureRecognizers>
+                        <Image HeightRequest="20" WidthRequest="20">
+                            <Image.Source>
+                                <FontImageSource
+                                    FontFamily="AgilePdfIcons"
+                                    Glyph="{x:Static agile:PdfReaderIcons.Up}"
+                                    Size="20"
+                                    Color="{Binding IconColor, Source={x:Reference Root}}" />
+                            </Image.Source>
+                        </Image>
+                    </Border>
+                    <Border
+                        x:Name="SearchNextBtn"
+                        Grid.Column="4"
+                        Style="{StaticResource PdfIconBtn}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnSearchNextOrCloseClicked" />
+                        </Border.GestureRecognizers>
+                        <Image HeightRequest="20" WidthRequest="20">
+                            <Image.Source>
+                                <FontImageSource
+                                    FontFamily="AgilePdfIcons"
+                                    Glyph="{x:Static agile:PdfReaderIcons.Down}"
+                                    Size="20"
+                                    Color="{Binding IconColor, Source={x:Reference Root}}" />
+                            </Image.Source>
+                        </Image>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!--  ── Visualizador (PdfViewer base) ────────────────────────────────  -->
+        <Grid Grid.Row="1">
+            <agile:PdfViewer
+                x:Name="Viewer"
+                CopiedMessageText="{Binding CopiedMessageText, Source={x:Reference Root}}"
+                CopyButtonText="{Binding CopyButtonText, Source={x:Reference Root}}"
+                DocumentLoadFailed="OnDocumentLoadFailed"
+                DocumentLoaded="OnDocumentLoaded"
+                EnableThumbnailBar="{Binding EnableThumbnailBar, Source={x:Reference Root}}"
+                IsPinchZoomEnabled="{Binding IsPinchZoomEnabled, Source={x:Reference Root}}"
+                IsThumbnailBarOpen="{Binding IsThumbnailBarOpen, Source={x:Reference Root}}"
+                MaxCacheMB="{Binding MaxCacheMB, Source={x:Reference Root}}"
+                MaxZoom="{Binding MaxZoom, Source={x:Reference Root}}"
+                MinZoom="{Binding MinZoom, Source={x:Reference Root}}"
+                PageBackgroundColor="{Binding PageBackgroundColor, Source={x:Reference Root}}"
+                PageChanged="OnPageChanged"
+                PageSpacing="{Binding PageSpacing, Source={x:Reference Root}}"
+                Password="{Binding Password, Source={x:Reference Root}}"
+                PdfStream="{Binding PdfStream, Source={x:Reference Root}}"
+                PrefetchAbove="{Binding PrefetchAbove, Source={x:Reference Root}}"
+                PrefetchBelow="{Binding PrefetchBelow, Source={x:Reference Root}}"
+                PrintJobName="{Binding PrintJobName, Source={x:Reference Root}}"
+                RenderScale="{Binding RenderScale, Source={x:Reference Root}}"
+                ScrollOrientation="{Binding ScrollOrientation, Source={x:Reference Root}}"
+                SearchResultChanged="OnSearchResultChanged"
+                ThumbnailBarPlacement="{Binding ThumbnailBarPlacement, Source={x:Reference Root}}"
+                ThumbnailBarTitleText="{Binding ThumbnailBarTitleText, Source={x:Reference Root}}"
+                ZoomFactor="{Binding ZoomFactor, Source={x:Reference Root}}" />
+
+            <Grid
+                x:Name="LoadingOverlay"
+                BackgroundColor="{StaticResource PdfBackdrop}"
+                IsVisible="False">
+                <VerticalStackLayout
+                    HorizontalOptions="Center"
+                    Spacing="10"
+                    VerticalOptions="Center">
+                    <ActivityIndicator
+                        x:Name="LoadingSpinner"
+                        HeightRequest="36"
+                        IsRunning="True"
+                        WidthRequest="36"
+                        Color="{StaticResource PdfAccent}" />
+                    <Label
+                        x:Name="LoadingLabel"
+                        FontSize="13"
+                        Text="{Binding LoadingText, Source={x:Reference Root}}"
+                        TextColor="{StaticResource PdfOnSurfaceVar}" />
+                </VerticalStackLayout>
+            </Grid>
+        </Grid>
+
+        <!--  ── Barra inferior (zoom + páginas) ──────────────────────────────  -->
+        <Grid
+            x:Name="BottomBarHost"
+            Grid.Row="2"
+            Padding="8,0"
+            BackgroundColor="{Binding BottomBarColor, Source={x:Reference Root}}"
+            ColumnDefinitions="Auto,*,Auto"
+            HeightRequest="48">
+            <BoxView
+                Grid.ColumnSpan="3"
+                HeightRequest="1"
+                VerticalOptions="Start"
+                Color="{StaticResource PdfOutline}" />
+
+            <!--
+                Botão do "menu" de miniaturas (drawer) — fica no MESMO lado do drawer (Grid.Column
+                definido em code-behind conforme ThumbnailBarPlacement).
+            -->
+            <Border
+                x:Name="ThumbsBtn"
+                Grid.Column="2"
+                Style="{StaticResource PdfIconBtn}"
+                VerticalOptions="Center">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnThumbnailsClicked" />
+                </Border.GestureRecognizers>
+                <Image HeightRequest="22" WidthRequest="22">
+                    <Image.Source>
+                        <FontImageSource
+                            FontFamily="AgilePdfIcons"
+                            Glyph="{x:Static agile:PdfReaderIcons.Thumbnails}"
+                            Size="22"
+                            Color="{Binding IconColor, Source={x:Reference Root}}" />
+                    </Image.Source>
+                </Image>
+            </Border>
+
+            <HorizontalStackLayout
+                Grid.Column="1"
+                HorizontalOptions="Center"
+                Spacing="2"
+                VerticalOptions="Center">
+                <Border Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnZoomOutClicked" />
+                    </Border.GestureRecognizers>
+                    <Image HeightRequest="22" WidthRequest="22">
+                        <Image.Source>
+                            <FontImageSource
+                                FontFamily="AgilePdfIcons"
+                                Glyph="{x:Static agile:PdfReaderIcons.ZoomOut}"
+                                Size="22"
+                                Color="{Binding IconColor, Source={x:Reference Root}}" />
+                        </Image.Source>
+                    </Image>
+                </Border>
+                <Label
+                    x:Name="ZoomLabel"
+                    FontSize="12.5"
+                    HorizontalTextAlignment="Center"
+                    MinimumWidthRequest="46"
+                    Text="100%"
+                    TextColor="{Binding CaptionColor, Source={x:Reference Root}}"
+                    VerticalOptions="Center" />
+                <Border Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnZoomInClicked" />
+                    </Border.GestureRecognizers>
+                    <Image HeightRequest="22" WidthRequest="22">
+                        <Image.Source>
+                            <FontImageSource
+                                FontFamily="AgilePdfIcons"
+                                Glyph="{x:Static agile:PdfReaderIcons.ZoomIn}"
+                                Size="22"
+                                Color="{Binding IconColor, Source={x:Reference Root}}" />
+                        </Image.Source>
+                    </Image>
+                </Border>
+
+                <BoxView
+                    Margin="8,0"
+                    HeightRequest="22"
+                    VerticalOptions="Center"
+                    WidthRequest="1"
+                    Color="{StaticResource PdfOutline}" />
+
+                <Border x:Name="PrevBtn" Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPrevClicked" />
+                    </Border.GestureRecognizers>
+                    <Image HeightRequest="22" WidthRequest="22">
+                        <Image.Source>
+                            <FontImageSource
+                                FontFamily="AgilePdfIcons"
+                                Glyph="{x:Static agile:PdfReaderIcons.Prev}"
+                                Size="22"
+                                Color="{Binding IconColor, Source={x:Reference Root}}" />
+                        </Image.Source>
+                    </Image>
+                </Border>
+                <Label
+                    x:Name="PageLabel"
+                    FontAttributes="Bold"
+                    FontSize="12.5"
+                    HorizontalTextAlignment="Center"
+                    MinimumWidthRequest="60"
+                    Text="—"
+                    TextColor="{Binding CaptionColor, Source={x:Reference Root}}"
+                    VerticalOptions="Center" />
+                <Border x:Name="NextBtn" Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnNextClicked" />
+                    </Border.GestureRecognizers>
+                    <Image HeightRequest="22" WidthRequest="22">
+                        <Image.Source>
+                            <FontImageSource
+                                FontFamily="AgilePdfIcons"
+                                Glyph="{x:Static agile:PdfReaderIcons.Next}"
+                                Size="22"
+                                Color="{Binding IconColor, Source={x:Reference Root}}" />
+                        </Image.Source>
+                    </Image>
+                </Border>
+            </HorizontalStackLayout>
+        </Grid>
+    </Grid>
+</ContentView>

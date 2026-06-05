@@ -1,0 +1,406 @@
+using System.ComponentModel;
+
+namespace Agile.Maui;
+
+/// <summary>
+/// Leitor de PDF "pronto": toolbar (busca, imprimir, compartilhar, miniaturas, orientação) +
+/// barra inferior (zoom e navegação de páginas) em volta do <see cref="PdfViewer"/> base.
+/// Autossuficiente (cores e ícones vetoriais próprios). Para uma UI totalmente customizada, use
+/// o <see cref="PdfViewer"/> diretamente.
+/// </summary>
+public partial class PdfReaderView : ContentView
+{
+    public PdfReaderView()
+    {
+        InitializeComponent();
+        ApplyChrome();
+        UpdateOrientationIcon();
+
+        // No Windows as miniaturas são uma sidebar FIXA — já abre por padrão no componente pronto.
+        // (Pode ser sobrescrito pelo consumidor via EnableThumbnailBar="False".) No mobile o drawer
+        // continua fechado, abrindo pelo botão da barra inferior.
+        if (DeviceInfo.Current.Platform == DevicePlatform.WinUI)
+            EnableThumbnailBar = true;
+
+        // Atualiza o caption de zoom também quando o zoom muda por GESTO (pinch/double-tap) dentro
+        // do PdfViewer — não só pelos botões +/−.
+        Viewer.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PdfViewer.ZoomFactor))
+                UpdateZoomLabel(Viewer.ZoomFactor);
+        };
+    }
+
+    // ── Pass-through para o PdfViewer ───────────────────────────────────────────
+    public static readonly BindableProperty SourceProperty =
+        BindableProperty.Create(nameof(Source), typeof(string), typeof(PdfReaderView));
+
+    public static readonly BindableProperty PdfStreamProperty =
+        BindableProperty.Create(nameof(PdfStream), typeof(Stream), typeof(PdfReaderView));
+
+    public static readonly BindableProperty PasswordProperty =
+        BindableProperty.Create(nameof(Password), typeof(string), typeof(PdfReaderView));
+
+    public static readonly BindableProperty ScrollOrientationProperty =
+        BindableProperty.Create(nameof(ScrollOrientation), typeof(PdfScrollOrientation), typeof(PdfReaderView),
+            PdfScrollOrientation.Vertical, BindingMode.TwoWay,
+            propertyChanged: (b, _, _) => ((PdfReaderView)b).UpdateOrientationIcon());
+
+    public static readonly BindableProperty ThumbnailBarPlacementProperty =
+        BindableProperty.Create(nameof(ThumbnailBarPlacement), typeof(PdfThumbnailPlacement), typeof(PdfReaderView),
+            PdfThumbnailPlacement.Right, propertyChanged: (b, _, _) => ((PdfReaderView)b).ApplyChrome());
+
+    public static readonly BindableProperty IsThumbnailBarOpenProperty =
+        BindableProperty.Create(nameof(IsThumbnailBarOpen), typeof(bool), typeof(PdfReaderView), false,
+            BindingMode.TwoWay);
+
+    public string?               Source                { get => (string?)GetValue(SourceProperty); set => SetValue(SourceProperty, value); }
+    public Stream?               PdfStream             { get => (Stream?)GetValue(PdfStreamProperty); set => SetValue(PdfStreamProperty, value); }
+    public string?               Password              { get => (string?)GetValue(PasswordProperty); set => SetValue(PasswordProperty, value); }
+    public PdfScrollOrientation  ScrollOrientation     { get => (PdfScrollOrientation)GetValue(ScrollOrientationProperty); set => SetValue(ScrollOrientationProperty, value); }
+    public PdfThumbnailPlacement ThumbnailBarPlacement { get => (PdfThumbnailPlacement)GetValue(ThumbnailBarPlacementProperty); set => SetValue(ThumbnailBarPlacementProperty, value); }
+    public bool                  IsThumbnailBarOpen    { get => (bool)GetValue(IsThumbnailBarOpenProperty); set => SetValue(IsThumbnailBarOpenProperty, value); }
+
+    /// <summary>Acesso ao componente base, para configurações avançadas.</summary>
+    public PdfViewer ViewerControl => Viewer;
+
+    // ── Pass-through adicional (zoom, cache, render, textos, etc.) ───────────────
+    public static readonly BindableProperty ZoomFactorProperty =
+        BindableProperty.Create(nameof(ZoomFactor), typeof(double), typeof(PdfReaderView), 1.0, BindingMode.TwoWay);
+    public static readonly BindableProperty MinZoomProperty =
+        BindableProperty.Create(nameof(MinZoom), typeof(double), typeof(PdfReaderView), 0.5);
+    public static readonly BindableProperty MaxZoomProperty =
+        BindableProperty.Create(nameof(MaxZoom), typeof(double), typeof(PdfReaderView), 8.0);
+    public static readonly BindableProperty IsPinchZoomEnabledProperty =
+        BindableProperty.Create(nameof(IsPinchZoomEnabled), typeof(bool), typeof(PdfReaderView), true);
+    public static readonly BindableProperty PageBackgroundColorProperty =
+        BindableProperty.Create(nameof(PageBackgroundColor), typeof(Color), typeof(PdfReaderView), Colors.White);
+    public static readonly BindableProperty PageSpacingProperty =
+        BindableProperty.Create(nameof(PageSpacing), typeof(double), typeof(PdfReaderView), 8.0);
+    public static readonly BindableProperty RenderScaleProperty =
+        BindableProperty.Create(nameof(RenderScale), typeof(double), typeof(PdfReaderView), 1.5);
+    public static readonly BindableProperty MaxCacheMBProperty =
+        BindableProperty.Create(nameof(MaxCacheMB), typeof(int), typeof(PdfReaderView), 200);
+    public static readonly BindableProperty PrefetchAboveProperty =
+        BindableProperty.Create(nameof(PrefetchAbove), typeof(int), typeof(PdfReaderView), 2);
+    public static readonly BindableProperty PrefetchBelowProperty =
+        BindableProperty.Create(nameof(PrefetchBelow), typeof(int), typeof(PdfReaderView), 3);
+    public static readonly BindableProperty EnableThumbnailBarProperty =
+        BindableProperty.Create(nameof(EnableThumbnailBar), typeof(bool), typeof(PdfReaderView), false);
+    public static readonly BindableProperty CopyButtonTextProperty =
+        BindableProperty.Create(nameof(CopyButtonText), typeof(string), typeof(PdfReaderView), "Copy");
+    public static readonly BindableProperty CopiedMessageTextProperty =
+        BindableProperty.Create(nameof(CopiedMessageText), typeof(string), typeof(PdfReaderView), "Copied");
+    public static readonly BindableProperty ThumbnailBarTitleTextProperty =
+        BindableProperty.Create(nameof(ThumbnailBarTitleText), typeof(string), typeof(PdfReaderView), "Pages");
+    public static readonly BindableProperty PrintJobNameProperty =
+        BindableProperty.Create(nameof(PrintJobName), typeof(string), typeof(PdfReaderView), "Document");
+
+    public double ZoomFactor          { get => (double)GetValue(ZoomFactorProperty); set => SetValue(ZoomFactorProperty, value); }
+    public double MinZoom             { get => (double)GetValue(MinZoomProperty); set => SetValue(MinZoomProperty, value); }
+    public double MaxZoom             { get => (double)GetValue(MaxZoomProperty); set => SetValue(MaxZoomProperty, value); }
+    public bool   IsPinchZoomEnabled  { get => (bool)GetValue(IsPinchZoomEnabledProperty); set => SetValue(IsPinchZoomEnabledProperty, value); }
+    public Color  PageBackgroundColor { get => (Color)GetValue(PageBackgroundColorProperty); set => SetValue(PageBackgroundColorProperty, value); }
+    public double PageSpacing         { get => (double)GetValue(PageSpacingProperty); set => SetValue(PageSpacingProperty, value); }
+    public double RenderScale         { get => (double)GetValue(RenderScaleProperty); set => SetValue(RenderScaleProperty, value); }
+    public int    MaxCacheMB          { get => (int)GetValue(MaxCacheMBProperty); set => SetValue(MaxCacheMBProperty, value); }
+    public int    PrefetchAbove       { get => (int)GetValue(PrefetchAboveProperty); set => SetValue(PrefetchAboveProperty, value); }
+    public int    PrefetchBelow       { get => (int)GetValue(PrefetchBelowProperty); set => SetValue(PrefetchBelowProperty, value); }
+    public bool   EnableThumbnailBar  { get => (bool)GetValue(EnableThumbnailBarProperty); set => SetValue(EnableThumbnailBarProperty, value); }
+    public string CopyButtonText      { get => (string)GetValue(CopyButtonTextProperty); set => SetValue(CopyButtonTextProperty, value); }
+    public string CopiedMessageText   { get => (string)GetValue(CopiedMessageTextProperty); set => SetValue(CopiedMessageTextProperty, value); }
+    public string ThumbnailBarTitleText { get => (string)GetValue(ThumbnailBarTitleTextProperty); set => SetValue(ThumbnailBarTitleTextProperty, value); }
+    public string PrintJobName        { get => (string)GetValue(PrintJobNameProperty); set => SetValue(PrintJobNameProperty, value); }
+
+    // ── Aparência do chrome (cores) ──────────────────────────────────────────────
+    public static readonly BindableProperty ToolbarColorProperty =
+        BindableProperty.Create(nameof(ToolbarColor), typeof(Color), typeof(PdfReaderView), Color.FromArgb("#FFFFFF"));
+    public static readonly BindableProperty BottomBarColorProperty =
+        BindableProperty.Create(nameof(BottomBarColor), typeof(Color), typeof(PdfReaderView), Color.FromArgb("#FFFFFF"));
+    public static readonly BindableProperty IconColorProperty =
+        BindableProperty.Create(nameof(IconColor), typeof(Color), typeof(PdfReaderView), Color.FromArgb("#44444A"));
+    public static readonly BindableProperty CaptionColorProperty =
+        BindableProperty.Create(nameof(CaptionColor), typeof(Color), typeof(PdfReaderView), Color.FromArgb("#2A2A2E"));
+
+    /// <summary>Cor de fundo da barra superior (toolbar).</summary>
+    public Color ToolbarColor   { get => (Color)GetValue(ToolbarColorProperty); set => SetValue(ToolbarColorProperty, value); }
+    /// <summary>Cor de fundo da barra inferior.</summary>
+    public Color BottomBarColor { get => (Color)GetValue(BottomBarColorProperty); set => SetValue(BottomBarColorProperty, value); }
+    /// <summary>Cor dos ícones (fonte) e do contador de páginas da toolbar.</summary>
+    public Color IconColor      { get => (Color)GetValue(IconColorProperty); set => SetValue(IconColorProperty, value); }
+    /// <summary>Cor do título (toolbar) e dos textos de zoom (%) e página (1/20) da barra inferior.</summary>
+    public Color CaptionColor   { get => (Color)GetValue(CaptionColorProperty); set => SetValue(CaptionColorProperty, value); }
+
+    // ── Textos próprios do leitor (localizáveis, padrão inglês) ──────────────────
+    public static readonly BindableProperty LoadingTextProperty =
+        BindableProperty.Create(nameof(LoadingText), typeof(string), typeof(PdfReaderView), "Loading…");
+    public static readonly BindableProperty SearchPlaceholderProperty =
+        BindableProperty.Create(nameof(SearchPlaceholder), typeof(string), typeof(PdfReaderView), "Search…");
+    public static readonly BindableProperty PageCountFormatProperty =
+        BindableProperty.Create(nameof(PageCountFormat), typeof(string), typeof(PdfReaderView), "{0} pages");
+    public static readonly BindableProperty LoadFailedTextProperty =
+        BindableProperty.Create(nameof(LoadFailedText), typeof(string), typeof(PdfReaderView), "Failed to load");
+
+    /// <summary>Texto do overlay de carregamento.</summary>
+    public string LoadingText       { get => (string)GetValue(LoadingTextProperty); set => SetValue(LoadingTextProperty, value); }
+    /// <summary>Placeholder do campo de busca.</summary>
+    public string SearchPlaceholder { get => (string)GetValue(SearchPlaceholderProperty); set => SetValue(SearchPlaceholderProperty, value); }
+    /// <summary>Formato do contador de páginas na toolbar ({0} = total). Ex.: "{0} páginas".</summary>
+    public string PageCountFormat   { get => (string)GetValue(PageCountFormatProperty); set => SetValue(PageCountFormatProperty, value); }
+    /// <summary>Texto exibido quando o documento falha ao carregar.</summary>
+    public string LoadFailedText    { get => (string)GetValue(LoadFailedTextProperty); set => SetValue(LoadFailedTextProperty, value); }
+
+    // ── Liga/desliga de chrome ───────────────────────────────────────────────────
+    public static readonly BindableProperty ShowToolbarProperty          = Toggle(nameof(ShowToolbar));
+    public static readonly BindableProperty ShowSearchProperty           = Toggle(nameof(ShowSearch));
+    public static readonly BindableProperty ShowPrintProperty            = Toggle(nameof(ShowPrint));
+    public static readonly BindableProperty ShowShareProperty            = Toggle(nameof(ShowShare));
+    public static readonly BindableProperty ShowOrientationToggleProperty = Toggle(nameof(ShowOrientationToggle));
+    public static readonly BindableProperty ShowBottomBarProperty         = Toggle(nameof(ShowBottomBar));
+
+    private static BindableProperty Toggle(string name) =>
+        BindableProperty.Create(name, typeof(bool), typeof(PdfReaderView), true,
+            propertyChanged: (b, _, _) => ((PdfReaderView)b).ApplyChrome());
+
+    public bool ShowToolbar          { get => (bool)GetValue(ShowToolbarProperty); set => SetValue(ShowToolbarProperty, value); }
+    public bool ShowSearch           { get => (bool)GetValue(ShowSearchProperty); set => SetValue(ShowSearchProperty, value); }
+    public bool ShowPrint            { get => (bool)GetValue(ShowPrintProperty); set => SetValue(ShowPrintProperty, value); }
+    public bool ShowShare            { get => (bool)GetValue(ShowShareProperty); set => SetValue(ShowShareProperty, value); }
+    public bool ShowOrientationToggle{ get => (bool)GetValue(ShowOrientationToggleProperty); set => SetValue(ShowOrientationToggleProperty, value); }
+    public bool ShowBottomBar        { get => (bool)GetValue(ShowBottomBarProperty); set => SetValue(ShowBottomBarProperty, value); }
+
+    private void ApplyChrome()
+    {
+        ToolbarHost.IsVisible    = ShowToolbar;
+        BottomBarHost.IsVisible  = ShowBottomBar;
+        SearchBtn.IsVisible      = ShowSearch;
+        PrintBtn.IsVisible       = ShowPrint;
+        ShareBtn.IsVisible       = ShowShare;
+        OrientationBtn.IsVisible = ShowOrientationToggle;
+
+        // Botão de miniaturas na barra inferior: visível só quando o drawer está habilitado
+        // (ThumbnailBarPlacement != None); posicionado no MESMO lado do drawer.
+        bool right = ThumbnailBarPlacement == PdfThumbnailPlacement.Right;
+        ThumbsBtn.IsVisible         = ThumbnailBarPlacement != PdfThumbnailPlacement.None;
+        Grid.SetColumn(ThumbsBtn, right ? 2 : 0);
+        ThumbsBtn.HorizontalOptions = right ? LayoutOptions.End : LayoutOptions.Start;
+    }
+
+    // ── Eventos re-expostos ───────────────────────────────────────────────────────
+    public event EventHandler<PdfDocumentLoadedEventArgs>?     DocumentLoaded;
+    public event EventHandler<PdfDocumentLoadFailedEventArgs>? DocumentLoadFailed;
+    public event EventHandler<PdfPageChangedEventArgs>?        PageChanged;
+
+    private void OnDocumentLoaded(object? sender, PdfDocumentLoadedEventArgs e)
+    {
+        LoadingOverlay.IsVisible = false;
+        StatsLabel.Text = string.Format(PageCountFormat ?? "{0}", e.PageCount);
+        UpdatePageControls(0, e.PageCount);
+        UpdateZoomLabel(Viewer.ZoomFactor);
+        DocumentLoaded?.Invoke(this, e);
+    }
+
+    private void OnDocumentLoadFailed(object? sender, PdfDocumentLoadFailedEventArgs e)
+    {
+        LoadingOverlay.IsVisible = false;
+        StatsLabel.Text = LoadFailedText;
+        DocumentLoadFailed?.Invoke(this, e);
+    }
+
+    private void OnPageChanged(object? sender, PdfPageChangedEventArgs e)
+    {
+        UpdatePageControls(e.Page, Viewer.PageCount);
+        PageChanged?.Invoke(this, e);
+    }
+
+    // ── Documento ─────────────────────────────────────────────────────────────────
+    protected override void OnPropertyChanged(string? propertyName = null)
+    {
+        base.OnPropertyChanged(propertyName);
+        if (propertyName == nameof(Source)) ApplySource();
+        else if (propertyName == nameof(PdfStream) && PdfStream is not null) ShowLoading();
+    }
+
+    // Resolve o Source: URL ou arquivo existente → usa direto; senão tenta como ASSET EMPACOTADO
+    // (copia para o cache). Permite definir Source="arquivo.pdf" no XAML, mesmo sendo bundle.
+    private async void ApplySource()
+    {
+        var s = Source;
+        FileNameLabel.Text = ResolveName(s);
+        if (string.IsNullOrEmpty(s)) { Viewer.Source = null; return; }
+
+        ShowLoading();
+
+        if (s.StartsWith("http", StringComparison.OrdinalIgnoreCase) || File.Exists(s))
+        {
+            Viewer.Source = s;
+            return;
+        }
+
+        try
+        {
+            // Asset empacotado (MauiAsset) → copia para um caminho de arquivo no cache.
+            var dest = Path.Combine(FileSystem.CacheDirectory, Path.GetFileName(s));
+            using (var src = await FileSystem.OpenAppPackageFileAsync(s))
+            using (var fs  = File.Create(dest))
+                await src.CopyToAsync(fs);
+            Viewer.Source = dest;
+        }
+        catch
+        {
+            Viewer.Source = s;   // não é asset → deixa o handler reportar o erro
+        }
+    }
+
+    private void ShowLoading() => LoadingOverlay.IsVisible = true;   // texto vem do binding LoadingText
+
+    private static string ResolveName(string? pathOrUrl)
+    {
+        if (string.IsNullOrEmpty(pathOrUrl)) return "PDF";
+        bool isUrl = pathOrUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+        var name = Path.GetFileName(isUrl ? pathOrUrl.Split('?')[0] : pathOrUrl);
+        return string.IsNullOrEmpty(name) ? "PDF" : name;
+    }
+
+    // ── Imprimir / Compartilhar ─────────────────────────────────────────────────
+    private async void OnPrintClicked(object? sender, EventArgs e)
+    {
+        try { await Viewer.PrintAsync(); } catch { /* sem documento / cancelado */ }
+    }
+
+    private async void OnShareClicked(object? sender, EventArgs e)
+    {
+        var src = Source;
+        if (string.IsNullOrEmpty(src)) return;
+        try
+        {
+            if (src.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                await Microsoft.Maui.ApplicationModel.DataTransfer.Share.RequestAsync(
+                    new Microsoft.Maui.ApplicationModel.DataTransfer.ShareTextRequest { Uri = src, Title = FileNameLabel.Text });
+            else if (File.Exists(src))
+                await Microsoft.Maui.ApplicationModel.DataTransfer.Share.RequestAsync(
+                    new Microsoft.Maui.ApplicationModel.DataTransfer.ShareFileRequest
+                    {
+                        Title = FileNameLabel.Text,
+                        File  = new Microsoft.Maui.ApplicationModel.DataTransfer.ShareFile(src),
+                    });
+        }
+        catch { }
+    }
+
+    // ── Orientação ────────────────────────────────────────────────────────────────
+    private void OnOrientationClicked(object? sender, EventArgs e)
+        => ScrollOrientation = ScrollOrientation == PdfScrollOrientation.Horizontal
+            ? PdfScrollOrientation.Vertical : PdfScrollOrientation.Horizontal;
+
+    private void UpdateOrientationIcon()
+    {
+        bool horizontal = ScrollOrientation == PdfScrollOrientation.Horizontal;
+        // Mostra o ícone da AÇÃO: em vertical → ícone "horizontal"; em horizontal → ícone "vertical".
+        IconToHorizontal.IsVisible = !horizontal;
+        IconToVertical.IsVisible   = horizontal;
+    }
+
+    // ── Miniaturas ──────────────────────────────────────────────────────────────
+    private void OnThumbnailsClicked(object? sender, EventArgs e)
+    {
+        // Desktop: barra lateral fixa (EnableThumbnailBar). Mobile: drawer sobreposto.
+        if (DeviceInfo.Current.Idiom == DeviceIdiom.Desktop)
+            Viewer.EnableThumbnailBar = !Viewer.EnableThumbnailBar;
+        else
+            IsThumbnailBarOpen = !IsThumbnailBarOpen;
+    }
+
+    // ── Zoom ──────────────────────────────────────────────────────────────────────
+    private double ZoomStep => DeviceInfo.Current.Idiom == DeviceIdiom.Desktop ? 0.10 : 0.25;
+
+    private void OnZoomInClicked(object? sender, EventArgs e)  => StepZoom(+1);
+    private void OnZoomOutClicked(object? sender, EventArgs e) => StepZoom(-1);
+
+    private void StepZoom(int dir)
+    {
+        double step   = ZoomStep;
+        double target = Math.Round((Viewer.ZoomFactor + dir * step) / step) * step;
+        Viewer.ZoomFactor = Math.Clamp(target, Viewer.MinZoom, Viewer.MaxZoom);
+        UpdateZoomLabel(Viewer.ZoomFactor);
+    }
+
+    private void UpdateZoomLabel(double zoom) => ZoomLabel.Text = $"{zoom * 100:F0}%";
+
+    // ── Navegação de páginas ──────────────────────────────────────────────────────
+    private void OnPrevClicked(object? sender, EventArgs e) { if (Viewer.CurrentPage > 0) Viewer.CurrentPage--; }
+    private void OnNextClicked(object? sender, EventArgs e) { if (Viewer.CurrentPage < Viewer.PageCount - 1) Viewer.CurrentPage++; }
+
+    private void UpdatePageControls(int page, int count)
+    {
+        PageLabel.Text   = count > 0 ? $"{page + 1} / {count}" : "—";
+        PrevBtn.Opacity  = page > 0 ? 1 : 0.3;
+        NextBtn.Opacity  = (count > 0 && page < count - 1) ? 1 : 0.3;
+    }
+
+    // ── Busca ──────────────────────────────────────────────────────────────────────
+    private bool _searchOpen;
+    private string _lastSearchTerm = string.Empty;
+    private CancellationTokenSource? _searchDebounceCts;
+
+    private void OnSearchToggleClicked(object? sender, EventArgs e)
+    {
+        if (_searchOpen) { CollapseSearch(); return; }
+        _searchOpen = true;
+        SearchBar.IsVisible = true;
+        SearchEntry.Focus();
+    }
+
+    private void CollapseSearch()
+    {
+        _searchOpen = false;
+        _searchDebounceCts?.Cancel();
+        SearchEntry.Unfocus();
+        SearchEntry.Text = string.Empty;
+        SearchBar.IsVisible = false;
+        SearchCountLabel.Text = string.Empty;
+        _lastSearchTerm = string.Empty;
+        Viewer.ClearSearch();
+    }
+
+    private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts = new CancellationTokenSource();
+        var ct = _searchDebounceCts.Token;
+        var term = e.NewTextValue ?? string.Empty;
+        _ = Task.Delay(300, ct).ContinueWith(t =>
+        {
+            if (t.IsCanceled) return;
+            MainThread.BeginInvokeOnMainThread(() => RunSearch(term));
+        }, TaskScheduler.Default);
+    }
+
+    private void OnSearchCompleted(object? sender, EventArgs e)
+    {
+        var term = SearchEntry.Text ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(term)) { Viewer.ClearSearch(); _lastSearchTerm = string.Empty; return; }
+        if (term != _lastSearchTerm) RunSearch(term);
+        else                          Viewer.FindNext();
+    }
+
+    private void RunSearch(string term)
+    {
+        if (string.IsNullOrWhiteSpace(term)) { Viewer.ClearSearch(); _lastSearchTerm = string.Empty; return; }
+        _lastSearchTerm = term;
+        Viewer.Search(term);
+    }
+
+    private void OnSearchPrevClicked(object? sender, EventArgs e) => Viewer.FindPrevious();
+    private void OnSearchNextOrCloseClicked(object? sender, EventArgs e) => Viewer.FindNext();
+
+    private void OnSearchResultChanged(object? sender, PdfSearchResultEventArgs e)
+    {
+        bool has = e.MatchCount > 0;
+        SearchCountLabel.Text = has
+            ? $"{e.CurrentIndex + 1}/{e.MatchCount}"
+            : (string.IsNullOrEmpty(SearchEntry.Text) ? string.Empty : "0/0");
+        SearchPrevBtn.Opacity = has ? 1 : 0.3;
+        SearchNextBtn.Opacity = has ? 1 : 0.3;
+    }
+}
