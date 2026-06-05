@@ -31,7 +31,10 @@
         ShowShare="True"
         ShowToolbar="True"
         Source="InteligenciaArtificial.pdf"
-        ThumbnailBarPlacement="Right"
+        ThumbnailBarPlacement="{OnPlatform Android=Right,
+                                           iOS=Right,
+                                           MacCatalyst=Left,
+                                           WinUI=Left}"
         ThumbnailBarTitleText="Páginas" />
 
 </ContentPage>

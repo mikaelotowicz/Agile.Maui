@@ -61,16 +61,16 @@ O `VrScrollListener` repassa `dx/dy` para `VirtualView.RaiseScrolled`. Para loga
 
 ```csharp
 virtualizedList.Scrolled += (_, e) =>
-    System.Diagnostics.Debug.WriteLine($"scrollY={e.ScrollY:F0}");
+    System.Diagnostics.Debug.WriteLine($"scrollY={e.VerticalOffset:F0}");
 ```
 
-Um deltaY > 5000 px em um único frame indica estimativa de scroll incorreta — confirmar que `CachingLinearLayoutManager` está ativo (ItemSizeStrategy=Dynamic).
+Um deltaY > 5000 px em um único frame indica estimativa de scroll incorreta — confirmar que `CachingLinearLayoutManager` está ativo (ItemSizingStrategy=Dynamic).
 
 ---
 
 ## Checklist antes de reportar regressão
 
-- [ ] `ItemSizeStrategy` é `Dynamic` e `ColumnCount=1`? → `CachingLinearLayoutManager` ativo
+- [ ] `ItemSizingStrategy` é `Dynamic` e `Span=1`? → `CachingLinearLayoutManager` ativo
 - [ ] Log `VrHandler` aparece no Logcat após scrollar?
 - [ ] `adb shell dumpsys gfxinfo` mostra Janky frames > 15%?
 - [ ] Heap cresce linearmente ao adicionar itens ou estabiliza depois de ~50?

@@ -14,9 +14,9 @@ public static class VirtualizedCollectionViewAppBuilderExtensions
 {
     /// <summary>
     /// Registra VirtualizedCollectionView e seu handler nativo.
-    /// Chamar em MauiProgram.cs: builder.UseVirtualizedCollectionView()
+    /// Chamar em MauiProgram.cs: builder.UseAgileVirtualizedCollectionView()
     /// </summary>
-    public static MauiAppBuilder UseVirtualizedCollectionView(this MauiAppBuilder builder)
+    public static MauiAppBuilder UseAgileVirtualizedCollectionView(this MauiAppBuilder builder)
     {
         builder.ConfigureMauiHandlers(handlers =>
         {

@@ -4,9 +4,9 @@ using System.Windows.Input;
 
 namespace Agile.Maui;
 
-public enum ItemsLayoutOrientation { Vertical, Horizontal }
+public enum VirtualizedOrientation { Vertical, Horizontal }
 
-public enum ItemSizingStrategy { MeasureFirstItem, MeasureAllItems }
+public enum ItemSizingStrategy { Fixed, Dynamic }
 
 // ContentView como base: no Windows, Content = CollectionView nativo do MAUI e nenhum
 // handler customizado é necessário. No Android/iOS os handlers criam RecyclerView /
@@ -31,8 +31,8 @@ public partial class VirtualizedCollectionView : ContentView
             validateValue: (_, v) => (int)v >= 1);
 
     public static readonly BindableProperty OrientationProperty =
-        BindableProperty.Create(nameof(Orientation), typeof(ItemsLayoutOrientation),
-            typeof(VirtualizedCollectionView), ItemsLayoutOrientation.Vertical);
+        BindableProperty.Create(nameof(Orientation), typeof(VirtualizedOrientation),
+            typeof(VirtualizedCollectionView), VirtualizedOrientation.Vertical);
 
     public static readonly BindableProperty RemainingItemsThresholdProperty =
         BindableProperty.Create(nameof(RemainingItemsThreshold), typeof(int),
@@ -61,7 +61,7 @@ public partial class VirtualizedCollectionView : ContentView
 
     public static readonly BindableProperty ItemSizingStrategyProperty =
         BindableProperty.Create(nameof(ItemSizingStrategy), typeof(ItemSizingStrategy),
-            typeof(VirtualizedCollectionView), ItemSizingStrategy.MeasureFirstItem);
+            typeof(VirtualizedCollectionView), ItemSizingStrategy.Fixed);
 
     public static readonly BindableProperty ItemHeightRequestProperty =
         BindableProperty.Create(nameof(ItemHeightRequest), typeof(double),
@@ -92,9 +92,9 @@ public partial class VirtualizedCollectionView : ContentView
         set => SetValue(SpanProperty, value);
     }
 
-    public ItemsLayoutOrientation Orientation
+    public VirtualizedOrientation Orientation
     {
-        get => (ItemsLayoutOrientation)GetValue(OrientationProperty);
+        get => (VirtualizedOrientation)GetValue(OrientationProperty);
         set => SetValue(OrientationProperty, value);
     }
 

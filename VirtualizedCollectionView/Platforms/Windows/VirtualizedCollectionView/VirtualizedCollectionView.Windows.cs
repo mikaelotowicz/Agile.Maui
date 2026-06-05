@@ -6,13 +6,14 @@
 // e ignoram o Content.
 
 using Microsoft.UI.Dispatching;
-using ItemsLayoutOrientation = Agile.Maui.ItemsLayoutOrientation;
+using VirtualizedOrientation = Agile.Maui.VirtualizedOrientation;
 using MauiOrientation = Microsoft.Maui.Controls.ItemsLayoutOrientation;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using MauiItemSizingStrategy = Microsoft.Maui.Controls.ItemSizingStrategy;
 using WinScrollView = Microsoft.UI.Xaml.Controls.ScrollView;
 
 namespace Agile.Maui;
@@ -63,6 +64,7 @@ public partial class VirtualizedCollectionView
     {
         _cv = new CollectionView();
         Content = _cv;
+        SyncSizingStrategy();
         _cv.RemainingItemsThresholdReached += (_, _) => RaiseRemainingItemsThresholdReached();
         _cv.Scrolled += (_, e) => RaiseScrolled(e.HorizontalOffset, e.VerticalOffset);
         _cv.HandlerChanged += OnCvHandlerChanged;
@@ -81,12 +83,13 @@ public partial class VirtualizedCollectionView
             case nameof(Span):
             case nameof(Orientation):
             case nameof(ItemSpacing):             SyncLayout();                                          break;
+            case nameof(ItemSizingStrategy):       SyncSizingStrategy();                                 break;
         }
     }
 
     private void SyncLayout()
     {
-        var orientation = Orientation == ItemsLayoutOrientation.Vertical
+        var orientation = Orientation == VirtualizedOrientation.Vertical
             ? MauiOrientation.Vertical
             : MauiOrientation.Horizontal;
         double spacing = ItemSpacing;
@@ -95,6 +98,13 @@ public partial class VirtualizedCollectionView
                 { HorizontalItemSpacing = spacing, VerticalItemSpacing = spacing }
             : new LinearItemsLayout(orientation)
                 { ItemSpacing = spacing };
+    }
+
+    private void SyncSizingStrategy()
+    {
+        _cv.ItemSizingStrategy = ItemSizingStrategy == Agile.Maui.ItemSizingStrategy.Dynamic
+            ? MauiItemSizingStrategy.MeasureAllItems
+            : MauiItemSizingStrategy.MeasureFirstItem;
     }
 
     public void ScrollTo(int index, bool animated = true) =>
@@ -207,7 +217,7 @@ public partial class VirtualizedCollectionView
             SetDragCursor(InputSystemCursorShape.Hand);
         }
 
-        bool   horizontal = Orientation == ItemsLayoutOrientation.Horizontal;
+        bool   horizontal = Orientation == VirtualizedOrientation.Horizontal;
         double deltaX     = _dragLastPoint.X - pos.X;
         double deltaY     = _dragLastPoint.Y - pos.Y;
         _dragLastPoint    = pos;
@@ -314,7 +324,7 @@ public partial class VirtualizedCollectionView
         }
 
         // Deslocamento proporcional ao tempo real decorrido (v × frames)
-        bool   horizontal = Orientation == ItemsLayoutOrientation.Horizontal;
+        bool   horizontal = Orientation == VirtualizedOrientation.Horizontal;
         double moveX      = horizontal ? _inertiaVx * framesElapsed : 0;
         double moveY      = horizontal ? 0 : _inertiaVy * framesElapsed;
 
@@ -354,7 +364,7 @@ public partial class VirtualizedCollectionView
     // evitando que o timer fique rodando sem efeito.
     private bool HasScrollCapacity(double deltaX, double deltaY)
     {
-        bool horizontal = Orientation == ItemsLayoutOrientation.Horizontal;
+        bool horizontal = Orientation == VirtualizedOrientation.Horizontal;
 
         if (_dragScrollViewer is not null)
         {
