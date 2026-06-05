@@ -7,6 +7,44 @@
     FlyoutBehavior="Flyout"
     Title="sample">
 
+    <Shell.FlyoutHeader>
+        <Grid
+            Padding="20,28,20,22"
+            BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+            RowDefinitions="Auto,Auto,Auto">
+
+            <Border
+                WidthRequest="96"
+                HeightRequest="96"
+                Padding="12"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
+                HorizontalOptions="Start"
+                StrokeThickness="0">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="24" />
+                </Border.StrokeShape>
+
+                <Image
+                    Aspect="AspectFit"
+                    Source="agile.png" />
+            </Border>
+
+            <Label
+                Grid.Row="1"
+                Margin="0,14,0,2"
+                FontAttributes="Bold"
+                FontSize="20"
+                Text="Agile.Maui"
+                TextColor="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+
+            <Label
+                Grid.Row="2"
+                FontSize="13"
+                Text="Sample"
+                TextColor="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+        </Grid>
+    </Shell.FlyoutHeader>
+
     <!--  Cada ShellContent vira um item do menu (flyout). O PdfViewer é um deles.  -->
 
     <ShellContent Title="Início" Route="MainPage" ContentTemplate="{DataTemplate local:MainPage}">
@@ -17,6 +55,13 @@
     </ShellContent>
 
     <ShellContent Title="PDF Viewer" Route="PdfViewerPage" ContentTemplate="{DataTemplate local:PdfViewerPage}">
+        <ShellContent.Icon>
+            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuPdf}"
+                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+        </ShellContent.Icon>
+    </ShellContent>
+
+    <ShellContent Title="PDF (pronto)" Route="ReaderDemoPage" ContentTemplate="{DataTemplate local:ReaderDemoPage}">
         <ShellContent.Icon>
             <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuPdf}"
                 Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
