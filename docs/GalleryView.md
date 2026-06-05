@@ -1,15 +1,15 @@
 # Agile.Maui.Gallery
 
-Projeto que entrega dois controles visuais para imagens:
+Project that delivers two visual controls for images:
 
-- `ImageView`: imagem unica com carregamento nativo, eventos de carga e zoom fullscreen nas plataformas suportadas.
-- `GalleryView`: galeria paginada de imagens com selecao, indicadores e fullscreen nas plataformas suportadas.
+- `ImageView`: single image with native loading, load events, and fullscreen zoom on the supported platforms.
+- `GalleryView`: paged image gallery with selection, indicators, and fullscreen on the supported platforms.
 
 Assembly: `Agile.Maui.Gallery`  
-Namespace C#: `Agile.Maui`  
-Registro: `builder.UseAgileGalleryView()`
+C# namespace: `Agile.Maui`  
+Registration: `builder.UseAgileGalleryView()`
 
-## Instalacao
+## Installation
 
 ```powershell
 dotnet add package Agile.Maui.Gallery
@@ -27,31 +27,31 @@ xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
 
 ## ImageView
 
-`ImageView` e um `View` MAUI cross-platform. Ele renderiza uma imagem local ou URL
-e, quando permitido, abre uma visualizacao fullscreen com zoom.
+`ImageView` is a cross-platform MAUI `View`. It renders a local image or URL
+and, when allowed, opens a fullscreen view with zoom.
 
-### Propriedades
+### Properties
 
-| Propriedade | Tipo | Padrao | Descricao |
+| Property | Type | Default | Description |
 |---|---|---|---|
-| `Source` | `string?` | `null` | Nome do recurso local ou URL completa. |
-| `IsUrl` | `bool` | `false` | Indica que `Source` e uma URL HTTP/HTTPS. |
-| `Placeholder` | `string?` | `null` | Recurso local exibido durante carga ou erro. |
-| `MaxZoom` | `float` | `5` | Zoom maximo do viewer fullscreen. Minimo aceito: `1`. |
-| `EnableFullscreen` | `bool` | `true` | Abre fullscreen ao tocar na imagem nas plataformas suportadas. |
-| `FullscreenSource` | `string?` | `null` | Fonte de maior qualidade para fullscreen. Se nula, usa `Source`. Ignorada onde fullscreen nao e implementado. |
-| `AspectMode` | `ZoomImageAspect` | `CenterCrop` | `CenterCrop` ou `AspectFit`. |
-| `ImageLoadedCommand` | `ICommand?` | `null` | Comando executado ao carregar. |
-| `ImageFailedCommand` | `ICommand?` | `null` | Comando executado ao falhar. |
+| `Source` | `string?` | `null` | Local resource name or full URL. |
+| `IsUrl` | `bool` | `false` | Indicates that `Source` is an HTTP/HTTPS URL. |
+| `Placeholder` | `string?` | `null` | Local resource shown during loading or on error. |
+| `MaxZoom` | `float` | `5` | Maximum zoom of the fullscreen viewer. Minimum accepted: `1`. |
+| `EnableFullscreen` | `bool` | `true` | Opens fullscreen when the image is tapped on the supported platforms. |
+| `FullscreenSource` | `string?` | `null` | Higher-quality source for fullscreen. If null, uses `Source`. Ignored where fullscreen is not implemented. |
+| `AspectMode` | `ZoomImageAspect` | `CenterCrop` | `CenterCrop` or `AspectFit`. |
+| `ImageLoadedCommand` | `ICommand?` | `null` | Command executed on load. |
+| `ImageFailedCommand` | `ICommand?` | `null` | Command executed on failure. |
 
-### Eventos
+### Events
 
-| Evento | Args | Quando dispara |
+| Event | Args | When it fires |
 |---|---|---|
-| `ImageLoaded` | `EventArgs` | Quando a imagem carrega com sucesso. |
-| `ImageFailed` | `EventArgs` | Quando o carregamento falha ou a fonte nao existe. |
+| `ImageLoaded` | `EventArgs` | When the image loads successfully. |
+| `ImageFailed` | `EventArgs` | When loading fails or the source does not exist. |
 
-### Exemplo
+### Example
 
 ```xml
 <gallery:ImageView
@@ -66,37 +66,37 @@ e, quando permitido, abre uma visualizacao fullscreen com zoom.
 
 ## GalleryView
 
-`GalleryView` exibe uma lista de imagens em formato paginado. Ele usa o mesmo enum
-`ZoomImageAspect` do `ImageView` e pode abrir a galeria em fullscreen com swipe e
-zoom nas plataformas que suportam esse fluxo.
+`GalleryView` displays a list of images in a paged format. It uses the same
+`ZoomImageAspect` enum as `ImageView` and can open the gallery in fullscreen with swipe and
+zoom on the platforms that support this flow.
 
-### Propriedades
+### Properties
 
-| Propriedade | Tipo | Padrao | Descricao |
+| Property | Type | Default | Description |
 |---|---|---|---|
-| `Images` | `IList<string>?` | `null` | Lista de URLs ou recursos locais. |
-| `IsUrl` | `bool` | `false` | Indica se os itens de `Images` sao URLs. |
-| `Placeholder` | `string?` | `null` | Fallback enquanto cada imagem carrega. |
-| `SelectedIndex` | `int` | `0` | Indice selecionado. Valor minimo: `0`. |
-| `AspectMode` | `ZoomImageAspect` | `CenterCrop` | Como a imagem ocupa o espaco. |
-| `MaxZoom` | `float` | `5` | Zoom maximo no fullscreen. |
-| `ShowIndicator` | `bool` | `false` | Mostra indicadores de pagina. |
-| `IndicatorColor` | `Color` | `White` | Cor do indicador ativo. |
-| `IndicatorInactiveColor` | `Color` | branco 50% | Cor dos indicadores inativos. |
-| `SelectionChangedCommand` | `ICommand?` | `null` | Recebe o indice selecionado. |
-| `ImageLoadedCommand` | `ICommand?` | `null` | Comando ao carregar imagem. |
-| `ImageFailedCommand` | `ICommand?` | `null` | Comando ao falhar imagem. |
-| `ThumbMaxPx` | `int` | `720` | Limite de decode de thumbnail no Android. Minimo: `64`. |
+| `Images` | `IList<string>?` | `null` | List of URLs or local resources. |
+| `IsUrl` | `bool` | `false` | Indicates whether the `Images` items are URLs. |
+| `Placeholder` | `string?` | `null` | Fallback while each image loads. |
+| `SelectedIndex` | `int` | `0` | Selected index. Minimum value: `0`. |
+| `AspectMode` | `ZoomImageAspect` | `CenterCrop` | How the image fills the space. |
+| `MaxZoom` | `float` | `5` | Maximum zoom in fullscreen. |
+| `ShowIndicator` | `bool` | `false` | Shows page indicators. |
+| `IndicatorColor` | `Color` | `White` | Color of the active indicator. |
+| `IndicatorInactiveColor` | `Color` | white 50% | Color of the inactive indicators. |
+| `SelectionChangedCommand` | `ICommand?` | `null` | Receives the selected index. |
+| `ImageLoadedCommand` | `ICommand?` | `null` | Command when an image loads. |
+| `ImageFailedCommand` | `ICommand?` | `null` | Command when an image fails. |
+| `ThumbMaxPx` | `int` | `720` | Thumbnail decode limit on Android. Minimum: `64`. |
 
-### Eventos
+### Events
 
-| Evento | Args | Quando dispara |
+| Event | Args | When it fires |
 |---|---|---|
-| `SelectionChanged` | `GalleryIndexChangedEventArgs` | Quando a pagina atual muda. |
-| `ImageLoaded` | `EventArgs` | Quando uma imagem carrega. |
-| `ImageFailed` | `EventArgs` | Quando uma imagem falha. |
+| `SelectionChanged` | `GalleryIndexChangedEventArgs` | When the current page changes. |
+| `ImageLoaded` | `EventArgs` | When an image loads. |
+| `ImageFailed` | `EventArgs` | When an image fails. |
 
-### Exemplo
+### Example
 
 ```xml
 <gallery:GalleryView
@@ -110,17 +110,17 @@ zoom nas plataformas que suportam esse fluxo.
     HeightRequest="240" />
 ```
 
-## Comportamento por plataforma
+## Per-platform behavior
 
-| Plataforma | `ImageView` | `GalleryView` |
+| Platform | `ImageView` | `GalleryView` |
 |---|---|---|
-| Android | `Android.Widget.ImageView` com Glide; fullscreen via `DialogFragment` e `Matrix`. | `ViewPager2`/`RecyclerView`; fullscreen nativo com swipe e zoom. |
-| iOS/MacCatalyst | `UIImageView`; URLs via `NSUrlSession`; fullscreen com `UIScrollView`. | `UIScrollView` paginado + `UIPageControl`; fullscreen com zoom. |
-| Windows | `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage`; fullscreen nao e implementado. | `FlipView` com indicadores. |
+| Android | `Android.Widget.ImageView` with Glide; fullscreen via `DialogFragment` and `Matrix`. | `ViewPager2`/`RecyclerView`; native fullscreen with swipe and zoom. |
+| iOS/MacCatalyst | `UIImageView`; URLs via `NSUrlSession`; fullscreen with `UIScrollView`. | Paged `UIScrollView` + `UIPageControl`; fullscreen with zoom. |
+| Windows | `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage`; fullscreen is not implemented. | `FlipView` with indicators. |
 
-## Recomendacoes
+## Recommendations
 
-- Use `FullscreenSource` quando a lista mostra thumbnails, mas o fullscreen deve abrir uma imagem de maior qualidade.
-- Em listas grandes, prefira URLs ja redimensionadas no servidor.
-- No Android, reduza `ThumbMaxPx` quando muitas imagens remotas estiverem vivas ao mesmo tempo.
-- Sempre defina `Placeholder` para evitar flashes visuais enquanto a imagem carrega.
+- Use `FullscreenSource` when the list shows thumbnails but fullscreen should open a higher-quality image.
+- In large lists, prefer URLs already resized on the server.
+- On Android, lower `ThumbMaxPx` when many remote images are alive at the same time.
+- Always set `Placeholder` to avoid visual flashes while the image loads.

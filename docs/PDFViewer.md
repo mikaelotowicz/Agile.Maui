@@ -1,69 +1,69 @@
 # Agile.Maui.Pdf
 
-Projeto de visualizacao PDF com dois niveis de uso:
+PDF viewing project with two levels of use:
 
-- `PdfViewer`: controle base para montar uma interface customizada.
-- `PdfReaderView`: leitor pronto, com toolbar, busca, print/share, orientacao, miniaturas, zoom e navegacao.
+- `PdfViewer`: base control for building a custom interface.
+- `PdfReaderView`: ready-to-use reader, with toolbar, search, print/share, orientation, thumbnails, zoom and navigation.
 
-Plataformas suportadas: Android, iOS, macOS Catalyst e Windows.
+Supported platforms: Android, iOS, macOS Catalyst and Windows.
 
 Assembly: `Agile.Maui.Pdf`  
-Namespace C#: `Agile.Maui`  
-Registro: `builder.UseAgilePdfViewer()`
+C# namespace: `Agile.Maui`  
+Registration: `builder.UseAgilePdfViewer()`
 
-## Visao geral
+## Overview
 
-`Agile.Maui.Pdf` traz visualizacao PDF nativa para apps .NET MAUI sem depender de
-`WebView`. O pacote expoe um controle base (`PdfViewer`) para UIs customizadas e
-um leitor pronto (`PdfReaderView`) com toolbar, busca, impressao, compartilhamento,
-miniaturas e navegacao.
+`Agile.Maui.Pdf` brings native PDF viewing to .NET MAUI apps without relying on
+`WebView`. The package exposes a base control (`PdfViewer`) for custom UIs and
+a ready-to-use reader (`PdfReaderView`) with toolbar, search, printing, sharing,
+thumbnails and navigation.
 
-### Por que usar
+### Why use it
 
-- Renderizacao nativa por plataforma, sem HTML/JavaScript.
-- API consistente para Android, iOS, macOS Catalyst e Windows.
-- Duas camadas de uso: controle base ou leitor completo.
-- Busca, selecao/copia de texto, zoom e navegacao por pagina.
-- Configuracao por `BindableProperty`, adequada para XAML e MVVM.
+- Native rendering per platform, without HTML/JavaScript.
+- Consistent API for Android, iOS, macOS Catalyst and Windows.
+- Two layers of use: base control or full reader.
+- Search, text selection/copy, zoom and page navigation.
+- Configuration via `BindableProperty`, suitable for XAML and MVVM.
 
-## Recursos
+## Features
 
-### Funcionalidade principal
+### Core functionality
 
-- Fontes por caminho/URL (`Source`), stream (`PdfStream`) e asset empacotado no `PdfReaderView`.
-- Senha para PDFs protegidos (`Password`).
-- Zoom programatico, pinch quando suportado e limites `MinZoom`/`MaxZoom`.
-- Scroll vertical continuo ou horizontal paginado.
-- Busca de texto com resultado atual/total.
-- Links com evento `LinkTapped` onde suportado pelo handler da plataforma.
-- Impressao nativa por plataforma.
-- Compartilhamento no `PdfReaderView`.
+- Sources by path/URL (`Source`), stream (`PdfStream`) and bundled asset in the `PdfReaderView`.
+- Password for protected PDFs (`Password`).
+- Programmatic zoom, pinch when supported and `MinZoom`/`MaxZoom` limits.
+- Continuous vertical scrolling or paged horizontal scrolling.
+- Text search with current/total result.
+- Links with `LinkTapped` event where supported by the platform handler.
+- Native printing per platform.
+- Sharing in the `PdfReaderView`.
 
-### Recursos avancados
+### Advanced features
 
-- Cache LRU e prefetch configuravel de paginas.
-- Miniaturas como drawer/overlay no mobile e sidebar fixa no Windows.
-- Selecao e copia de texto onde suportado pelo handler.
-- Localizacao de textos do leitor pronto.
-- Controle de renderizacao por `RenderScale`, `MaxCacheMB`, `PrefetchAbove` e `PrefetchBelow`.
+- LRU cache and configurable page prefetch.
+- Thumbnails as drawer/overlay on mobile and fixed sidebar on Windows.
+- Text selection and copy where supported by the handler.
+- Localization of the ready-to-use reader's text.
+- Render control via `RenderScale`, `MaxCacheMB`, `PrefetchAbove` and `PrefetchBelow`.
 
-## Requisitos
+## Requirements
 
 - .NET MAUI / .NET 10.0.
 - Android API 21+.
 - iOS 15.0+.
 - macOS Catalyst 15.0+.
-- Windows 10.0.17763.0+; target Windows recomendado: `net10.0-windows10.0.19041.0`.
+- Windows 10.0.17763.0+; recommended Windows target: `net10.0-windows10.0.19041.0`.
 
-## Inicio rapido
+## Quick start
 
-### 1. Instale o pacote
+### 1. Install the package
 
 ```powershell
 dotnet add package Agile.Maui.Pdf
 ```
 
-### 2. Registre o handler
+### 2. Register the handler
 
 ```csharp
 using Agile.Maui;
@@ -73,22 +73,22 @@ builder
     .UseAgilePdfViewer();
 ```
 
-`UseAgilePdfViewer()` tambem registra a fonte interna `AgilePdfIcons`, usada pelo
+`UseAgilePdfViewer()` also registers the internal `AgilePdfIcons` font, used by the
 `PdfReaderView`.
 
-### 3. Adicione o namespace XAML
+### 3. Add the XAML namespace
 
 ```xml
 xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
 ```
 
-### 4. Use o leitor pronto
+### 4. Use the ready-to-use reader
 
 ```xml
 <pdf:PdfReaderView Source="manual.pdf" />
 ```
 
-### 5. Ou use o controle base
+### 5. Or use the base control
 
 ```xml
 <pdf:PdfViewer
@@ -99,51 +99,51 @@ xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
 
 ## PdfViewer
 
-`PdfViewer` e o controle base. Ele renderiza o PDF e expoe propriedades,
-eventos e comandos para navegacao, zoom, busca, print e miniaturas.
+`PdfViewer` is the base control. It renders the PDF and exposes properties,
+events and commands for navigation, zoom, search, print and thumbnails.
 
-### Fontes de documento
+### Document sources
 
-| Propriedade | Tipo | Descricao |
+| Property | Type | Description |
 |---|---|---|
-| `Source` | `string?` | Caminho local ou URL. |
-| `PdfStream` | `Stream?` | Stream PDF fornecido pela aplicacao. |
-| `Password` | `string?` | Senha para PDFs protegidos. |
+| `Source` | `string?` | Local path or URL. |
+| `PdfStream` | `Stream?` | PDF stream provided by the application. |
+| `Password` | `string?` | Password for protected PDFs. |
 
-### Regras de origem
+### Source rules
 
-| Entrada | Comportamento |
+| Input | Behavior |
 |---|---|
-| `https://...` ou `http://...` | Baixa e abre como URL. |
-| Caminho de arquivo existente | Abre o arquivo local. |
-| `PdfStream` | Abre os bytes fornecidos pela aplicacao. |
-| `PdfReaderView Source="arquivo.pdf"` | Se nao for URL/arquivo local, tenta abrir como MauiAsset e copia para cache. |
+| `https://...` or `http://...` | Downloads and opens as a URL. |
+| Existing file path | Opens the local file. |
+| `PdfStream` | Opens the bytes provided by the application. |
+| `PdfReaderView Source="file.pdf"` | If it is not a URL/local file, tries to open it as a MauiAsset and copies it to the cache. |
 
-### Estado e navegacao
+### State and navigation
 
-| Propriedade | Tipo | Padrao | Descricao |
+| Property | Type | Default | Description |
 |---|---|---|---|
-| `CurrentPage` | `int` | `0` | Pagina atual, 0-based, `TwoWay`. |
-| `PageCount` | `int` | `0` | Total de paginas, definido pelo controle. |
-| `ScrollOrientation` | `PdfScrollOrientation` | `Vertical` | Scroll continuo vertical ou horizontal paginado. |
+| `CurrentPage` | `int` | `0` | Current page, 0-based, `TwoWay`. |
+| `PageCount` | `int` | `0` | Total number of pages, set by the control. |
+| `ScrollOrientation` | `PdfScrollOrientation` | `Vertical` | Continuous vertical scroll or paged horizontal scroll. |
 
-### Zoom e renderizacao
+### Zoom and rendering
 
-| Propriedade | Tipo | Padrao | Descricao |
+| Property | Type | Default | Description |
 |---|---|---|---|
-| `ZoomFactor` | `double` | `1.0` | Zoom relativo ao ajuste base. |
-| `MinZoom` | `double` | `0.5` | Zoom minimo. |
-| `MaxZoom` | `double` | `8.0` | Zoom maximo. |
-| `IsPinchZoomEnabled` | `bool` | `true` | Habilita gesto de pinch quando suportado. |
-| `RenderScale` | `double` | `1.5` | Escala/DPI de render. |
-| `MaxCacheMB` | `int` | `200` | Limite de cache de paginas renderizadas. |
-| `EnablePageCaching` | `bool` | `true` | Habilita cache/prefetch. |
-| `PrefetchAbove` | `int` | `2` | Paginas acima a pre-carregar. |
-| `PrefetchBelow` | `int` | `3` | Paginas abaixo a pre-carregar. |
+| `ZoomFactor` | `double` | `1.0` | Zoom relative to the base fit. |
+| `MinZoom` | `double` | `0.5` | Minimum zoom. |
+| `MaxZoom` | `double` | `8.0` | Maximum zoom. |
+| `IsPinchZoomEnabled` | `bool` | `true` | Enables the pinch gesture when supported. |
+| `RenderScale` | `double` | `1.5` | Render scale/DPI. |
+| `MaxCacheMB` | `int` | `200` | Limit for the rendered page cache. |
+| `EnablePageCaching` | `bool` | `true` | Enables cache/prefetch. |
+| `PrefetchAbove` | `int` | `2` | Pages above to prefetch. |
+| `PrefetchBelow` | `int` | `3` | Pages below to prefetch. |
 
-### Aparencia e textos
+### Appearance and text
 
-| Propriedade | Tipo | Padrao |
+| Property | Type | Default |
 |---|---|---|
 | `PageBackgroundColor` | `Color` | `White` |
 | `PageSpacing` | `double` | `8` |
@@ -152,23 +152,23 @@ eventos e comandos para navegacao, zoom, busca, print e miniaturas.
 | `ThumbnailBarTitleText` | `string` | `Pages` |
 | `PrintJobName` | `string` | `Document` |
 
-### Miniaturas
+### Thumbnails
 
-| Propriedade | Tipo | Padrao | Descricao |
+| Property | Type | Default | Description |
 |---|---|---|---|
-| `EnableThumbnailBar` | `bool` | `false` | Sidebar fixa no Windows. |
-| `IsThumbnailBarOpen` | `bool` | `false` | Drawer mobile, `TwoWay`. |
-| `ThumbnailBarPlacement` | `PdfThumbnailPlacement` | `None` | `None`, `Left` ou `Right`. |
+| `EnableThumbnailBar` | `bool` | `false` | Fixed sidebar on Windows. |
+| `IsThumbnailBarOpen` | `bool` | `false` | Mobile drawer, `TwoWay`. |
+| `ThumbnailBarPlacement` | `PdfThumbnailPlacement` | `None` | `None`, `Left` or `Right`. |
 
-### Eventos
+### Events
 
-| Evento | Args |
+| Event | Args |
 |---|---|
 | `DocumentLoaded` | `PdfDocumentLoadedEventArgs` |
 | `DocumentLoadFailed` | `PdfDocumentLoadFailedEventArgs` |
 | `PageChanged` | `PdfPageChangedEventArgs` |
 | `SearchResultChanged` | `PdfSearchResultEventArgs` |
-| `LinkTapped` | `PdfLinkTappedEventArgs`; Android intercepta links internos/externos, iOS/MacCatalyst intercepta URLs externas e Windows ainda nao expõe interceptacao de links. Defina `Handled = true` para impedir a acao padrao quando suportado. |
+| `LinkTapped` | `PdfLinkTappedEventArgs`; Android intercepts internal/external links, iOS/MacCatalyst intercepts external URLs and Windows does not yet expose link interception. Set `Handled = true` to prevent the default action when supported. |
 
 ### Commands
 
@@ -178,7 +178,7 @@ eventos e comandos para navegacao, zoom, busca, print e miniaturas.
 | `DocumentLoadFailedCommand` | `PdfDocumentLoadFailedEventArgs` |
 | `PageChangedCommand` | `PdfPageChangedEventArgs` |
 
-### Metodos
+### Methods
 
 ```csharp
 await Viewer.GoToPageAsync(10);
@@ -210,7 +210,7 @@ public enum PdfThumbnailPlacement
 }
 ```
 
-### Exemplo base
+### Base example
 
 ```xml
 <pdf:PdfViewer
@@ -227,57 +227,57 @@ public enum PdfThumbnailPlacement
 
 ## PdfReaderView
 
-`PdfReaderView` compoe uma UI completa sobre `PdfViewer`. Ele e indicado quando
-voce quer um leitor pronto e customizavel sem recriar toolbar, busca e barra
-inferior no app.
+`PdfReaderView` composes a complete UI on top of `PdfViewer`. It is suitable when
+you want a ready-to-use, customizable reader without recreating the toolbar, search and bottom
+bar in the app.
 
-### Principais propriedades
+### Main properties
 
-`PdfReaderView` repassa a maior parte das propriedades do `PdfViewer`: `Source`,
+`PdfReaderView` forwards most of the `PdfViewer` properties: `Source`,
 `PdfStream`, `Password`, `ZoomFactor`, `MinZoom`, `MaxZoom`,
 `ScrollOrientation`, `ThumbnailBarPlacement`, `IsThumbnailBarOpen`,
 `EnableThumbnailBar`, `RenderScale`, `MaxCacheMB`, `PrefetchAbove`,
-`PrefetchBelow`, textos e cores.
+`PrefetchBelow`, text and colors.
 
-Ele tambem expoe:
+It also exposes:
 
-| Propriedade | Tipo | Descricao |
+| Property | Type | Description |
 |---|---|---|
-| `ViewerControl` | `PdfViewer` | Acesso ao controle base para cenarios avancados. |
-| `ToolbarColor` | `Color` | Cor da barra superior. |
-| `BottomBarColor` | `Color` | Cor da barra inferior. |
-| `IconColor` | `Color` | Cor dos icones. |
-| `CaptionColor` | `Color` | Cor dos titulos e contadores. |
-| `LoadingText` | `string` | Texto do carregamento. |
-| `SearchPlaceholder` | `string` | Placeholder da busca. |
-| `PageCountFormat` | `string` | Formato do total de paginas. |
-| `LoadFailedText` | `string` | Texto em falha de carga. |
-| `ShowToolbar` | `bool` | Mostra a barra superior. |
-| `ShowSearch` | `bool` | Mostra o botao de busca. |
-| `ShowPrint` | `bool` | Mostra o botao de impressao. |
-| `ShowShare` | `bool` | Mostra o botao de compartilhamento. |
-| `ShowOrientationToggle` | `bool` | Mostra alternancia vertical/horizontal. |
-| `ShowBottomBar` | `bool` | Mostra a barra inferior. |
+| `ViewerControl` | `PdfViewer` | Access to the base control for advanced scenarios. |
+| `ToolbarColor` | `Color` | Top bar color. |
+| `BottomBarColor` | `Color` | Bottom bar color. |
+| `IconColor` | `Color` | Icon color. |
+| `CaptionColor` | `Color` | Color of titles and counters. |
+| `LoadingText` | `string` | Loading text. |
+| `SearchPlaceholder` | `string` | Search placeholder. |
+| `PageCountFormat` | `string` | Format for the total page count. |
+| `LoadFailedText` | `string` | Text on load failure. |
+| `ShowToolbar` | `bool` | Shows the top bar. |
+| `ShowSearch` | `bool` | Shows the search button. |
+| `ShowPrint` | `bool` | Shows the print button. |
+| `ShowShare` | `bool` | Shows the share button. |
+| `ShowOrientationToggle` | `bool` | Shows the vertical/horizontal toggle. |
+| `ShowBottomBar` | `bool` | Shows the bottom bar. |
 
-### Exemplo pronto
+### Ready-to-use example
 
 ```xml
 <pdf:PdfReaderView
     Source="InteligenciaArtificial.pdf"
-    LoadingText="Carregando..."
-    SearchPlaceholder="Buscar..."
-    PageCountFormat="{}{0} paginas"
-    CopyButtonText="Copiar"
-    CopiedMessageText="Copiado"
-    PrintJobName="Documento"
+    LoadingText="Loading..."
+    SearchPlaceholder="Search..."
+    PageCountFormat="{}{0} pages"
+    CopyButtonText="Copy"
+    CopiedMessageText="Copied"
+    PrintJobName="Document"
     ThumbnailBarPlacement="Right"
     ShowToolbar="True"
     ShowBottomBar="True" />
 ```
 
-## Exemplos
+## Examples
 
-### Leitor completo em uma pagina
+### Full reader on a page
 
 ```xml
 <ContentPage
@@ -289,13 +289,13 @@ Ele tambem expoe:
         Source="manual.pdf"
         MinZoom="1"
         MaxZoom="4"
-        SearchPlaceholder="Buscar..."
-        LoadingText="Carregando..."
+        SearchPlaceholder="Search..."
+        LoadingText="Loading..."
         ThumbnailBarPlacement="Right" />
 </ContentPage>
 ```
 
-### Controle base com eventos
+### Base control with events
 
 ```xml
 <pdf:PdfViewer
@@ -310,7 +310,7 @@ Ele tambem expoe:
 ```csharp
 private void OnDocumentLoaded(object sender, PdfDocumentLoadedEventArgs e)
 {
-    StatusLabel.Text = $"{e.PageCount} paginas";
+    StatusLabel.Text = $"{e.PageCount} pages";
 }
 
 private void OnPageChanged(object sender, PdfPageChangedEventArgs e)
@@ -320,7 +320,7 @@ private void OnPageChanged(object sender, PdfPageChangedEventArgs e)
 
 private void OnLinkTapped(object sender, PdfLinkTappedEventArgs e)
 {
-    if (e.Uri is not null && !e.Uri.StartsWith("https://minhaempresa.com"))
+    if (e.Uri is not null && !e.Uri.StartsWith("https://mycompany.com"))
         e.Handled = true;
 }
 ```
@@ -335,7 +335,7 @@ private void OnLinkTapped(object sender, PdfLinkTappedEventArgs e)
     PageChangedCommand="{Binding PageChangedCommand}" />
 ```
 
-### PDF protegido por senha
+### Password-protected PDF
 
 ```xml
 <pdf:PdfReaderView
@@ -343,12 +343,12 @@ private void OnLinkTapped(object sender, PdfLinkTappedEventArgs e)
     Password="{Binding PdfPassword}" />
 ```
 
-## Cenarios comuns
+## Common scenarios
 
-### Bloquear navegacao externa
+### Block external navigation
 
-Disponivel nos handlers que expõem `LinkTapped` para o tipo de link tocado
-(Android para links internos/externos; iOS/MacCatalyst para URLs externas).
+Available on the handlers that expose `LinkTapped` for the type of link tapped
+(Android for internal/external links; iOS/MacCatalyst for external URLs).
 
 ```csharp
 Viewer.LinkTapped += (sender, e) =>
@@ -358,9 +358,9 @@ Viewer.LinkTapped += (sender, e) =>
 };
 ```
 
-### Abrir links externos com confirmacao
+### Open external links with confirmation
 
-Disponivel no Android, iOS e MacCatalyst para URLs externas.
+Available on Android, iOS and MacCatalyst for external URLs.
 
 ```csharp
 Viewer.LinkTapped += async (sender, e) =>
@@ -374,7 +374,7 @@ Viewer.LinkTapped += async (sender, e) =>
 };
 ```
 
-### Ajustar memoria para PDFs grandes
+### Tune memory for large PDFs
 
 ```xml
 <pdf:PdfViewer
@@ -385,24 +385,24 @@ Viewer.LinkTapped += async (sender, e) =>
     PrefetchBelow="2" />
 ```
 
-## Comportamento por plataforma
+## Platform behavior
 
-| Plataforma | Motor | Observacoes |
+| Platform | Engine | Notes |
 |---|---|---|
-| Android | `PdfRenderer` + PDFium | Render nativo; PDFium para texto, busca e links. |
-| iOS/MacCatalyst | `PdfKit.PdfView` | Zoom, selecao, links nativos; `LinkTapped` cobre URLs externas. |
-| Windows | PDFium | Renderizacao, texto e busca via PDFium; impressao e compartilhamento usam APIs WinUI/Windows. |
+| Android | `PdfRenderer` + PDFium | Native rendering; PDFium for text, search and links. |
+| iOS/MacCatalyst | `PdfKit.PdfView` | Native zoom, selection, links; `LinkTapped` covers external URLs. |
+| Windows | PDFium | Rendering, text and search via PDFium; printing and sharing use WinUI/Windows APIs. |
 
-## Arquitetura
+## Architecture
 
 ```text
 .NET MAUI app
   |
-  +-- PdfReaderView (UI pronta: toolbar, busca, share, print)
+  +-- PdfReaderView (ready-to-use UI: toolbar, search, share, print)
   |     |
   |     +-- PdfViewer
   |
-  +-- PdfViewer (View cross-platform)
+  +-- PdfViewer (cross-platform View)
         |
         +-- Android handler      -> PdfRenderer + PDFium
         +-- iOS/Mac handler      -> PdfKit.PdfView
@@ -411,38 +411,38 @@ Viewer.LinkTapped += async (sender, e) =>
 
 ## Performance
 
-- O controle renderiza paginas sob demanda e mantem cache configuravel.
-- `MaxCacheMB` limita o uso de memoria das paginas renderizadas.
-- `PrefetchAbove` e `PrefetchBelow` melhoram a fluidez do scroll ao custo de memoria/CPU.
-- `RenderScale` controla a nitidez: valores maiores melhoram qualidade, mas aumentam custo.
-- Para documentos muito grandes, reduza prefetch e cache antes de aumentar `RenderScale`.
+- The control renders pages on demand and keeps a configurable cache.
+- `MaxCacheMB` limits the memory used by rendered pages.
+- `PrefetchAbove` and `PrefetchBelow` improve scroll smoothness at the cost of memory/CPU.
+- `RenderScale` controls sharpness: higher values improve quality but increase cost.
+- For very large documents, reduce prefetch and cache before increasing `RenderScale`.
 
-## Solucao de problemas
+## Troubleshooting
 
-### O PDF nao carrega
+### The PDF does not load
 
-- Confira se `Source` e URL acessivel ou caminho de arquivo existente.
-- Para assets, marque o PDF como `MauiAsset` no projeto do app e use o nome logico correto.
-- Se o PDF for protegido, defina `Password`.
-- Assine `DocumentLoadFailed` para capturar a mensagem de erro.
+- Check that `Source` is an accessible URL or an existing file path.
+- For assets, mark the PDF as `MauiAsset` in the app project and use the correct logical name.
+- If the PDF is protected, set `Password`.
+- Subscribe to `DocumentLoadFailed` to capture the error message.
 
-### Busca nao encontra texto
+### Search does not find text
 
-- Alguns PDFs sao imagens escaneadas e nao possuem camada de texto pesquisavel.
-- Confirme se o termo nao esta vazio e se o documento terminou de carregar.
+- Some PDFs are scanned images and have no searchable text layer.
+- Confirm that the term is not empty and that the document has finished loading.
 
-### Links nao abrem ou precisam ser bloqueados
+### Links do not open or need to be blocked
 
-- Assine `LinkTapped`.
-- Defina `e.Handled = true` quando quiser impedir a acao padrao.
-- Android intercepta links internos e externos; iOS/MacCatalyst intercepta URLs externas; Windows ainda nao expõe interceptacao de links.
+- Subscribe to `LinkTapped`.
+- Set `e.Handled = true` when you want to prevent the default action.
+- Android intercepts internal and external links; iOS/MacCatalyst intercepts external URLs; Windows does not yet expose link interception.
 
-### Compartilhamento no Windows nao abre
+### Sharing on Windows does not open
 
-- O `PdfReaderView` usa a API WinUI de compartilhamento vinculada ao HWND da janela atual.
-- Confirme que existe uma janela MAUI ativa e que o documento veio de arquivo, URL ou `PdfStream` valido.
+- The `PdfReaderView` uses the WinUI sharing API bound to the current window's HWND.
+- Confirm that there is an active MAUI window and that the document came from a valid file, URL or `PdfStream`.
 
-## Build local
+## Local build
 
 ```powershell
 dotnet build PDFViewer\PDFViewer.csproj
@@ -452,18 +452,18 @@ dotnet build PDFViewer\PDFViewer.csproj -f net10.0-maccatalyst
 dotnet build PDFViewer\PDFViewer.csproj -f net10.0-windows10.0.19041.0
 ```
 
-## Quando usar cada controle
+## When to use each control
 
-Use `PdfViewer` quando a aplicacao precisa de toolbar propria, comandos em outro
-layout, overlays personalizados ou integracao profunda com o fluxo do app.
+Use `PdfViewer` when the application needs its own toolbar, commands in a different
+layout, custom overlays or deep integration with the app flow.
 
-Use `PdfReaderView` quando voce quer um leitor completo com configuracao por
-propriedades e localizacao de textos.
+Use `PdfReaderView` when you want a complete reader with property-based
+configuration and text localization.
 
-## Licenca
+## License
 
-Pacote distribuido sob licenca MIT.
+Package distributed under the MIT license.
 
-## Suporte
+## Support
 
-Use o issue tracker do repositorio para bugs, duvidas e pedidos de recurso.
+Use the repository's issue tracker for bugs, questions and feature requests.

@@ -1,17 +1,17 @@
 # sample
 
-Aplicativo de demonstracao que consome os tres projetos ativos:
+Demo application that consumes the three active projects:
 
 - `GalleryView`
 - `PDFViewer`
 - `VirtualizedCollectionView`
 
-Ele tambem contem uma comparacao com o `CollectionView` padrao do MAUI para medir
-comportamento, scroll e carga incremental.
+It also includes a comparison with the standard MAUI `CollectionView` to measure
+behavior, scrolling, and incremental loading.
 
-## Registro dos componentes
+## Component registration
 
-O sample registra todos os componentes no `MauiProgram.cs`:
+The sample registers all components in `MauiProgram.cs`:
 
 ```csharp
 builder
@@ -21,18 +21,18 @@ builder
     .UseAgileVirtualizedCollectionView();
 ```
 
-Tambem registra a fonte `MaterialDesignIcons`, usada pelos botoes do app de
-exemplo, e o servico `IAnchoredMenu`, usado no menu superior do PDF customizado.
+It also registers the `MaterialDesignIcons` font, used by the sample app's
+buttons, and the `IAnchoredMenu` service, used in the custom PDF top menu.
 
-## Paginas
+## Pages
 
-| Pagina | Finalidade |
+| Page | Purpose |
 |---|---|
-| `MainPage` | Demonstra `ImageView` e `GalleryView`. |
-| `ReaderDemoPage` | Demonstra o `PdfReaderView`, o leitor pronto. |
-| `VirtualizedListPage` | Demonstra `VirtualizedCollectionView` com lista, grade, busca e metricas. |
+| `MainPage` | Demonstrates `ImageView` and `GalleryView`. |
+| `ReaderDemoPage` | Demonstrates `PdfReaderView`, the ready-to-use reader. |
+| `VirtualizedListPage` | Demonstrates `VirtualizedCollectionView` with list, grid, search, and metrics. |
 
-## XAML namespaces usados
+## XAML namespaces used
 
 ```xml
 xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
@@ -42,33 +42,33 @@ xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedColle
 
 ## Assets
 
-| Asset | Uso |
+| Asset | Usage |
 |---|---|
-| `Resources/Images/agile.png` | Cabecalho do menu Shell. |
-| `Resources/Images/InteligenciaArtificial.pdf` | PDF empacotado para as demos. |
-| `Resources/Images/dotnet_bot.png` | Placeholder de imagem. |
-| `Resources/Fonts/materialdesignicons-webfont.ttf` | Icones do sample. |
+| `Resources/Images/agile.png` | Shell menu header. |
+| `Resources/Images/InteligenciaArtificial.pdf` | PDF bundled for the demos. |
+| `Resources/Images/dotnet_bot.png` | Image placeholder. |
+| `Resources/Fonts/materialdesignicons-webfont.ttf` | Sample icons. |
 
-PDFs em `Resources/Images` sao removidos de `MauiImage` e incluidos como
-`MauiAsset`, para evitar problemas do Resizetizer com arquivos PDF.
+PDFs in `Resources/Images` are removed from `MauiImage` and included as
+`MauiAsset`, to avoid Resizetizer issues with PDF files.
 
-## Menu Shell
+## Shell menu
 
-O `AppShell.xaml` usa um flyout com cabecalho contendo `agile.png`. Cada item do
-menu e um `ShellContent`:
+`AppShell.xaml` uses a flyout with a header containing `agile.png`. Each menu
+item is a `ShellContent`:
 
-- `Gallery View`: imagens e galeria.
-- `PDF Viewer`: UI pronta com `PdfReaderView`.
-- `Virtualized Collection`: lista virtualizada com busca, grade e metricas.
+- `Gallery View`: images and gallery.
+- `PDF Viewer`: ready-to-use UI with `PdfReaderView`.
+- `Virtualized Collection`: virtualized list with search, grid, and metrics.
 
 ## ReaderDemoPage
 
-Usa `PdfReaderView` com toolbar, busca, impressao, compartilhamento, alternancia
-vertical/horizontal, miniaturas, zoom e navegacao por paginas.
+Uses `PdfReaderView` with toolbar, search, printing, sharing, vertical/horizontal
+toggling, thumbnails, zoom, and page navigation.
 
 ## VirtualizedListPage
 
-Usa:
+Uses:
 
 ```xml
 <virtualized:VirtualizedCollectionView
@@ -77,8 +77,8 @@ Usa:
     RemainingItemsThreshold="8" />
 ```
 
-Tambem permite alternar entre lista/grade e altura fixa/dinamica para observar
-impacto de performance.
+It also allows toggling between list/grid and fixed/dynamic height to observe
+performance impact.
 
 ## Build
 
