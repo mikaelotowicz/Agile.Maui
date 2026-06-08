@@ -68,4 +68,11 @@
         </ShellContent.Icon>
     </ShellContent>
 
+    <ShellContent Title="ChipGroup" Route="ChipGroupPage" ContentTemplate="{DataTemplate local:ChipGroupPage}">
+        <ShellContent.Icon>
+            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuChips}"
+                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+        </ShellContent.Icon>
+    </ShellContent>
+
 </Shell>

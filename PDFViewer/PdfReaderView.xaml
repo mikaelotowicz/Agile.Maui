@@ -62,8 +62,8 @@
                 VerticalOptions="Center">
                 <Label
                     x:Name="FileNameLabel"
-                    FontAutoScalingEnabled="False"
                     FontAttributes="Bold"
+                    FontAutoScalingEnabled="False"
                     FontSize="15"
                     LineBreakMode="TailTruncation"
                     MaxLines="1"
@@ -451,7 +451,7 @@
                         </Image.Source>
                     </Image>
                 </Border>
-                </HorizontalStackLayout>
+            </HorizontalStackLayout>
         </Grid>
 
         <Grid

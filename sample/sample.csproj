@@ -89,6 +89,7 @@
 		<ProjectReference Include="..\GalleryView\GalleryView.csproj" />
 		<ProjectReference Include="..\PDFViewer\PDFViewer.csproj" />
 		<ProjectReference Include="..\VirtualizedCollectionView\VirtualizedCollectionView.csproj" />
+		<ProjectReference Include="..\ChipGroup\ChipGroup.csproj" />
 	</ItemGroup>
 
 </Project>

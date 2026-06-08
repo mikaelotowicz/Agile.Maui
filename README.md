@@ -9,13 +9,14 @@
 [![Gallery NuGet](https://img.shields.io/nuget/v/Agile.Maui.Gallery?label=Agile.Maui.Gallery)](https://www.nuget.org/packages/Agile.Maui.Gallery)
 [![PDF NuGet](https://img.shields.io/nuget/v/Agile.Maui.Pdf?label=Agile.Maui.Pdf)](https://www.nuget.org/packages/Agile.Maui.Pdf)
 [![Virtualized NuGet](https://img.shields.io/nuget/v/Agile.Maui.VirtualizedCollection?label=Agile.Maui.VirtualizedCollection)](https://www.nuget.org/packages/Agile.Maui.VirtualizedCollection)
+[![ChipGroup NuGet](https://img.shields.io/nuget/v/Agile.Maui.ChipGroup?label=Agile.Maui.ChipGroup)](https://www.nuget.org/packages/Agile.Maui.ChipGroup)
 
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![MAUI](https://img.shields.io/badge/MAUI-supported-512BD4)
 ![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20Catalyst%20%7C%20Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-`ImageView` / `GalleryView` | `PdfViewer` / `PdfReaderView` | `VirtualizedCollectionView`
+`ImageView` / `GalleryView` | `PdfViewer` / `PdfReaderView` | `VirtualizedCollectionView` | `ChipGroup`
 
 [Overview](#overview) | [Features](#features) | [Projects](#projects) | [Platforms](#platforms) | [Documentation](#additional-documentation)
 
@@ -28,7 +29,7 @@ own project/package, but they all share the C# namespace `Agile.Maui`.
 ## Overview
 
 Agile.Maui is a collection of native MAUI controls for common mobile and desktop app
-scenarios: zoomable images, galleries, PDF reading, and virtualized lists.
+scenarios: zoomable images, galleries, PDF reading, virtualized lists, and chip-based selections.
 Each module can be installed separately, so the app consumes only what it uses.
 
 ### Why use it
@@ -46,6 +47,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 | `Agile.Maui.Gallery` | `ImageView` with zoom/fullscreen on supported platforms and `GalleryView` with image navigation. |
 | `Agile.Maui.Pdf` | Base `PdfViewer` and a ready-to-use `PdfReaderView` with search, print/share, zoom, thumbnails, and navigation. |
 | `Agile.Maui.VirtualizedCollection` | High-performance virtualized list for large volumes of items. |
+| `Agile.Maui.ChipGroup` | Chip selection control with single/multiple selection and wrap, horizontal, or vertical layout modes. |
 
 ## Requirements
 
@@ -60,6 +62,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 | `GalleryView` | `Agile.Maui.Gallery` | `ImageView`, `GalleryView` | [docs/GalleryView.md](docs/GalleryView.md) |
 | `PDFViewer` | `Agile.Maui.Pdf` | `PdfViewer`, `PdfReaderView` | [docs/PDFViewer.md](docs/PDFViewer.md) |
 | `VirtualizedCollectionView` | `Agile.Maui.VirtualizedCollection` | `VirtualizedCollectionView` | [docs/VirtualizedCollectionView.md](docs/VirtualizedCollectionView.md) |
+| `ChipGroup` | `Agile.Maui.ChipGroup` | `ChipGroup` | [docs/ChipGroup.md](docs/ChipGroup.md) |
 | `sample` | sample application | demos of all components | [docs/Sample.md](docs/Sample.md) |
 
 `Controls_old` is a legacy copy of the old monolithic project and is not part of the
@@ -73,6 +76,7 @@ Install only the packages your application actually uses:
 dotnet add package Agile.Maui.Gallery
 dotnet add package Agile.Maui.Pdf
 dotnet add package Agile.Maui.VirtualizedCollection
+dotnet add package Agile.Maui.ChipGroup
 ```
 
 Then register the handlers in `MauiProgram.cs`:
@@ -84,7 +88,8 @@ builder
     .UseMauiApp<App>()
     .UseAgileGalleryView()
     .UseAgilePdfViewer()
-    .UseAgileVirtualizedCollectionView();
+    .UseAgileVirtualizedCollectionView()
+    .UseAgileChipGroup();
 ```
 
 Each method is independent. If the application uses only PDF, for example, call
@@ -98,6 +103,7 @@ The C# namespace is the same, but the XAML assembly changes per package:
 xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
 xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
 xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
+xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
 ```
 
 Example:
@@ -108,6 +114,7 @@ Example:
 <pdf:PdfViewer Source="{Binding PdfPath}" />
 <pdf:PdfReaderView Source="manual.pdf" />
 <virtualized:VirtualizedCollectionView ItemsSource="{Binding Items}" />
+<chips:ChipGroup ItemsSource="{Binding Categories}" LayoutMode="Horizontal" />
 ```
 
 ## Platforms
@@ -118,6 +125,7 @@ Example:
 | `GalleryView` | `ViewPager2` + `RecyclerView` | paginated `UIScrollView` + `UIPageControl` | `FlipView` |
 | `PdfViewer` | `PdfRenderer` for rendering + PDFium for text/search | `PdfKit.PdfView` | PDFium |
 | `VirtualizedCollectionView` | `RecyclerView` | `UICollectionViewCompositionalLayout` | MAUI `CollectionView` |
+| `ChipGroup` | MAUI `FlexLayout` / horizontal `ScrollView` | MAUI `FlexLayout` / horizontal `ScrollView` | MAUI `FlexLayout` / horizontal `ScrollView` |
 
 ## Performance
 
@@ -138,6 +146,7 @@ Agile.Maui.slnx
 GalleryView/
 PDFViewer/
 VirtualizedCollectionView/
+ChipGroup/
 sample/
 docs/
 TUNING.md
@@ -159,6 +168,7 @@ dotnet build -f net10.0-windows10.0.19041.0
 - [GalleryView and ImageView](docs/GalleryView.md)
 - [PDFViewer and PdfReaderView](docs/PDFViewer.md)
 - [VirtualizedCollectionView](docs/VirtualizedCollectionView.md)
+- [ChipGroup](docs/ChipGroup.md)
 - [Sample application](docs/Sample.md)
 - [Performance tuning](TUNING.md)
 - [Android profiling of VirtualizedCollectionView](PROFILING.md)
