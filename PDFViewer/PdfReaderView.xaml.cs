@@ -23,7 +23,13 @@ public partial class PdfReaderView : ContentView
         // (Pode ser sobrescrito pelo consumidor via EnableThumbnailBar="False".) No mobile o drawer
         // continua fechado, abrindo pelo botão da barra inferior.
         if (DeviceInfo.Current.Platform == DevicePlatform.WinUI)
+        {
             EnableThumbnailBar = true;
+            SearchBarMaxWidth = 408;
+        }
+
+        ApplySearchBarLayout();
+        ToolbarHost.SizeChanged += (_, _) => ApplySearchBarLayout();
 
         // Atualiza o caption de zoom também quando o zoom muda por GESTO (pinch/double-tap) dentro
         // do PdfViewer — não só pelos botões +/−.
@@ -144,6 +150,9 @@ public partial class PdfReaderView : ContentView
         BindableProperty.Create(nameof(PageCountFormat), typeof(string), typeof(PdfReaderView), "{0} pages");
     public static readonly BindableProperty LoadFailedTextProperty =
         BindableProperty.Create(nameof(LoadFailedText), typeof(string), typeof(PdfReaderView), "Failed to load");
+    public static readonly BindableProperty SearchBarMaxWidthProperty =
+        BindableProperty.Create(nameof(SearchBarMaxWidth), typeof(double), typeof(PdfReaderView),
+            double.PositiveInfinity, propertyChanged: (b, _, _) => ((PdfReaderView)b).ApplySearchBarLayout());
 
     /// <summary>Texto do overlay de carregamento.</summary>
     public string LoadingText       { get => (string)GetValue(LoadingTextProperty); set => SetValue(LoadingTextProperty, value); }
@@ -153,6 +162,8 @@ public partial class PdfReaderView : ContentView
     public string PageCountFormat   { get => (string)GetValue(PageCountFormatProperty); set => SetValue(PageCountFormatProperty, value); }
     /// <summary>Texto exibido quando o documento falha ao carregar.</summary>
     public string LoadFailedText    { get => (string)GetValue(LoadFailedTextProperty); set => SetValue(LoadFailedTextProperty, value); }
+    /// <summary>Largura maxima da barra de busca. No Windows o padrão é 408; no mobile preenche a toolbar.</summary>
+    public double SearchBarMaxWidth { get => (double)GetValue(SearchBarMaxWidthProperty); set => SetValue(SearchBarMaxWidthProperty, value); }
 
     // ── Liga/desliga de chrome ───────────────────────────────────────────────────
     public static readonly BindableProperty ShowToolbarProperty          = Toggle(nameof(ShowToolbar));
@@ -172,6 +183,29 @@ public partial class PdfReaderView : ContentView
     public bool ShowShare            { get => (bool)GetValue(ShowShareProperty); set => SetValue(ShowShareProperty, value); }
     public bool ShowOrientationToggle{ get => (bool)GetValue(ShowOrientationToggleProperty); set => SetValue(ShowOrientationToggleProperty, value); }
     public bool ShowBottomBar        { get => (bool)GetValue(ShowBottomBarProperty); set => SetValue(ShowBottomBarProperty, value); }
+
+    private void ApplySearchBarLayout()
+    {
+        var maxWidth = SearchBarMaxWidth;
+        if (double.IsNaN(maxWidth) || double.IsInfinity(maxWidth) || maxWidth <= 0)
+        {
+            SearchBar.MaximumWidthRequest = double.PositiveInfinity;
+            SearchBar.WidthRequest = -1;
+            SearchBar.HorizontalOptions = LayoutOptions.Fill;
+            return;
+        }
+
+        var toolbarWidth = ToolbarHost.Width;
+        var horizontalMargin = SearchBar.Margin.Left + SearchBar.Margin.Right;
+        var availableWidth = toolbarWidth > horizontalMargin
+            ? toolbarWidth - horizontalMargin
+            : maxWidth;
+        var targetWidth = Math.Min(maxWidth, availableWidth);
+
+        SearchBar.MaximumWidthRequest = maxWidth;
+        SearchBar.WidthRequest = targetWidth;
+        SearchBar.HorizontalOptions = LayoutOptions.End;
+    }
 
     private void ApplyChrome()
     {

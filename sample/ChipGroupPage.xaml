@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="sample.ChipGroupPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
+    Title="ChipGroup"
+    BackgroundColor="#F2F2F2">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="28,32" Spacing="28">
+
+            <VerticalStackLayout Spacing="14">
+                <Label
+                    FontAttributes="Bold"
+                    FontSize="18"
+                    Text="Single-Select Chips"
+                    TextColor="#8B8B8B" />
+
+                <Label
+                    FontSize="15"
+                    Text="Day available"
+                    TextColor="#111111" />
+
+                <chips:ChipGroup
+                    ItemsSource="{Binding Days}"
+                    SelectionMode="Single"
+                    ShowCheckmark="False" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="14">
+                <Label
+                    FontAttributes="Bold"
+                    FontSize="18"
+                    Text="Multi-Select Chips"
+                    TextColor="#8B8B8B" />
+
+                <Label
+                    FontSize="15"
+                    Text="Interests"
+                    TextColor="#111111" />
+
+                <chips:ChipGroup
+                    ItemsSource="{Binding Interests}"
+                    SelectionMode="Multiple"
+                    ShowCheckmark="True" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="14">
+                <Label
+                    FontAttributes="Bold"
+                    FontSize="18"
+                    Text="Horizontal Chips"
+                    TextColor="#8B8B8B" />
+
+                <Label
+                    FontSize="15"
+                    Text="Categories"
+                    TextColor="#111111" />
+
+                <chips:ChipGroup
+                    ItemsSource="{Binding Categories}"
+                    LayoutMode="Horizontal"
+                    SelectionMode="Single"
+                    ShowCheckmark="False" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="14">
+                <Label
+                    FontAttributes="Bold"
+                    FontSize="18"
+                    Text="Vertical Chips"
+                    TextColor="#8B8B8B" />
+
+                <Label
+                    FontSize="15"
+                    Text="Status"
+                    TextColor="#111111" />
+
+                <chips:ChipGroup
+                    ItemsSource="{Binding Statuses}"
+                    LayoutMode="Vertical"
+                    SelectionMode="Single"
+                    ShowCheckmark="False" />
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

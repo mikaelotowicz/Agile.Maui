@@ -1,10 +1,11 @@
 # sample
 
-Demo application that consumes the three active projects:
+Demo application that consumes the active component projects:
 
 - `GalleryView`
 - `PDFViewer`
 - `VirtualizedCollectionView`
+- `ChipGroup`
 
 It also includes a comparison with the standard MAUI `CollectionView` to measure
 behavior, scrolling, and incremental loading.
@@ -18,7 +19,8 @@ builder
     .UseMauiApp<App>()
     .UseAgileGalleryView()
     .UseAgilePdfViewer()
-    .UseAgileVirtualizedCollectionView();
+    .UseAgileVirtualizedCollectionView()
+    .UseAgileChipGroup();
 ```
 
 It also registers the `MaterialDesignIcons` font, used by the sample app's
@@ -31,6 +33,7 @@ buttons, and the `IAnchoredMenu` service, used in the custom PDF top menu.
 | `MainPage` | Demonstrates `ImageView` and `GalleryView`. |
 | `ReaderDemoPage` | Demonstrates `PdfReaderView`, the ready-to-use reader. |
 | `VirtualizedListPage` | Demonstrates `VirtualizedCollectionView` with list, grid, search, and metrics. |
+| `ChipGroupPage` | Demonstrates `ChipGroup` in wrap, horizontal scroll, and vertical modes. |
 
 ## XAML namespaces used
 
@@ -38,6 +41,7 @@ buttons, and the `IAnchoredMenu` service, used in the custom PDF top menu.
 xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
 xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
 xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
+xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
 ```
 
 ## Assets
@@ -60,6 +64,7 @@ item is a `ShellContent`:
 - `Gallery View`: images and gallery.
 - `PDF Viewer`: ready-to-use UI with `PdfReaderView`.
 - `Virtualized Collection`: virtualized list with search, grid, and metrics.
+- `ChipGroup`: single/multiple chip selection with wrap, horizontal, and vertical layouts.
 
 ## ReaderDemoPage
 
@@ -79,6 +84,19 @@ Uses:
 
 It also allows toggling between list/grid and fixed/dynamic height to observe
 performance impact.
+
+## ChipGroupPage
+
+Uses `ChipGroup` with the three `LayoutMode` values:
+
+```xml
+<chips:ChipGroup LayoutMode="Wrap" />
+<chips:ChipGroup LayoutMode="Horizontal" />
+<chips:ChipGroup LayoutMode="Vertical" />
+```
+
+`Horizontal` keeps the chips in one row and enables horizontal scrolling, which
+is useful for many options on small screens.
 
 ## Build
 

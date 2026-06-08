@@ -13,6 +13,7 @@ namespace sample
                 .UseAgileGalleryView()
                 .UseAgilePdfViewer()
                 .UseAgileVirtualizedCollectionView()
+                .UseAgileChipGroup()
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
