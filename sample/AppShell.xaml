@@ -107,4 +107,11 @@
         </ShellContent.Icon>
     </ShellContent>
 
+    <ShellContent Title="SignaturePad" Route="SignaturePadPage" ContentTemplate="{DataTemplate local:SignaturePadPage}">
+        <ShellContent.Icon>
+            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuSignature}"
+                Color="{StaticResource OnSurfaceLight}" />
+        </ShellContent.Icon>
+    </ShellContent>
+
 </Shell>

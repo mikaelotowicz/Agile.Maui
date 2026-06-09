@@ -49,4 +49,5 @@ public static class Icons
     public const string MenuList       = MaterialDesingIconsFonts.ViewListOutline;        // lista virtualizada
     public const string MenuCollection = MaterialDesingIconsFonts.ViewDashboardOutline;   // MAUI CollectionView
     public const string MenuChips      = MaterialDesingIconsFonts.TagMultipleOutline;     // ChipGroup
+    public const string MenuSignature  = MaterialDesingIconsFonts.SignatureFreehand;      // SignaturePad
 }

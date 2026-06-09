@@ -4,7 +4,7 @@
 		<AssemblyName>Agile.Maui.Pdf</AssemblyName>
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.Pdf</PackageId>
-		<Version>1.0.1</Version>
+		<Version>1.0.2</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.Pdf</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
