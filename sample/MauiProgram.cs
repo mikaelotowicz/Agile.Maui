@@ -14,6 +14,7 @@ namespace sample
                 .UseAgilePdfViewer()
                 .UseAgileVirtualizedCollectionView()
                 .UseAgileChipGroup()
+                .UseAgileSignaturePad()
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");

@@ -90,6 +90,7 @@
 		<ProjectReference Include="..\PDFViewer\PDFViewer.csproj" />
 		<ProjectReference Include="..\VirtualizedCollectionView\VirtualizedCollectionView.csproj" />
 		<ProjectReference Include="..\ChipGroup\ChipGroup.csproj" />
+		<ProjectReference Include="..\SignaturePad\SignaturePad.csproj" />
 	</ItemGroup>
 
 </Project>

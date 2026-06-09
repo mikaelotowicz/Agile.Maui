@@ -256,6 +256,9 @@ It also exposes:
 | `NavigationButtonMode` | `PdfReaderNavigationButtonMode` | Shows a navigation button at the start of the toolbar. `None`, `Auto`, `Menu`, or `Back`. |
 | `NavigationButtonCommand` | `ICommand?` | Optional command that replaces the default navigation action. |
 | `NavigationButtonCommandParameter` | `object?` | Optional parameter for `NavigationButtonCommand`. |
+| `IsFullscreen` | `bool` | Hides the reader toolbar, bottom bar, search UI, and thumbnails so the PDF fills the control. |
+| `ShowFullscreenToggle` | `bool` | Shows a floating button over the PDF to enter or exit internal fullscreen mode. |
+| `FullscreenTogglePlacement` | `PdfReaderFullscreenTogglePlacement` | Floating fullscreen button placement. `Top` or `Bottom`. |
 | `ShowToolbar` | `bool` | Shows the top bar. |
 | `ShowSearch` | `bool` | Shows the search button. |
 | `ShowPrint` | `bool` | Shows the print button. |
@@ -276,6 +279,8 @@ It also exposes:
     PrintJobName="Document"
     ThumbnailBarPlacement="Right"
     ShowToolbar="True"
+    ShowFullscreenToggle="True"
+    FullscreenTogglePlacement="Bottom"
     ShowBottomBar="True" />
 ```
 
@@ -307,6 +312,25 @@ For custom navigation, bind a command:
     NavigationButtonMode="Menu"
     NavigationButtonCommand="{Binding OpenMenuCommand}" />
 ```
+
+### Internal fullscreen
+
+`PdfReaderView` supports an internal fullscreen mode. It does not change system UI
+such as the Android status/navigation bars; it only hides the reader chrome so the
+PDF area fills the control.
+
+```xml
+<pdf:PdfReaderView
+    Source="manual.pdf"
+    ShowFullscreenToggle="True"
+    FullscreenTogglePlacement="Bottom" />
+```
+
+When the floating button is tapped, `IsFullscreen` toggles. While fullscreen is
+active, the toolbar, bottom bar, search overlay, and thumbnail drawer/sidebar are
+hidden. The floating button stays visible so the reader can exit fullscreen.
+Use `FullscreenTogglePlacement="Top"` for the top-right corner or `"Bottom"` for
+the bottom-right corner of the PDF area.
 
 ## Examples
 
