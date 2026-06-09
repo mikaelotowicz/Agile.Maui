@@ -10,13 +10,14 @@
 [![PDF NuGet](https://img.shields.io/nuget/v/Agile.Maui.Pdf?label=Agile.Maui.Pdf)](https://www.nuget.org/packages/Agile.Maui.Pdf)
 [![Virtualized NuGet](https://img.shields.io/nuget/v/Agile.Maui.VirtualizedCollection?label=Agile.Maui.VirtualizedCollection)](https://www.nuget.org/packages/Agile.Maui.VirtualizedCollection)
 [![ChipGroup NuGet](https://img.shields.io/nuget/v/Agile.Maui.ChipGroup?label=Agile.Maui.ChipGroup)](https://www.nuget.org/packages/Agile.Maui.ChipGroup)
+[![SignaturePad NuGet](https://img.shields.io/nuget/v/Agile.Maui.SignaturePad?label=Agile.Maui.SignaturePad)](https://www.nuget.org/packages/Agile.Maui.SignaturePad)
 
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![MAUI](https://img.shields.io/badge/MAUI-supported-512BD4)
 ![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20Catalyst%20%7C%20Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-`ImageView` / `GalleryView` | `PdfViewer` / `PdfReaderView` | `VirtualizedCollectionView` | `ChipGroup`
+`ImageView` / `GalleryView` | `PdfViewer` / `PdfReaderView` | `VirtualizedCollectionView` | `ChipGroup` | `SignaturePad`
 
 [Overview](#overview) | [Features](#features) | [Projects](#projects) | [Platforms](#platforms) | [Documentation](#additional-documentation)
 
@@ -29,7 +30,8 @@ own project/package, but they all share the C# namespace `Agile.Maui`.
 ## Overview
 
 Agile.Maui is a collection of native MAUI controls for common mobile and desktop app
-scenarios: zoomable images, galleries, PDF reading, virtualized lists, and chip-based selections.
+scenarios: zoomable images, galleries, PDF reading, virtualized lists, chip-based selections,
+and signature capture.
 Each module can be installed separately, so the app consumes only what it uses.
 
 ### Why use it
@@ -48,6 +50,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 | `Agile.Maui.Pdf` | Base `PdfViewer` and a ready-to-use `PdfReaderView` with search, print/share, zoom, thumbnails, and navigation. |
 | `Agile.Maui.VirtualizedCollection` | High-performance virtualized list for large volumes of items. |
 | `Agile.Maui.ChipGroup` | Chip selection control with single/multiple selection and wrap, horizontal, or vertical layout modes. |
+| `Agile.Maui.SignaturePad` | Freehand signature capture with vector strokes, pressure metadata, undo/redo, and PNG/JPEG export. |
 
 ## Requirements
 
@@ -63,6 +66,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 | `PDFViewer` | `Agile.Maui.Pdf` | `PdfViewer`, `PdfReaderView` | [docs/PDFViewer.md](docs/PDFViewer.md) |
 | `VirtualizedCollectionView` | `Agile.Maui.VirtualizedCollection` | `VirtualizedCollectionView` | [docs/VirtualizedCollectionView.md](docs/VirtualizedCollectionView.md) |
 | `ChipGroup` | `Agile.Maui.ChipGroup` | `ChipGroup` | [docs/ChipGroup.md](docs/ChipGroup.md) |
+| `SignaturePad` | `Agile.Maui.SignaturePad` | `SignaturePad` | [docs/SignaturePad.md](docs/SignaturePad.md) |
 | `sample` | sample application | demos of all components | [docs/Sample.md](docs/Sample.md) |
 
 `Controls_old` is a legacy copy of the old monolithic project and is not part of the
@@ -77,6 +81,7 @@ dotnet add package Agile.Maui.Gallery
 dotnet add package Agile.Maui.Pdf
 dotnet add package Agile.Maui.VirtualizedCollection
 dotnet add package Agile.Maui.ChipGroup
+dotnet add package Agile.Maui.SignaturePad
 ```
 
 Then register the handlers in `MauiProgram.cs`:
@@ -89,7 +94,8 @@ builder
     .UseAgileGalleryView()
     .UseAgilePdfViewer()
     .UseAgileVirtualizedCollectionView()
-    .UseAgileChipGroup();
+    .UseAgileChipGroup()
+    .UseAgileSignaturePad();
 ```
 
 Each method is independent. If the application uses only PDF, for example, call
@@ -104,6 +110,7 @@ xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
 xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
 xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
 xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
+xmlns:signature="clr-namespace:Agile.Maui;assembly=Agile.Maui.SignaturePad"
 ```
 
 Example:
@@ -115,6 +122,7 @@ Example:
 <pdf:PdfReaderView Source="manual.pdf" />
 <virtualized:VirtualizedCollectionView ItemsSource="{Binding Items}" />
 <chips:ChipGroup ItemsSource="{Binding Categories}" LayoutMode="Horizontal" />
+<signature:SignaturePad StrokeColor="#111111" />
 ```
 
 ## Platforms
@@ -126,17 +134,19 @@ Example:
 | `PdfViewer` | `PdfRenderer` for rendering + PDFium for text/search | `PdfKit.PdfView` | PDFium |
 | `VirtualizedCollectionView` | `RecyclerView` | `UICollectionViewCompositionalLayout` | MAUI `CollectionView` |
 | `ChipGroup` | MAUI `FlexLayout` / horizontal `ScrollView` | MAUI `FlexLayout` / horizontal `ScrollView` | MAUI `FlexLayout` / horizontal `ScrollView` |
+| `SignaturePad` | MAUI `GraphicsView` + native `MotionEvent` pressure input | MAUI `GraphicsView` + native `UITouch` pressure input | MAUI `GraphicsView` + native pointer pressure input |
 
 ## Performance
 
 - `VirtualizedCollectionView` uses native handlers and virtualization to reduce cost on large lists.
 - `PdfViewer` renders pages on demand and provides a configurable cache/prefetch.
 - `GalleryView` and `ImageView` use native per-platform loading and cache where applicable.
+- `SignaturePad` stores strokes as vector data and exports images on demand.
 
 ## Troubleshooting
 
 - If a control does not render, confirm that the corresponding `UseAgile...()` method was called.
-- If XAML cannot find the control, check the assembly in the namespace (`Agile.Maui.Pdf`, `Agile.Maui.Gallery`, or `Agile.Maui.VirtualizedCollection`).
+- If XAML cannot find the control, check the assembly in the namespace, such as `Agile.Maui.Pdf`, `Agile.Maui.Gallery`, `Agile.Maui.VirtualizedCollection`, `Agile.Maui.ChipGroup`, or `Agile.Maui.SignaturePad`.
 - For bundled PDFs, use `MauiAsset` and refer to [docs/PDFViewer.md](docs/PDFViewer.md).
 
 ## Structure
@@ -147,6 +157,7 @@ GalleryView/
 PDFViewer/
 VirtualizedCollectionView/
 ChipGroup/
+SignaturePad/
 sample/
 docs/
 TUNING.md
@@ -169,6 +180,7 @@ dotnet build -f net10.0-windows10.0.19041.0
 - [PDFViewer and PdfReaderView](docs/PDFViewer.md)
 - [VirtualizedCollectionView](docs/VirtualizedCollectionView.md)
 - [ChipGroup](docs/ChipGroup.md)
+- [SignaturePad](docs/SignaturePad.md)
 - [Sample application](docs/Sample.md)
 - [Performance tuning](TUNING.md)
 - [Android profiling of VirtualizedCollectionView](PROFILING.md)

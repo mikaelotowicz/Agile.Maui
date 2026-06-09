@@ -1,23 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<AssemblyName>Agile.Maui.ChipGroup</AssemblyName>
+		<AssemblyName>Agile.Maui.SignaturePad</AssemblyName>
 		<RootNamespace>Agile.Maui</RootNamespace>
-		<PackageId>Agile.Maui.ChipGroup</PackageId>
+		<PackageId>Agile.Maui.SignaturePad</PackageId>
 		<Version>1.0.2</Version>
 		<Authors>Micael Otowicz</Authors>
-		<Product>Agile.Maui.ChipGroup</Product>
+		<Product>Agile.Maui.SignaturePad</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
 		<RepositoryUrl>https://github.com/mikaelotowicz/agile.maui</RepositoryUrl>
 		<PackageProjectUrl>https://github.com/mikaelotowicz/agile.maui</PackageProjectUrl>
-		<Description>MAUI component library providing ChipGroup for single and multiple chip selection.</Description>
-		<PackageTags>maui;android;ios;maccatalyst;windows;chip;chips;filter;selection</PackageTags>
+		<Description>MAUI component library providing SignaturePad with pressure-aware variable-width strokes, biometric capture and image export. Android, iOS, macOS Catalyst and Windows.</Description>
+		<PackageTags>maui;android;ios;maccatalyst;windows;signature;signaturepad;ink;biometric</PackageTags>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<IncludeSymbols>true</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
-		<Title>Agile.Maui.ChipGroup</Title>
+		<Title>Agile.Maui.SignaturePad</Title>
 		<TargetFrameworks>net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
@@ -27,12 +27,6 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
-		<!-- Enable XAML source generation for faster build times and improved performance.
-		     This generates C# code from XAML at compile time instead of runtime inflation.
-		     To disable, remove this line.
-		     For individual files, you can override by setting Inflator metadata:
-		       <MauiXaml Update="MyPage.xaml" Inflator="Default" /> (reverts to defaults: Runtime for Debug, XamlC for Release)
-		       <MauiXaml Update="MyPage.xaml" Inflator="Runtime" /> (force runtime inflation) -->
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
@@ -46,6 +40,10 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.70" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="sample" />
 	</ItemGroup>
 
 	<ItemGroup>

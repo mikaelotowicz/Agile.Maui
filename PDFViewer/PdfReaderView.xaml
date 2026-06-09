@@ -351,6 +351,40 @@
                         TextColor="{StaticResource PdfOnSurfaceVar}" />
                 </VerticalStackLayout>
             </Grid>
+
+            <Border
+                x:Name="FullscreenToggleBtn"
+                Margin="0,14,14,0"
+                BackgroundColor="#EFFFFFFF"
+                HorizontalOptions="End"
+                IsVisible="False"
+                Padding="10"
+                Stroke="{StaticResource PdfOutlineBrush}"
+                StrokeShape="RoundRectangle 22"
+                StrokeThickness="1"
+                VerticalOptions="Start"
+                WidthRequest="44"
+                HeightRequest="44">
+                <Border.Shadow>
+                    <Shadow
+                        Brush="Black"
+                        Offset="0,2"
+                        Opacity="0.18"
+                        Radius="8" />
+                </Border.Shadow>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnFullscreenToggleClicked" />
+                </Border.GestureRecognizers>
+                <Label
+                    x:Name="FullscreenToggleGlyph"
+                    FontAutoScalingEnabled="False"
+                    FontFamily="AgilePdfIcons"
+                    FontSize="22"
+                    HorizontalTextAlignment="Center"
+                    Text="{x:Static agile:PdfReaderIcons.Fullscreen}"
+                    TextColor="{Binding IconColor, Source={x:Reference Root}}"
+                    VerticalTextAlignment="Center" />
+            </Border>
         </Grid>
 
         <!--  ── Barra inferior (zoom + páginas) ──────────────────────────────  -->

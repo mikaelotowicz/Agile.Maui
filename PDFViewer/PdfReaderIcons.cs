@@ -19,6 +19,8 @@ public static class PdfReaderIcons
     public const string Vertical   = "\U000f148a";  // view-day-outline (ir para vertical)
     public const string ZoomIn    = "\U000f06ed";   // magnify-plus-outline
     public const string ZoomOut   = "\U000f06ec";   // magnify-minus-outline
+    public const string Fullscreen = "\U000f0293";  // fullscreen
+    public const string FullscreenExit = "\U000f0294"; // fullscreen-exit
     public const string Prev      = "\U000f0141";   // chevron-left
     public const string Next      = "\U000f0142";   // chevron-right
     public const string Up        = "\U000f0143";   // chevron-up
