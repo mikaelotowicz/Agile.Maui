@@ -105,7 +105,8 @@ public partial class PdfReaderView : ContentView
     public static readonly BindableProperty PrefetchBelowProperty =
         BindableProperty.Create(nameof(PrefetchBelow), typeof(int), typeof(PdfReaderView), 3);
     public static readonly BindableProperty EnableThumbnailBarProperty =
-        BindableProperty.Create(nameof(EnableThumbnailBar), typeof(bool), typeof(PdfReaderView), false);
+        BindableProperty.Create(nameof(EnableThumbnailBar), typeof(bool), typeof(PdfReaderView), false,
+            propertyChanged: (b, _, _) => ((PdfReaderView)b).ApplyChrome());
     public static readonly BindableProperty CopyButtonTextProperty =
         BindableProperty.Create(nameof(CopyButtonText), typeof(string), typeof(PdfReaderView), "Copy");
     public static readonly BindableProperty CopiedMessageTextProperty =
@@ -122,6 +123,15 @@ public partial class PdfReaderView : ContentView
             propertyChanged: (b, _, _) => ((PdfReaderView)b).UpdateNavigationButton());
     public static readonly BindableProperty NavigationButtonCommandParameterProperty =
         BindableProperty.Create(nameof(NavigationButtonCommandParameter), typeof(object), typeof(PdfReaderView));
+    public static readonly BindableProperty IsFullscreenProperty =
+        BindableProperty.Create(nameof(IsFullscreen), typeof(bool), typeof(PdfReaderView), false,
+            BindingMode.TwoWay, propertyChanged: (b, _, _) => ((PdfReaderView)b).OnFullscreenChanged());
+    public static readonly BindableProperty ShowFullscreenToggleProperty =
+        BindableProperty.Create(nameof(ShowFullscreenToggle), typeof(bool), typeof(PdfReaderView), false,
+            propertyChanged: (b, _, _) => ((PdfReaderView)b).UpdateFullscreenToggle());
+    public static readonly BindableProperty FullscreenTogglePlacementProperty =
+        BindableProperty.Create(nameof(FullscreenTogglePlacement), typeof(PdfReaderFullscreenTogglePlacement), typeof(PdfReaderView),
+            PdfReaderFullscreenTogglePlacement.Top, propertyChanged: (b, _, _) => ((PdfReaderView)b).UpdateFullscreenToggle());
 
     public double ZoomFactor          { get => (double)GetValue(ZoomFactorProperty); set => SetValue(ZoomFactorProperty, value); }
     public double MinZoom             { get => (double)GetValue(MinZoomProperty); set => SetValue(MinZoomProperty, value); }
@@ -144,6 +154,12 @@ public partial class PdfReaderView : ContentView
     public ICommand? NavigationButtonCommand { get => (ICommand?)GetValue(NavigationButtonCommandProperty); set => SetValue(NavigationButtonCommandProperty, value); }
     /// <summary>Parametro enviado para <see cref="NavigationButtonCommand"/>.</summary>
     public object? NavigationButtonCommandParameter { get => GetValue(NavigationButtonCommandParameterProperty); set => SetValue(NavigationButtonCommandParameterProperty, value); }
+    /// <summary>Oculta o chrome interno do leitor e deixa o PDF ocupar todo o espaco do controle.</summary>
+    public bool IsFullscreen { get => (bool)GetValue(IsFullscreenProperty); set => SetValue(IsFullscreenProperty, value); }
+    /// <summary>Exibe um botao flutuante sobre o PDF para entrar/sair do fullscreen interno.</summary>
+    public bool ShowFullscreenToggle { get => (bool)GetValue(ShowFullscreenToggleProperty); set => SetValue(ShowFullscreenToggleProperty, value); }
+    /// <summary>Posicao vertical do botao flutuante de fullscreen.</summary>
+    public PdfReaderFullscreenTogglePlacement FullscreenTogglePlacement { get => (PdfReaderFullscreenTogglePlacement)GetValue(FullscreenTogglePlacementProperty); set => SetValue(FullscreenTogglePlacementProperty, value); }
 
     // ── Aparência do chrome (cores) ──────────────────────────────────────────────
     public static readonly BindableProperty ToolbarColorProperty =
@@ -232,8 +248,8 @@ public partial class PdfReaderView : ContentView
 
     private void ApplyChrome()
     {
-        ToolbarHost.IsVisible    = ShowToolbar;
-        BottomBarHost.IsVisible  = ShowBottomBar;
+        ToolbarHost.IsVisible    = ShowToolbar && !IsFullscreen;
+        BottomBarHost.IsVisible  = ShowBottomBar && !IsFullscreen;
         SearchBtn.IsVisible      = ShowSearch;
         PrintBtn.IsVisible       = ShowPrint;
         ShareBtn.IsVisible       = ShowShare;
@@ -246,8 +262,40 @@ public partial class PdfReaderView : ContentView
         Grid.SetColumn(ThumbsBtn, right ? 2 : 0);
         ThumbsBtn.HorizontalOptions = right ? LayoutOptions.End : LayoutOptions.Start;
 
+        Viewer.EnableThumbnailBar = EnableThumbnailBar && !IsFullscreen;
         UpdateNavigationButton();
+        UpdateFullscreenToggle();
     }
+
+    private void OnFullscreenChanged()
+    {
+        if (IsFullscreen)
+        {
+            if (_searchOpen)
+                CollapseSearch();
+
+            IsThumbnailBarOpen = false;
+        }
+
+        ApplyChrome();
+    }
+
+    private void UpdateFullscreenToggle()
+    {
+        FullscreenToggleBtn.IsVisible = ShowFullscreenToggle;
+        FullscreenToggleGlyph.Text = IsFullscreen
+            ? PdfReaderIcons.FullscreenExit
+            : PdfReaderIcons.Fullscreen;
+
+        var bottom = FullscreenTogglePlacement == PdfReaderFullscreenTogglePlacement.Bottom;
+        FullscreenToggleBtn.VerticalOptions = bottom ? LayoutOptions.End : LayoutOptions.Start;
+        FullscreenToggleBtn.Margin = bottom
+            ? new Thickness(0, 0, 14, 14)
+            : new Thickness(0, 14, 14, 0);
+    }
+
+    private void OnFullscreenToggleClicked(object? sender, EventArgs e)
+        => IsFullscreen = !IsFullscreen;
 
     // ── Eventos re-expostos ───────────────────────────────────────────────────────
     private void UpdateNavigationButton()

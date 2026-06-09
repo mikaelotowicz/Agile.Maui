@@ -6,6 +6,7 @@ Demo application that consumes the active component projects:
 - `PDFViewer`
 - `VirtualizedCollectionView`
 - `ChipGroup`
+- `SignaturePad`
 
 It also includes a comparison with the standard MAUI `CollectionView` to measure
 behavior, scrolling, and incremental loading.
@@ -20,7 +21,8 @@ builder
     .UseAgileGalleryView()
     .UseAgilePdfViewer()
     .UseAgileVirtualizedCollectionView()
-    .UseAgileChipGroup();
+    .UseAgileChipGroup()
+    .UseAgileSignaturePad();
 ```
 
 It also registers the `MaterialDesignIcons` font, used by the sample app's
@@ -34,6 +36,7 @@ buttons, and the `IAnchoredMenu` service, used in the custom PDF top menu.
 | `ReaderDemoPage` | Demonstrates `PdfReaderView`, the ready-to-use reader. |
 | `VirtualizedListPage` | Demonstrates `VirtualizedCollectionView` with list, grid, search, and metrics. |
 | `ChipGroupPage` | Demonstrates `ChipGroup` in wrap, horizontal scroll, and vertical modes. |
+| `SignaturePadPage` | Demonstrates `SignaturePad` with signature capture, undo/redo, metrics, and PNG export preview. |
 
 ## XAML namespaces used
 
@@ -42,6 +45,7 @@ xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
 xmlns:pdf="clr-namespace:Agile.Maui;assembly=Agile.Maui.Pdf"
 xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
 xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
+xmlns:signature="clr-namespace:Agile.Maui;assembly=Agile.Maui.SignaturePad"
 ```
 
 ## Assets
@@ -65,6 +69,7 @@ item is a `ShellContent`:
 - `PDF Viewer`: ready-to-use UI with `PdfReaderView`.
 - `Virtualized Collection`: virtualized list with search, grid, and metrics.
 - `ChipGroup`: single/multiple chip selection with wrap, horizontal, and vertical layouts.
+- `SignaturePad`: freehand signature capture and export preview.
 
 ## ReaderDemoPage
 
@@ -97,6 +102,23 @@ Uses `ChipGroup` with the three `LayoutMode` values:
 
 `Horizontal` keeps the chips in one row and enables horizontal scrolling, which
 is useful for many options on small screens.
+
+## SignaturePadPage
+
+Uses `SignaturePad` with a fixed-height signing area, guide line, prompt,
+undo/redo actions, clear action, biometric metrics, and PNG export preview.
+
+```xml
+<signature:SignaturePad
+    MinStrokeWidth="1.5"
+    MaxStrokeWidth="7"
+    PromptText="Sign here"
+    ShowSignatureLine="True"
+    StrokeColor="#111111" />
+```
+
+The page calls `GetSignatureData()` for stroke/point/duration metrics and
+`GetImageStreamAsync()` to export a cropped transparent PNG.
 
 ## Build
 
