@@ -4,20 +4,29 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:sample"
+    BackgroundColor="{StaticResource SurfaceLight}"
+    FlyoutBackgroundColor="{StaticResource SurfaceLight}"
     FlyoutBehavior="Flyout"
+    ForegroundColor="{StaticResource White}"
+    Shell.BackgroundColor="{StaticResource Primary}"
+    Shell.DisabledColor="{StaticResource Gray300}"
+    Shell.FlyoutBackgroundColor="{StaticResource SurfaceLight}"
+    Shell.ForegroundColor="{StaticResource White}"
+    Shell.TitleColor="{StaticResource White}"
+    Shell.UnselectedColor="{StaticResource OnSurfaceVariantLight}"
     Title="Agile">
 
     <Shell.FlyoutHeader>
         <Grid
             Padding="20,28,20,22"
-            BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+            BackgroundColor="{StaticResource Primary}"
             RowDefinitions="Auto,Auto,Auto">
 
             <Border
                 WidthRequest="96"
                 HeightRequest="96"
                 Padding="12"
-                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
+                BackgroundColor="{StaticResource SurfaceLight}"
                 HorizontalOptions="Start"
                 StrokeThickness="0">
                 <Border.StrokeShape>
@@ -35,43 +44,66 @@
                 FontAttributes="Bold"
                 FontSize="20"
                 Text="Agile.Maui"
-                TextColor="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+                TextColor="{StaticResource White}" />
 
             <Label
                 Grid.Row="2"
                 FontSize="13"
                 Text="Sample"
-                TextColor="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+                TextColor="{StaticResource Secondary}" />
         </Grid>
     </Shell.FlyoutHeader>
 
     <!--  Cada ShellContent vira um item do menu (flyout). O PdfViewer é um deles.  -->
 
+    <Shell.ItemTemplate>
+        <DataTemplate>
+            <Grid
+                Padding="20,12"
+                BackgroundColor="{StaticResource SurfaceLight}"
+                ColumnDefinitions="28,*"
+                ColumnSpacing="12">
+                <Image
+                    Grid.Column="0"
+                    HeightRequest="22"
+                    Source="{Binding FlyoutIcon}"
+                    VerticalOptions="Center"
+                    WidthRequest="22" />
+                <Label
+                    Grid.Column="1"
+                    FontSize="15"
+                    Text="{Binding Title}"
+                    TextColor="{StaticResource OnSurfaceLight}"
+                    VerticalOptions="Center" />
+            </Grid>
+        </DataTemplate>
+    </Shell.ItemTemplate>
+
     <ShellContent Title="Gallery View" Route="MainPage" ContentTemplate="{DataTemplate local:MainPage}">
         <ShellContent.Icon>
             <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuHome}"
-                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+                Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 
     <ShellContent Title="PDF Viewer" Route="ReaderDemoPage" ContentTemplate="{DataTemplate local:ReaderDemoPage}">
         <ShellContent.Icon>
             <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuPdf}"
-                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+                Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 
     <ShellContent Title="Virtualized Collection" Route="VirtualizedListPage" ContentTemplate="{DataTemplate local:VirtualizedListPage}">
         <ShellContent.Icon>
             <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuList}"
-                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+                Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 
     <ShellContent Title="ChipGroup" Route="ChipGroupPage" ContentTemplate="{DataTemplate local:ChipGroupPage}">
         <ShellContent.Icon>
             <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuChips}"
-                Color="{AppThemeBinding Light={StaticResource OnSurfaceLight}, Dark={StaticResource OnSurfaceDark}}" />
+                Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 

@@ -4,7 +4,7 @@
 		<AssemblyName>Agile.Maui.ChipGroup</AssemblyName>
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.ChipGroup</PackageId>
-		<Version>1.0.0</Version>
+		<Version>1.0.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.ChipGroup</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -45,7 +45,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.70" />
 	</ItemGroup>
 
 	<ItemGroup>

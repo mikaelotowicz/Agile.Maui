@@ -5,16 +5,16 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:gallery="clr-namespace:Agile.Maui;assembly=Agile.Maui.Gallery"
     xmlns:local="clr-namespace:sample"
-    Title="ImageView Demo">
+    Title="Gallery View"
+    BackgroundColor="{StaticResource BackdropLight}">
 
     <ContentPage.BindingContext>
         <local:MainViewModel />
     </ContentPage.BindingContext>
 
     <ScrollView>
-        <VerticalStackLayout Padding="16,24" Spacing="0">
+        <VerticalStackLayout Padding="28,32" Spacing="0">
 
-            <!--  Cabeçalho  -->
             <Label
                 Margin="0,0,0,4"
                 Style="{StaticResource Headline}"
@@ -23,19 +23,15 @@
             <Label
                 Margin="0,0,0,24"
                 FontSize="13"
-                HorizontalTextAlignment="Center"
-                Text="Toque em qualquer imagem para abrir em fullscreen com zoom"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}" />
+                Text="Tap any image to open fullscreen zoom."
+                TextColor="{StaticResource OnSurfaceVariantLight}" />
 
-            <!--  ── 1. URL · CenterCrop ────────────────────────────────  -->
             <Label
                 Margin="2,0,0,6"
                 FontAttributes="Bold"
                 FontSize="12"
-                Text="URL · CenterCrop · MaxZoom 6×"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}" />
+                Text="URL · CenterCrop · MaxZoom 6x"
+                TextColor="{StaticResource OnSurfaceVariantLight}" />
 
             <gallery:ImageView
                 AspectMode="CenterCrop"
@@ -48,19 +44,16 @@
                 Placeholder="dotnet_bot"
                 Source="https://picsum.photos/seed/maui1/800/500" />
 
-            <!--  ── 2. URL · AspectFit ─────────────────────────────────  -->
             <Label
                 Margin="2,20,0,6"
                 FontAttributes="Bold"
                 FontSize="12"
-                Text="URL · AspectFit · MaxZoom 8×"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}" />
+                Text="URL · AspectFit · MaxZoom 8x"
+                TextColor="{StaticResource OnSurfaceVariantLight}" />
 
             <gallery:ImageView
                 AspectMode="AspectFit"
-                BackgroundColor="{AppThemeBinding Light={StaticResource Gray100},
-                                                  Dark={StaticResource Gray950}}"
+                BackgroundColor="{StaticResource Gray100}"
                 EnableFullscreen="True"
                 HeightRequest="220"
                 ImageFailedCommand="{Binding ImageFailedCommand}"
@@ -70,7 +63,6 @@
                 Placeholder="dotnet_bot"
                 Source="https://picsum.photos/seed/maui2/400/700" />
 
-            <!--  ══ GalleryView ══════════════════════════════════════  -->
             <Label
                 Margin="0,32,0,4"
                 Style="{StaticResource Headline}"
@@ -79,19 +71,15 @@
             <Label
                 Margin="0,0,0,24"
                 FontSize="13"
-                HorizontalTextAlignment="Center"
-                Text="Toque na galeria para navegar entre imagens em fullscreen com zoom e swipe"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}" />
+                Text="Tap the gallery to browse fullscreen images with zoom and swipe."
+                TextColor="{StaticResource OnSurfaceVariantLight}" />
 
-            <!--  ── 5. Galeria de URLs ────────────────────────────────  -->
             <Label
                 Margin="2,0,0,6"
                 FontAttributes="Bold"
                 FontSize="12"
-                Text="Galeria · URLs · CenterCrop · MaxZoom 6×"
-                TextColor="{AppThemeBinding Light={StaticResource Gray500},
-                                            Dark={StaticResource Gray400}}" />
+                Text="Gallery · URLs · CenterCrop · MaxZoom 6x"
+                TextColor="{StaticResource OnSurfaceVariantLight}" />
 
             <gallery:GalleryView
                 AspectMode="CenterCrop"
@@ -105,9 +93,6 @@
                 SelectedIndex="{Binding UrlSelectedIndex, Mode=TwoWay}"
                 SelectionChangedCommand="{Binding UrlSelectionChangedCommand}"
                 ShowIndicator="True" />
-
-
-
 
         </VerticalStackLayout>
     </ScrollView>

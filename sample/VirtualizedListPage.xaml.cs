@@ -1,4 +1,3 @@
-// sample/VirtualizedListPage.xaml.cs
 using System.Collections.ObjectModel;
 using Agile.Maui;
 
@@ -6,25 +5,24 @@ namespace sample;
 
 public partial class VirtualizedListPage : ContentPage
 {
-    private const int InitialBatch   = 500;
-    private const int LoadMoreBatch  = 200;
+    private const int InitialBatch = 500;
+    private const int LoadMoreBatch = 200;
     private const int FixedItemHeight = 112;
 
-    // Todos os itens gerados (para busca local)
     private readonly List<ProductItem> _allItems;
 
-    // ObservableCollection exposta via binding no XAML
     public ObservableCollection<ProductItem> Items { get; } = [];
 
-    private int  _nextId      = 0;
-    private int  _columnCount = 1;
-    private bool _fixedHeight = false;
-    private bool _isLoading   = false;
+    private int _nextId;
+    private int _columnCount = 1;
+    private bool _fixedHeight;
+    private bool _isLoading;
     private string _currentSearch = "";
 
     private readonly PerformanceMonitor _perf = new();
-    private          IDispatcherTimer?   _decayTimer;
-    private          bool                _firstLayoutDone = false;
+    private IDispatcherTimer? _decayTimer;
+    private IDispatcherTimer? _uiTickTimer;
+    private bool _firstLayoutDone;
 
     public VirtualizedListPage()
     {
@@ -32,9 +30,8 @@ public partial class VirtualizedListPage : ContentPage
         InitializeComponent();
         BindingContext = this;
 
-        // Gera todo o dataset no background para não travar a UI
         _allItems = ProductItem.GenerateBatch(0, 2000);
-        _nextId   = _allItems.Count;
+        _nextId = _allItems.Count;
 
         LoadInitialItems();
         StartFpsDecayTimer();
@@ -50,8 +47,6 @@ public partial class VirtualizedListPage : ContentPage
             UpdateMetricsLabel();
         }
     }
-
-    private IDispatcherTimer? _uiTickTimer;
 
     private void StartFpsDecayTimer()
     {
@@ -72,11 +67,9 @@ public partial class VirtualizedListPage : ContentPage
 
     private void UpdateMetricsLabel()
     {
-        FpsLabel.Text     = $"UI {_perf.UiFps:F0} · Scroll {_perf.ScrollFps:F0}";
+        FpsLabel.Text = $"UI {_perf.UiFps:F0} · Scroll {_perf.ScrollFps:F0}";
         MetricsLabel.Text = _perf.FormatReport();
     }
-
-    // ── Carga inicial ────────────────────────────────────────────────────
 
     private void LoadInitialItems()
     {
@@ -85,23 +78,19 @@ public partial class VirtualizedListPage : ContentPage
             Items.Add(item);
 
         UpdateCountLabel();
-        StatusLabel.Text = $"{InitialBatch} produtos carregados. Role para baixo para mais.";
+        StatusLabel.Text = $"{InitialBatch} products loaded. Scroll down to load more.";
     }
-
-    // ── Infinite scroll ──────────────────────────────────────────────────
 
     private async void OnLoadMore(object? sender, EventArgs e)
     {
         if (_isLoading || !string.IsNullOrEmpty(_currentSearch)) return;
         _isLoading = true;
-        LoadingIndicator.IsVisible  = true;
-        LoadingIndicator.IsRunning  = true;
-        StatusLabel.Text = "Carregando mais...";
+        LoadingIndicator.IsVisible = true;
+        LoadingIndicator.IsRunning = true;
+        StatusLabel.Text = "Loading more...";
 
-        // Simula latência de rede (ex: API paginada)
         await Task.Delay(600);
 
-        // Gera novo lote se necessário
         if (_nextId >= _allItems.Count)
         {
             var extra = ProductItem.GenerateBatch(_nextId, LoadMoreBatch);
@@ -115,14 +104,12 @@ public partial class VirtualizedListPage : ContentPage
             Items.Add(item);
 
         UpdateCountLabel();
-        StatusLabel.Text = $"+{toAdd.Count} itens adicionados. Total: {Items.Count}";
+        StatusLabel.Text = $"+{toAdd.Count} items added. Total: {Items.Count}";
 
-        LoadingIndicator.IsRunning  = false;
-        LoadingIndicator.IsVisible  = false;
+        LoadingIndicator.IsRunning = false;
+        LoadingIndicator.IsVisible = false;
         _isLoading = false;
     }
-
-    // ── Busca / filtro ───────────────────────────────────────────────────
 
     private CancellationTokenSource? _searchCts;
 
@@ -130,10 +117,9 @@ public partial class VirtualizedListPage : ContentPage
     {
         _searchCts?.Cancel();
         _searchCts = new CancellationTokenSource();
-        var token  = _searchCts.Token;
-        var query  = e.NewTextValue?.Trim() ?? "";
+        var token = _searchCts.Token;
+        var query = e.NewTextValue?.Trim() ?? "";
 
-        // Debounce de 300ms para não filtrar a cada tecla
         try { await Task.Delay(300, token); }
         catch (OperationCanceledException) { return; }
 
@@ -141,16 +127,14 @@ public partial class VirtualizedListPage : ContentPage
 
         if (string.IsNullOrEmpty(query))
         {
-            // Volta ao estado completo
             Items.Clear();
             foreach (var item in _allItems.Take(InitialBatch))
                 Items.Add(item);
             UpdateCountLabel();
-            StatusLabel.Text = "Busca cancelada.";
+            StatusLabel.Text = "Search cleared.";
             return;
         }
 
-        // Filtra no background
         List<ProductItem> results;
         try
         {
@@ -169,27 +153,22 @@ public partial class VirtualizedListPage : ContentPage
 
         UpdateCountLabel();
         StatusLabel.Text = results.Count == 0
-            ? $"Nenhum resultado para \"{query}\""
-            : $"{results.Count} resultado(s) para \"{query}\"";
+            ? $"No results for \"{query}\""
+            : $"{results.Count} result(s) for \"{query}\"";
     }
-
-    // ── Toggle grade / lista ─────────────────────────────────────────────
 
     private void OnColumnToggleClicked(object? sender, EventArgs e)
     {
         _columnCount = _columnCount == 1 ? 2 : 1;
         ProductList.Span = _columnCount;
 
-        ColumnToggleButton.Text = _columnCount == 1 ? "⊞ Grade" : "☰ Lista";
+        ColumnToggleButton.Text = _columnCount == 1 ? "Grid" : "List";
 
-        // Ajusta a altura ao mudar colunas (grade precisa de mais espaço vertical)
         if (_fixedHeight)
             ProductList.ItemHeight = _columnCount == 1 ? FixedItemHeight : FixedItemHeight + 40;
 
-        StatusLabel.Text = _columnCount == 1 ? "Modo lista (1 coluna)" : "Modo grade (2 colunas)";
+        StatusLabel.Text = _columnCount == 1 ? "List mode (1 column)" : "Grid mode (2 columns)";
     }
-
-    // ── Toggle altura fixa / wrap ────────────────────────────────────────
 
     private void OnHeightToggleClicked(object? sender, EventArgs e)
     {
@@ -198,31 +177,25 @@ public partial class VirtualizedListPage : ContentPage
         if (_fixedHeight)
         {
             ProductList.ItemHeight = _columnCount == 1 ? FixedItemHeight : FixedItemHeight + 40;
-            HeightToggleButton.Text            = "↕ Auto";
+            HeightToggleButton.Text = "Auto";
             HeightToggleButton.BackgroundColor = Color.FromArgb("#512BD4");
-            HeightToggleButton.TextColor       = Colors.White;
-            StatusLabel.Text = $"Altura fixa: {ProductList.ItemHeight}dp — RecyclerView mais rápido";
+            HeightToggleButton.TextColor = Colors.White;
+            StatusLabel.Text = $"Fixed height: {ProductList.ItemHeight}dp - faster native virtualization";
         }
         else
         {
             ProductList.ItemHeight = -1;
-            HeightToggleButton.Text            = "↕ Fixo";
-            HeightToggleButton.BackgroundColor = Application.Current!.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#4D4D4D") : Color.FromArgb("#E0E0E0");
-            HeightToggleButton.TextColor = Application.Current.RequestedTheme == AppTheme.Dark
-                ? Colors.White : Colors.Black;
-            StatusLabel.Text = "Altura automática (wrap_content) — mais flexível, mais lento";
+            HeightToggleButton.Text = "Fixed";
+            HeightToggleButton.BackgroundColor = Color.FromArgb("#C8C8C8");
+            HeightToggleButton.TextColor = Color.FromArgb("#111111");
+            StatusLabel.Text = "Dynamic height - more flexible, more measurement work";
         }
     }
-
-    // ── Eventos de scroll ────────────────────────────────────────────────
 
     private long _lastScrollTick;
 
     private void OnScrolled(object? sender, VirtualizedScrolledEventArgs e)
     {
-        // ScrollTick sempre (para event-rate preciso). Update do label é throttled
-        // a 10fps para evitar re-layouts MAUI excessivos durante fling.
         _perf.ScrollTick();
         var now = Environment.TickCount64;
         if (now - _lastScrollTick < 100) return;
@@ -230,8 +203,6 @@ public partial class VirtualizedListPage : ContentPage
         ScrollLabel.Text = $"Y: {e.VerticalOffset:F0}dp";
         UpdateMetricsLabel();
     }
-
-    // ── Expanders ────────────────────────────────────────────────────────
 
     private void OnSpecsTapped(object? sender, TappedEventArgs e)
     {
@@ -245,8 +216,6 @@ public partial class VirtualizedListPage : ContentPage
             p.IsExpandedReviews = !p.IsExpandedReviews;
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────
-
     private void UpdateCountLabel() =>
-        ItemCountLabel.Text = $"{Items.Count:N0} produto{(Items.Count != 1 ? "s" : "")}";
+        ItemCountLabel.Text = $"{Items.Count:N0} product{(Items.Count != 1 ? "s" : "")}";
 }

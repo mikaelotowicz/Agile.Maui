@@ -55,30 +55,55 @@
                 VerticalOptions="End"
                 Color="{StaticResource PdfOutline}" />
 
-            <VerticalStackLayout
+            <Grid
                 Grid.Column="0"
-                Padding="10,0"
-                Spacing="0"
+                ColumnDefinitions="Auto,*"
+                Padding="2,0,10,0"
                 VerticalOptions="Center">
-                <Label
-                    x:Name="FileNameLabel"
-                    FontAttributes="Bold"
-                    FontAutoScalingEnabled="False"
-                    FontSize="15"
-                    LineBreakMode="TailTruncation"
-                    MaxLines="1"
-                    Text="PDF"
-                    TextColor="{Binding CaptionColor, Source={x:Reference Root}}" />
-                <Label
-                    x:Name="StatsLabel"
-                    FontAutoScalingEnabled="False"
-                    FontSize="10.5"
-                    LineBreakMode="TailTruncation"
-                    MaxLines="1"
-                    MinimumHeightRequest="14"
-                    Text=" "
-                    TextColor="{Binding IconColor, Source={x:Reference Root}}" />
-            </VerticalStackLayout>
+                <Border
+                    x:Name="NavigationBtn"
+                    Grid.Column="0"
+                    IsVisible="False"
+                    Style="{StaticResource PdfIconBtn}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnNavigationButtonClicked" />
+                    </Border.GestureRecognizers>
+                    <Label
+                        x:Name="NavigationButtonGlyph"
+                        FontAutoScalingEnabled="False"
+                        FontFamily="AgilePdfIcons"
+                        FontSize="24"
+                        HorizontalTextAlignment="Center"
+                        Text="{x:Static agile:PdfReaderIcons.Menu}"
+                        TextColor="{Binding IconColor, Source={x:Reference Root}}"
+                        VerticalTextAlignment="Center" />
+                </Border>
+
+                <VerticalStackLayout
+                    Grid.Column="1"
+                    Padding="8,0,0,0"
+                    Spacing="0"
+                    VerticalOptions="Center">
+                    <Label
+                        x:Name="FileNameLabel"
+                        FontAttributes="Bold"
+                        FontAutoScalingEnabled="False"
+                        FontSize="15"
+                        LineBreakMode="TailTruncation"
+                        MaxLines="1"
+                        Text="PDF"
+                        TextColor="{Binding CaptionColor, Source={x:Reference Root}}" />
+                    <Label
+                        x:Name="StatsLabel"
+                        FontAutoScalingEnabled="False"
+                        FontSize="10.5"
+                        LineBreakMode="TailTruncation"
+                        MaxLines="1"
+                        MinimumHeightRequest="14"
+                        Text=" "
+                        TextColor="{Binding IconColor, Source={x:Reference Root}}" />
+                </VerticalStackLayout>
+            </Grid>
 
             <HorizontalStackLayout
                 Grid.Column="1"

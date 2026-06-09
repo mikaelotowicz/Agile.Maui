@@ -4,7 +4,7 @@
 		<AssemblyName>Agile.Maui.Pdf</AssemblyName>
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.Pdf</PackageId>
-		<Version>1.0.0</Version>
+		<Version>1.0.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.Pdf</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -38,7 +38,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.70" />
 	</ItemGroup>
 
 	<!-- Fonte de ícones do PdfReaderView (Material Design Icons), empacotada e registrada por UseAgilePdfViewer(). -->
@@ -50,14 +50,14 @@
 	     PDFiumCore (binding P/Invoke de baixo nível, binários nativos inclusos). Acesso direto à
 	     API de texto (FPDFText_*) para seleção/busca, e ao documento persistente (sem reabrir). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-		<PackageReference Include="PDFiumCore" Version="146.0.7678.1" />
+		<PackageReference Include="PDFiumCore" Version="150.0.7869" />
 	</ItemGroup>
 
 	<!-- Android: PDFium só para a CAMADA DE TEXTO (seleção/busca). O render continua via
 	     PdfRenderer nativo. Binding PDFiumCore + binário nativo bblanchon.PDFium.Android. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="PDFiumCore" Version="146.0.7678.1" />
-		<PackageReference Include="bblanchon.PDFium.Android" Version="146.0.7678" />
+		<PackageReference Include="PDFiumCore" Version="150.0.7869" />
+		<PackageReference Include="bblanchon.PDFium.Android" Version="150.0.7869" />
 	</ItemGroup>
 
 	<ItemGroup>
