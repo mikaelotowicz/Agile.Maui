@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Windows.Input;
 
 namespace Agile.Maui;
 
@@ -12,6 +13,7 @@ public partial class PdfReaderView : ContentView
 {
     private string? _shareFilePath;
     private string? _streamShareFilePath;
+    private PdfReaderNavigationButtonMode _activeNavigationButtonMode = PdfReaderNavigationButtonMode.None;
 
     public PdfReaderView()
     {
@@ -30,6 +32,7 @@ public partial class PdfReaderView : ContentView
 
         ApplySearchBarLayout();
         ToolbarHost.SizeChanged += (_, _) => ApplySearchBarLayout();
+        Loaded += (_, _) => UpdateNavigationButton();
 
         // Atualiza o caption de zoom também quando o zoom muda por GESTO (pinch/double-tap) dentro
         // do PdfViewer — não só pelos botões +/−.
@@ -39,6 +42,12 @@ public partial class PdfReaderView : ContentView
                 UpdateZoomLabel(Viewer.ZoomFactor);
         };
         Viewer.PageTapped += OnViewerPageTapped;
+    }
+
+    protected override void OnParentSet()
+    {
+        base.OnParentSet();
+        UpdateNavigationButton();
     }
 
     // ── Pass-through para o PdfViewer ───────────────────────────────────────────
@@ -105,6 +114,14 @@ public partial class PdfReaderView : ContentView
         BindableProperty.Create(nameof(ThumbnailBarTitleText), typeof(string), typeof(PdfReaderView), "Pages");
     public static readonly BindableProperty PrintJobNameProperty =
         BindableProperty.Create(nameof(PrintJobName), typeof(string), typeof(PdfReaderView), "Document");
+    public static readonly BindableProperty NavigationButtonModeProperty =
+        BindableProperty.Create(nameof(NavigationButtonMode), typeof(PdfReaderNavigationButtonMode), typeof(PdfReaderView),
+            PdfReaderNavigationButtonMode.None, propertyChanged: (b, _, _) => ((PdfReaderView)b).UpdateNavigationButton());
+    public static readonly BindableProperty NavigationButtonCommandProperty =
+        BindableProperty.Create(nameof(NavigationButtonCommand), typeof(ICommand), typeof(PdfReaderView), null,
+            propertyChanged: (b, _, _) => ((PdfReaderView)b).UpdateNavigationButton());
+    public static readonly BindableProperty NavigationButtonCommandParameterProperty =
+        BindableProperty.Create(nameof(NavigationButtonCommandParameter), typeof(object), typeof(PdfReaderView));
 
     public double ZoomFactor          { get => (double)GetValue(ZoomFactorProperty); set => SetValue(ZoomFactorProperty, value); }
     public double MinZoom             { get => (double)GetValue(MinZoomProperty); set => SetValue(MinZoomProperty, value); }
@@ -121,6 +138,12 @@ public partial class PdfReaderView : ContentView
     public string CopiedMessageText   { get => (string)GetValue(CopiedMessageTextProperty); set => SetValue(CopiedMessageTextProperty, value); }
     public string ThumbnailBarTitleText { get => (string)GetValue(ThumbnailBarTitleTextProperty); set => SetValue(ThumbnailBarTitleTextProperty, value); }
     public string PrintJobName        { get => (string)GetValue(PrintJobNameProperty); set => SetValue(PrintJobNameProperty, value); }
+    /// <summary>Modo do botao de navegacao exibido no inicio da toolbar.</summary>
+    public PdfReaderNavigationButtonMode NavigationButtonMode { get => (PdfReaderNavigationButtonMode)GetValue(NavigationButtonModeProperty); set => SetValue(NavigationButtonModeProperty, value); }
+    /// <summary>Comando opcional para substituir a acao padrao do botao de navegacao.</summary>
+    public ICommand? NavigationButtonCommand { get => (ICommand?)GetValue(NavigationButtonCommandProperty); set => SetValue(NavigationButtonCommandProperty, value); }
+    /// <summary>Parametro enviado para <see cref="NavigationButtonCommand"/>.</summary>
+    public object? NavigationButtonCommandParameter { get => GetValue(NavigationButtonCommandParameterProperty); set => SetValue(NavigationButtonCommandParameterProperty, value); }
 
     // ── Aparência do chrome (cores) ──────────────────────────────────────────────
     public static readonly BindableProperty ToolbarColorProperty =
@@ -222,9 +245,159 @@ public partial class PdfReaderView : ContentView
         ThumbsBtn.IsVisible         = ThumbnailBarPlacement != PdfThumbnailPlacement.None;
         Grid.SetColumn(ThumbsBtn, right ? 2 : 0);
         ThumbsBtn.HorizontalOptions = right ? LayoutOptions.End : LayoutOptions.Start;
+
+        UpdateNavigationButton();
     }
 
     // ── Eventos re-expostos ───────────────────────────────────────────────────────
+    private void UpdateNavigationButton()
+    {
+        _activeNavigationButtonMode = ResolveNavigationButtonMode();
+        NavigationBtn.IsVisible = ShowToolbar && _activeNavigationButtonMode != PdfReaderNavigationButtonMode.None;
+        NavigationButtonGlyph.Text = _activeNavigationButtonMode == PdfReaderNavigationButtonMode.Back
+            ? PdfReaderIcons.Back
+            : PdfReaderIcons.Menu;
+    }
+
+    private PdfReaderNavigationButtonMode ResolveNavigationButtonMode()
+    {
+        if (NavigationButtonMode == PdfReaderNavigationButtonMode.None)
+            return PdfReaderNavigationButtonMode.None;
+
+        if (NavigationButtonMode == PdfReaderNavigationButtonMode.Back
+            || NavigationButtonMode == PdfReaderNavigationButtonMode.Menu)
+            return NavigationButtonMode;
+
+        if (CanNavigateBack())
+            return PdfReaderNavigationButtonMode.Back;
+
+        if (CanOpenMenu() || NavigationButtonCommand is not null)
+            return PdfReaderNavigationButtonMode.Menu;
+
+        return PdfReaderNavigationButtonMode.None;
+    }
+
+    private async void OnNavigationButtonClicked(object? sender, EventArgs e)
+    {
+        var command = NavigationButtonCommand;
+        var parameter = NavigationButtonCommandParameter ?? this;
+        if (command?.CanExecute(parameter) == true)
+        {
+            command.Execute(parameter);
+            return;
+        }
+
+        if (_activeNavigationButtonMode == PdfReaderNavigationButtonMode.Back)
+            await NavigateBackAsync();
+        else if (_activeNavigationButtonMode == PdfReaderNavigationButtonMode.Menu)
+            OpenMenu();
+    }
+
+    private bool CanNavigateBack()
+        => Navigation.ModalStack.Count > 0 || Navigation.NavigationStack.Count > 1;
+
+    private async Task NavigateBackAsync()
+    {
+        try
+        {
+            if (Navigation.ModalStack.Count > 0)
+            {
+                await Navigation.PopModalAsync();
+                return;
+            }
+
+            if (Navigation.NavigationStack.Count > 1)
+            {
+                await Navigation.PopAsync();
+                return;
+            }
+
+            var shell = GetCurrentShell();
+            if (shell is not null)
+                await shell.GoToAsync("..");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PdfReaderView] Navigation back failed: {ex}");
+        }
+        finally
+        {
+            UpdateNavigationButton();
+        }
+    }
+
+    private bool CanOpenMenu()
+        => CanOpenShellFlyout() || FindFlyoutPage() is not null;
+
+    private static bool CanOpenShellFlyout()
+    {
+        var shell = GetCurrentShell();
+        return shell is not null && shell.FlyoutBehavior != FlyoutBehavior.Disabled;
+    }
+
+    private void OpenMenu()
+    {
+        try
+        {
+            var shell = GetCurrentShell();
+            if (shell is not null && shell.FlyoutBehavior != FlyoutBehavior.Disabled)
+            {
+                shell.FlyoutIsPresented = true;
+                return;
+            }
+
+            var flyout = FindFlyoutPage();
+            if (flyout is not null)
+                flyout.IsPresented = true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PdfReaderView] Open menu failed: {ex}");
+        }
+    }
+
+    private static Shell? GetCurrentShell()
+    {
+        try
+        {
+            return Shell.Current;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private FlyoutPage? FindFlyoutPage()
+    {
+        for (Element? current = this; current is not null; current = current.Parent)
+        {
+            if (current is FlyoutPage flyout)
+                return flyout;
+        }
+
+        foreach (var window in Application.Current?.Windows ?? [])
+        {
+            var flyout = FindFlyoutPage(window.Page);
+            if (flyout is not null)
+                return flyout;
+        }
+
+        return null;
+    }
+
+    private static FlyoutPage? FindFlyoutPage(Page? page)
+    {
+        return page switch
+        {
+            FlyoutPage flyout => flyout,
+            NavigationPage navigation => FindFlyoutPage(navigation.CurrentPage),
+            TabbedPage tabbed => FindFlyoutPage(tabbed.CurrentPage),
+            Shell => null,
+            _ => null,
+        };
+    }
+
     public event EventHandler<PdfDocumentLoadedEventArgs>?     DocumentLoaded;
     public event EventHandler<PdfDocumentLoadFailedEventArgs>? DocumentLoadFailed;
     public event EventHandler<PdfPageChangedEventArgs>?        PageChanged;

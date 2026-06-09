@@ -16,8 +16,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
-    // ─── Coleções ─────────────────────────────────────────────────────────────
-
     public ObservableCollection<string> UrlImages { get; } =
     [
         "https://picsum.photos/seed/gallery1/800/500",
@@ -36,8 +34,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         "gallery_05",
     ];
 
-    // ─── SelectedIndex (two-way) ──────────────────────────────────────────────
-
     private int _urlSelectedIndex;
     public int UrlSelectedIndex
     {
@@ -52,9 +48,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set => Set(ref _localSelectedIndex, value);
     }
 
-    // ─── Log ──────────────────────────────────────────────────────────────────
-
-    private string _logText = "—";
+    private string _logText = "-";
     public string LogText
     {
         get => _logText;
@@ -70,30 +64,28 @@ public sealed class MainViewModel : INotifyPropertyChanged
         LogText = string.Join("\n", _log);
     }
 
-    // ─── Commands ─────────────────────────────────────────────────────────────
-
-    public ICommand ImageLoadedCommand           { get; }
-    public ICommand ImageFailedCommand           { get; }
-    public ICommand GalleryImageLoadedCommand    { get; }
-    public ICommand GalleryImageFailedCommand    { get; }
-    public ICommand UrlSelectionChangedCommand   { get; }
+    public ICommand ImageLoadedCommand { get; }
+    public ICommand ImageFailedCommand { get; }
+    public ICommand GalleryImageLoadedCommand { get; }
+    public ICommand GalleryImageFailedCommand { get; }
+    public ICommand UrlSelectionChangedCommand { get; }
     public ICommand LocalSelectionChangedCommand { get; }
 
     public MainViewModel()
     {
-        ImageLoadedCommand        = new Command(() => AppendLog("[OK]   ImageView carregou"));
-        ImageFailedCommand        = new Command(() => AppendLog("[ERRO] ImageView falhou"));
-        GalleryImageLoadedCommand = new Command(() => AppendLog("[OK]   galeria carregou imagem"));
-        GalleryImageFailedCommand = new Command(() => AppendLog("[ERRO] galeria falhou ao carregar"));
+        ImageLoadedCommand = new Command(() => AppendLog("[OK] ImageView loaded"));
+        ImageFailedCommand = new Command(() => AppendLog("[ERROR] ImageView failed"));
+        GalleryImageLoadedCommand = new Command(() => AppendLog("[OK] Gallery image loaded"));
+        GalleryImageFailedCommand = new Command(() => AppendLog("[ERROR] Gallery image failed"));
 
         UrlSelectionChangedCommand = new Command(param =>
         {
-            if (param is int idx) AppendLog($"[NAV]  URL → índice {idx}");
+            if (param is int index) AppendLog($"[NAV] URL index {index}");
         });
 
         LocalSelectionChangedCommand = new Command(param =>
         {
-            if (param is int idx) AppendLog($"[NAV]  Local → índice {idx}");
+            if (param is int index) AppendLog($"[NAV] Local index {index}");
         });
     }
 }

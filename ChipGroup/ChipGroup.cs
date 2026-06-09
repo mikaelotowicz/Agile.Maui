@@ -13,6 +13,9 @@ namespace Agile.Maui;
 /// </summary>
 public sealed class ChipGroup : ContentView
 {
+    private const double UnselectedStrokeThickness = 1.0;
+    private const double SelectedStrokeThickness = 1.5;
+
     private readonly FlexLayout _layout;
     private readonly ScrollView _horizontalScroll;
     private readonly List<ChipItem> _observedChipItems = new();
@@ -387,11 +390,11 @@ public sealed class ChipGroup : ContentView
 
         var border = new Border
         {
-            Padding = ChipPadding,
+            Padding = GetCompensatedPadding(selected),
             Margin = new Thickness(0, 0, ChipSpacing, RowSpacing),
             BackgroundColor = selected ? SelectedBackgroundColor : UnselectedBackgroundColor,
             Stroke = new SolidColorBrush(selected ? SelectedStrokeColor : UnselectedStrokeColor),
-            StrokeThickness = selected ? 1.5 : 1,
+            StrokeThickness = selected ? SelectedStrokeThickness : UnselectedStrokeThickness,
             StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(CornerRadius) },
             Content = row,
             Opacity = enabled ? 1 : 0.45,
@@ -418,6 +421,19 @@ public sealed class ChipGroup : ContentView
         }
 
         return border;
+    }
+
+    private Thickness GetCompensatedPadding(bool selected)
+    {
+        if (!selected)
+            return ChipPadding;
+
+        var delta = SelectedStrokeThickness - UnselectedStrokeThickness;
+        return new Thickness(
+            Math.Max(0, ChipPadding.Left - delta),
+            Math.Max(0, ChipPadding.Top - delta),
+            Math.Max(0, ChipPadding.Right - delta),
+            Math.Max(0, ChipPadding.Bottom - delta));
     }
 
     private Border CreateIndicator(bool selected)

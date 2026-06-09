@@ -252,6 +252,10 @@ It also exposes:
 | `SearchPlaceholder` | `string` | Search placeholder. |
 | `PageCountFormat` | `string` | Format for the total page count. |
 | `LoadFailedText` | `string` | Text on load failure. |
+| `SearchBarMaxWidth` | `double` | Maximum search bar width. Mobile fills the toolbar by default; Windows uses a compact width. |
+| `NavigationButtonMode` | `PdfReaderNavigationButtonMode` | Shows a navigation button at the start of the toolbar. `None`, `Auto`, `Menu`, or `Back`. |
+| `NavigationButtonCommand` | `ICommand?` | Optional command that replaces the default navigation action. |
+| `NavigationButtonCommandParameter` | `object?` | Optional parameter for `NavigationButtonCommand`. |
 | `ShowToolbar` | `bool` | Shows the top bar. |
 | `ShowSearch` | `bool` | Shows the search button. |
 | `ShowPrint` | `bool` | Shows the print button. |
@@ -273,6 +277,35 @@ It also exposes:
     ThumbnailBarPlacement="Right"
     ShowToolbar="True"
     ShowBottomBar="True" />
+```
+
+### Navigation button
+
+`PdfReaderView` can show a navigation button in its custom toolbar. This is useful
+when `Shell.NavBarIsVisible="False"` or when the app uses `FlyoutPage` and the
+reader toolbar occupies the navigation bar area.
+
+```xml
+<pdf:PdfReaderView
+    Source="manual.pdf"
+    NavigationButtonMode="Auto" />
+```
+
+Modes:
+
+| Mode | Behavior |
+|---|---|
+| `None` | Default. Does not show a navigation button. |
+| `Auto` | Shows back when the page can navigate back; otherwise shows menu when a Shell flyout or `FlyoutPage` is available. |
+| `Menu` | Shows a menu button and opens `Shell.Current.FlyoutIsPresented` or `FlyoutPage.IsPresented`. |
+| `Back` | Shows a back button and tries modal/pop navigation, then Shell relative navigation. |
+
+For custom navigation, bind a command:
+
+```xml
+<pdf:PdfReaderView
+    NavigationButtonMode="Menu"
+    NavigationButtonCommand="{Binding OpenMenuCommand}" />
 ```
 
 ## Examples

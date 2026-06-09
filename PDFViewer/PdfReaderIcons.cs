@@ -9,6 +9,8 @@ public static class PdfReaderIcons
     /// <summary>Nome (alias) da fonte registrada pela biblioteca.</summary>
     public const string FontFamily = "AgilePdfIcons";
 
+    public const string Menu      = "\U000f035c";   // menu
+    public const string Back      = "\U000f004d";   // arrow-left
     public const string Search    = "\U000f0349";   // magnify
     public const string Print     = "\U000f1786";   // printer-outline
     public const string Share     = "\U000f1514";   // share-variant-outline
