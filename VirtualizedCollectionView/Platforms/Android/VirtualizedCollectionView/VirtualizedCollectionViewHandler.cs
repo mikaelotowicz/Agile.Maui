@@ -91,15 +91,26 @@ public sealed class VirtualizedCollectionViewHandler
             platformView.Rv.RemoveOnScrollListener(_scrollListener);
             _scrollListener = null;
         }
+
+        if (_recyclerListener is not null)
+            platformView.Rv.RemoveRecyclerListener(_recyclerListener);
+
         UnsubscribeCollection();
         _reloadScheduled = false;
+
+        // Desanexar do RecyclerView ANTES de Dispose: SetAdapter(null) recicla as views
+        // e ainda invoca callbacks no adapter/listener registrados — Dispose precoce mata
+        // o peer gerenciado e o runtime tenta reativá-lo do handle nativo, causando
+        // NotSupportedException ("Unable to activate instance ... from native handle").
+        platformView.Rv.SetAdapter(null);
+        platformView.Rv.SetLayoutManager(null);
+
         _adapter?.Dispose();
         _adapter = null;
         _cachingLm = null;
         _recyclerListener?.Dispose();
         _recyclerListener = null;
-        platformView.Rv.SetAdapter(null);
-        platformView.Rv.SetLayoutManager(null);
+
         base.DisconnectHandler(platformView);
     }
 
@@ -802,16 +813,22 @@ internal sealed class ClippedRecyclerView : RecyclerView
 
 internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyclerListener
 {
-    private readonly Context _context;
+    private readonly Context? _context;
 
     public VrRecyclerListener(Context context) => _context = context;
+
+    // Construtor de ativação: usado pelo runtime se o peer gerenciado for coletado
+    // enquanto o Java ainda referencia o listener — sem ele, NotSupportedException.
+    public VrRecyclerListener(IntPtr handle, global::Android.Runtime.JniHandleOwnership transfer)
+        : base(handle, transfer) { }
 
     public void OnViewRecycled(RecyclerView.ViewHolder holder)
     {
         if (holder is VrViewHolder vh)
         {
             vh.CancelHeavyBind();
-            Glide.With(_context).Clear(vh.ItemView);
+            if (_context is not null)
+                Glide.With(_context).Clear(vh.ItemView);
             vh.MauiView.BindingContext = null;
         }
     }
