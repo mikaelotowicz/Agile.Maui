@@ -414,7 +414,7 @@ public sealed class VirtualizedCollectionViewHandler
 
 public sealed class VrContainerView : global::Android.Widget.FrameLayout
 {
-    internal readonly ClippedRecyclerView Rv;
+    internal readonly VrClippedRecyclerView Rv;
     private AView? _emptyView;
 
     public VrContainerView(Context context) : base(context)
@@ -425,7 +425,7 @@ public sealed class VrContainerView : global::Android.Widget.FrameLayout
             ViewGroup.LayoutParams.MatchParent,
             ViewGroup.LayoutParams.MatchParent);
 
-        Rv = new ClippedRecyclerView(context);
+        Rv = new VrClippedRecyclerView(context);
         Rv.HasFixedSize = false;
         Rv.SetItemAnimator(null);
         Rv.NestedScrollingEnabled = false;
@@ -792,9 +792,9 @@ internal sealed class VrScrollListener : RecyclerView.OnScrollListener
 // posiciona o primeiro item com top negativo (scroll parcial), o desenho dos
 // filhos jamais ultrapassa a área retangular dos bounds do RecyclerView. Isso
 // impede a row visível vazar acima do RecyclerView e cobrir a SearchBar/header.
-internal sealed class ClippedRecyclerView : RecyclerView
+internal sealed class VrClippedRecyclerView : RecyclerView
 {
-    public ClippedRecyclerView(Context context) : base(context) { }
+    public VrClippedRecyclerView(Context context) : base(context) { }
 
     protected override void DispatchDraw(Canvas? canvas)
     {
