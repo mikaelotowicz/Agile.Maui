@@ -39,6 +39,8 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => { },
             [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => { },
             [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
+            [nameof(VirtualizedCollectionView.VerticalScrollBarVisibility)]            = (h, _) => h.ApplyScrollIndicators(),
+            [nameof(VirtualizedCollectionView.HorizontalScrollBarVisibility)]          = (h, _) => h.ApplyScrollIndicators(),
         };
 
     public static readonly CommandMapper<VirtualizedCollectionView, VirtualizedCollectionViewHandler> Commands =
@@ -87,8 +89,20 @@ public sealed class VirtualizedCollectionViewHandler
             onScrolled:    (x, y) => VirtualView?.RaiseScrolled(x, y),
             onScrollEnded: CheckRemainingThreshold);
         platformView.Delegate = _delegate;
+        ApplyScrollIndicators();
         // ReloadItems() não é necessário aqui — o mapper dispara ItemsSource e ItemTemplate
         // imediatamente após ConnectHandler, cobrindo a carga inicial sem duplicação.
+    }
+
+    // iOS/MacCatalyst: o indicador de rolagem sempre some sozinho após o gesto (não há
+    // "sempre visível" nativo sem hacks). Never oculta; Default/Always exibem o indicador.
+    private void ApplyScrollIndicators()
+    {
+        if (PlatformView is null || VirtualView is null) return;
+        PlatformView.ShowsVerticalScrollIndicator =
+            VirtualView.VerticalScrollBarVisibility != Microsoft.Maui.ScrollBarVisibility.Never;
+        PlatformView.ShowsHorizontalScrollIndicator =
+            VirtualView.HorizontalScrollBarVisibility != Microsoft.Maui.ScrollBarVisibility.Never;
     }
 
     protected override void DisconnectHandler(UICollectionView platformView)
@@ -130,9 +144,15 @@ public sealed class VirtualizedCollectionViewHandler
         // Fixed            →  CreateAbsolute(ItemHeightRequest): altura fixa sem per-cell measure.
         // Dynamic          →  CreateEstimated(ItemHeightRequest): self-sizing via
         //                     PreferredLayoutAttributesFitting, suporta expanders e conteúdo variável.
+        // MeasureFirst     →  Estimated até medir o 1º item; depois CreateAbsolute(altura medida)
+        //                     para todos (sem per-cell measure a partir daí).
         var estimatedH  = (nfloat)Math.Max(44, VirtualView?.ItemHeightRequest ?? 350);
-        var useAbsolute = itemHeight > 0 || VirtualView?.ItemSizingStrategy == ItemSizingStrategy.Fixed;
-        var absoluteH   = itemHeight > 0 ? (nfloat)itemHeight : estimatedH;
+        var strategy    = VirtualView?.ItemSizingStrategy ?? ItemSizingStrategy.Fixed;
+        var measuredFirst = strategy == ItemSizingStrategy.MeasureFirst && _measureFirstHeight > 0;
+        var useAbsolute = itemHeight > 0 || strategy == ItemSizingStrategy.Fixed || measuredFirst;
+        var absoluteH   = itemHeight > 0 ? (nfloat)itemHeight
+                        : measuredFirst ? _measureFirstHeight
+                        : estimatedH;
         var heightDim   = useAbsolute
             ? NSCollectionLayoutDimension.CreateAbsolute(absoluteH)
             : NSCollectionLayoutDimension.CreateEstimated(estimatedH);
@@ -184,12 +204,32 @@ public sealed class VirtualizedCollectionViewHandler
         return new UICollectionViewCompositionalLayout(section, config);
     }
 
+    // Altura medida do 1º item no modo MeasureFirst (0 = ainda não medido).
+    private nfloat _measureFirstHeight;
+
     internal void RefreshLayout()
     {
         if (PlatformView is null) return;
+        _measureFirstHeight = 0;   // mudou layout/estratégia/altura → re-mede o 1º item
         PlatformView.SetCollectionViewLayout(BuildCompositionalLayout(), animated: false);
         ApplyBounceDirection(PlatformView);
         PlatformView.ReloadData();
+    }
+
+    // Chamado pela 1ª célula medida quando ItemSizingStrategy == MeasureFirst:
+    // fixa a altura medida e reconstrói o layout como Absolute para todos os itens.
+    internal void OnFirstCellMeasured(nfloat height)
+    {
+        if (PlatformView is null || height <= 0) return;
+        if (VirtualView?.ItemSizingStrategy != ItemSizingStrategy.MeasureFirst) return;
+        if (_measureFirstHeight > 0) return;   // já fixado
+
+        _measureFirstHeight = height;
+        PlatformView.BeginInvokeOnMainThread(() =>
+        {
+            if (PlatformView is null) return;
+            PlatformView.SetCollectionViewLayout(BuildCompositionalLayout(), animated: false);
+        });
     }
 
     // ── Dados ────────────────────────────────────────────────────────────────
@@ -198,13 +238,26 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (PlatformView is null || MauiContext is null) return;
 
+        // Recarga total ressincroniza a partir do snapshot atual da fonte, que já reflete
+        // toda mutação ocorrida até aqui. Qualquer evento incremental ainda enfileirado é
+        // redundante — reaplicá-lo duplicaria itens (clássico: Reset seguido de Add no mesmo
+        // ciclo, pois o evento Add é enfileirado APÓS o Reset limpar a fila). Descarta a fila
+        // ao recarregar para manter a contagem em sincronia com a UICollectionView.
+        _pendingChanges.Clear();
+        _flushScheduled = false;
+
         UnsubscribeCollection();
 
         var items    = SnapshotItems(VirtualView.ItemsSource);
         var template = VirtualView.ItemTemplate;
 
         _dataSource?.Dispose();
-        _dataSource = new VrDataSource(items, template, MauiContext, CellId);
+        _dataSource = new VrDataSource(items, template, MauiContext, CellId)
+        {
+            ReportFirstMeasure = VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst
+                ? OnFirstCellMeasured
+                : null,
+        };
 
         PlatformView.DataSource = _dataSource;
         PlatformView.ReloadData();
@@ -392,13 +445,16 @@ internal sealed class VrMauiCell : UICollectionViewCell
     private DataTemplate?     _template;
     private bool              _measureInvalidated;
     private bool              _layoutStabilized;
+    private Action<nfloat>?   _reportFirstMeasure;
 
     [Export("initWithFrame:")]
     public VrMauiCell(CGRect frame) : base(frame) { }
 
-    public void Bind(object item, DataTemplate template, IMauiContext context, UICollectionView collectionView)
+    public void Bind(object item, DataTemplate template, IMauiContext context, UICollectionView collectionView,
+        Action<nfloat>? reportFirstMeasure = null)
     {
-        _collectionView = collectionView;
+        _collectionView     = collectionView;
+        _reportFirstMeasure = reportFirstMeasure;
 
         // Recria a view quando o template muda em runtime; sem esse check,
         // cells do pool reuse manteriam a hierarquia do template antigo.
@@ -485,6 +541,9 @@ internal sealed class VrMauiCell : UICollectionViewCell
         var measured = ((IView)_mauiView).Measure(width, double.PositiveInfinity);
         var height   = Math.Max(1, measured.Height);
 
+        // MeasureFirst: reporta a altura medida; o handler fixa para todos e reconstrói Absolute.
+        _reportFirstMeasure?.Invoke((nfloat)height);
+
         // Célula medida pelo UIKit: a partir daqui pode reagir a MeasureInvalidated
         // (ex: expander abre/fecha) sem risco de loop no setup inicial.
         _layoutStabilized = true;
@@ -525,6 +584,9 @@ internal sealed class VrDataSource : UICollectionViewDataSource
     private readonly IMauiContext _mauiContext;
     private readonly NSString     _cellId;
 
+    // Callback opcional: a 1ª célula medida reporta a altura (modo MeasureFirst).
+    internal Action<nfloat>? ReportFirstMeasure;
+
     public List<object> Items { get; private set; }
 
     public VrDataSource(
@@ -548,7 +610,7 @@ internal sealed class VrDataSource : UICollectionViewDataSource
     {
         var cell = (VrMauiCell)collectionView.DequeueReusableCell(_cellId, indexPath);
         if ((uint)indexPath.Item < (uint)Items.Count)
-            cell.Bind(Items[(int)indexPath.Item], _template, _mauiContext, collectionView);
+            cell.Bind(Items[(int)indexPath.Item], _template, _mauiContext, collectionView, ReportFirstMeasure);
         return cell;
     }
 

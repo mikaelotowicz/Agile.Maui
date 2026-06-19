@@ -28,7 +28,7 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ScheduleReload(),
             [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.ScheduleReload(),
             [nameof(VirtualizedCollectionView.Span)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyCacheSizes(); },
-            [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); },
+            [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyScrollBars(); },
             [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.ApplyItemSpacing(),
             [nameof(VirtualizedCollectionView.EmptyView)]                              = (h, _) => h.UpdateEmptyView(),
             [nameof(VirtualizedCollectionView.EmptyViewTemplate)]                      = (h, _) => h.UpdateEmptyView(),
@@ -37,6 +37,8 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
             [nameof(VirtualizedCollectionView.ItemSizingStrategy)]                       = (h, _) => h.ApplySizeStrategy(),
             [nameof(VirtualizedCollectionView.ItemHeightRequest)]                      = (h, _) => h.ApplySizeStrategy(),
+            [nameof(VirtualizedCollectionView.VerticalScrollBarVisibility)]            = (h, _) => h.ApplyScrollBars(),
+            [nameof(VirtualizedCollectionView.HorizontalScrollBarVisibility)]          = (h, _) => h.ApplyScrollBars(),
         };
 
     public static readonly CommandMapper<VirtualizedCollectionView, VirtualizedCollectionViewHandler> Commands =
@@ -72,6 +74,7 @@ public sealed class VirtualizedCollectionViewHandler
         // construtor de VrContainerView — não repetir aqui.
         ApplyLayoutManager();
         ApplyItemSpacing();
+        ApplyScrollBars();
         UpdateEmptyView();
         // ReloadItems() não é necessário aqui — o mapper dispara ItemsSource e ItemTemplate
         // imediatamente após ConnectHandler, cobrindo a carga inicial sem duplicação.
@@ -186,6 +189,9 @@ public sealed class VirtualizedCollectionViewHandler
         ApplyLayoutManager();
         if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.Fixed)
             _adapter?.SetFixedHeight(GetFallbackHeightPx());
+        else if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst)
+            // Reconstrói em modo "mede o 1º e fixa" (itens voltam a WrapContent até a medição).
+            ScheduleReload();
     }
 
     internal void ApplyCacheSizes()
@@ -235,6 +241,47 @@ public sealed class VirtualizedCollectionViewHandler
             VirtualView.Span,
             VirtualView.Orientation == VirtualizedOrientation.Horizontal);
         PlatformView.Rv.AddItemDecoration(_spacingDecoration);
+    }
+
+    // Habilita/desabilita a barra de rolagem nativa do RecyclerView.
+    //
+    // Pegadinha: num RecyclerView criado em código (sem AttributeSet com android:scrollbars)
+    // o ScrollBarDrawable interno nunca é instanciado. Só ligar VerticalScrollBarEnabled faz
+    // o draw chamar scrollBar.mutate() em null → NullPointerException. A única forma pública
+    // de inicializar esse drawable sem inflar XML é setVerticalScrollbarThumbDrawable, que só
+    // existe a partir do API 29 — por isso o guard de versão. Abaixo de 29 a barra fica oculta
+    // (degrada sem crash). Só "Always" exibe; "Default"/"Never" mantêm oculto.
+    private void ApplyScrollBars()
+    {
+        if (PlatformView is null) return;
+
+        var rv         = PlatformView.Rv;
+        var horizontal = VirtualView.Orientation == VirtualizedOrientation.Horizontal;
+        var vis        = horizontal
+            ? VirtualView.HorizontalScrollBarVisibility
+            : VirtualView.VerticalScrollBarVisibility;
+
+        var visible = vis == Microsoft.Maui.ScrollBarVisibility.Always
+                   && OperatingSystem.IsAndroidVersionAtLeast(29);
+
+        if (visible)
+        {
+            // Thumb cinza translúcido com cantos arredondados. Setá-lo inicializa o
+            // ScrollBarDrawable (evita o NPE) e dá um visual discreto.
+            var thumb = new global::Android.Graphics.Drawables.GradientDrawable();
+            thumb.SetShape(global::Android.Graphics.Drawables.ShapeType.Rectangle);
+            thumb.SetCornerRadius(rv.Context!.Resources!.DisplayMetrics!.Density * 4);
+            thumb.SetColor(global::Android.Graphics.Color.Argb(128, 136, 136, 136));
+
+            if (horizontal) rv.HorizontalScrollbarThumbDrawable = thumb;
+            else            rv.VerticalScrollbarThumbDrawable   = thumb;
+
+            rv.ScrollBarSize          = ViewConfiguration.Get(rv.Context)!.ScaledScrollBarSize;
+            rv.ScrollbarFadingEnabled = false; // Always = sempre visível
+        }
+
+        rv.VerticalScrollBarEnabled   = visible && !horizontal;
+        rv.HorizontalScrollBarEnabled = visible && horizontal;
     }
 
     private void UpdateEmptyView()
@@ -312,8 +359,10 @@ public sealed class VirtualizedCollectionViewHandler
         }
         else
         {
-            _adapter.UpdateItemsAsync(items, heightPx);
+            _adapter.ReplaceAll(items, heightPx);
         }
+
+        _adapter.SetMeasureFirst(VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst);
 
         SubscribeCollection(VirtualView.ItemsSource);
         PlatformView.UpdateEmptyVisibility(items.Count == 0);
@@ -340,6 +389,22 @@ public sealed class VirtualizedCollectionViewHandler
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_adapter is null) return;
+
+        // Para um Reset (substituição total) o snapshot DEVE ser capturado AGORA, no
+        // momento do evento — e não dentro do callback diferido abaixo. Capturá-lo no
+        // callback incluiria itens de eventos posteriores ainda enfileirados (ex.:
+        // Clear() seguido de AddRange() no mesmo tick), fazendo o Reset notificar as
+        // mesmas inserções que o Add seguinte também notifica → dupla contagem → crash.
+        // Os caminhos incrementais usam e.NewItems/e.OldItems (imutáveis), então não
+        // precisam de snapshot.
+        var resetSnapshot =
+            e.Action is NotifyCollectionChangedAction.Add
+                     or NotifyCollectionChangedAction.Remove
+                     or NotifyCollectionChangedAction.Replace
+                     or NotifyCollectionChangedAction.Move
+                ? null
+                : SnapshotItems(VirtualView.ItemsSource);
+
         MainThread.BeginInvokeOnMainThread(() =>
         {
             if (_adapter is null) return;
@@ -358,7 +423,7 @@ public sealed class VirtualizedCollectionViewHandler
                     _adapter.IncrementalMove(e.OldStartingIndex, e.NewStartingIndex);
                     break;
                 default:
-                    _adapter.UpdateItemsAsync(SnapshotItems(VirtualView.ItemsSource), _adapter.ItemHeightPx);
+                    _adapter.ReplaceAll(resetSnapshot ?? SnapshotItems(VirtualView.ItemsSource), _adapter.ItemHeightPx);
                     break;
             }
             PlatformView?.UpdateEmptyVisibility(_adapter.ItemCount == 0);
@@ -530,9 +595,9 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     private          List<object>        _items;
     private          int                 _itemHeightPx;
     private readonly List<VrViewHolder>  _allHolders = [];
-    private          CancellationTokenSource? _diffCts;
     private          bool                _disposed;
     private          CachingLinearLayoutManager? _cachingLm;
+    private          bool                _measureFirst;
 
     public DataTemplate Template    => _template;
     public int          ItemHeightPx => _itemHeightPx;
@@ -540,6 +605,14 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     public void SetFixedHeight(int px) => _itemHeightPx = px;
 
     public void SetCachingLayoutManager(CachingLinearLayoutManager? clm) => _cachingLm = clm;
+
+    // MeasureFirst: enquanto ativo, os itens ficam em WrapContent até o 1º ser medido;
+    // a altura medida é então fixada para todos. Reativar volta a medir.
+    public void SetMeasureFirst(bool value)
+    {
+        _measureFirst = value;
+        if (value) _itemHeightPx = ViewGroup.LayoutParams.WrapContent;
+    }
 
     public VrAdapter(List<object> items, DataTemplate template, IMauiContext mauiContext, int itemHeightPx, Context context)
     {
@@ -615,6 +688,41 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             {
                 h.MauiView.BindingContext = null;
                 h.MauiView.BindingContext = _items[position];
+
+                // MeasureFirst: mede o 1º item exibido (WrapContent) e fixa essa altura para todos.
+                // A medição via Post "tiro único" falha quando o item nasce com altura 0 — o que
+                // acontece se a lista é populada com o controle ainda invisível (ex.: enquanto um
+                // IsCarregando=true mantém IsVisible=false). Nesse caso o item nunca era medido e
+                // a lista ficava colapsada. Aqui observamos o layout do item e fixamos a altura
+                // assim que ela passar a ser > 0 — ou seja, quando a tela enfim ganha dimensões.
+                if (_measureFirst && _itemHeightPx <= 0)
+                {
+                    h.MeasureFirstHeight(real =>
+                    {
+                        if (_disposed || _itemHeightPx > 0) return;
+
+                        _itemHeightPx = real;   // novos holders já nascem com esta altura
+                        _measureFirst = false;
+                        AplicarAlturaFixaATodos();
+                    });
+                }
+            }
+        }
+    }
+
+    // Aplica a altura fixa medida aos holders já criados (os novos pegam em OnCreateViewHolder).
+    private void AplicarAlturaFixaATodos()
+    {
+        lock (_allHolders)
+        {
+            foreach (var hh in _allHolders)
+            {
+                if (hh.ItemView.LayoutParameters is RecyclerView.LayoutParams lp &&
+                    lp.Height != _itemHeightPx)
+                {
+                    lp.Height = _itemHeightPx;
+                    hh.ItemView.LayoutParameters = lp; // dispara requestLayout
+                }
             }
         }
     }
@@ -677,43 +785,20 @@ internal sealed class VrAdapter : RecyclerView.Adapter
 
     // ── Substituição completa com DiffUtil assíncrono ─────────────────────────
 
-    public void UpdateItemsAsync(List<object> newItems, int newHeightPx)
+    // Substituição total SÍNCRONA. NotifyDataSetChanged é à prova de inconsistência
+    // (o RecyclerView re-consulta a contagem inteira no próximo layout) e, por rodar
+    // de forma síncrona na UI thread, jamais corre com as notificações incrementais —
+    // ao contrário do diff assíncrono anterior (Task.Run + DispatchUpdatesTo), que
+    // podia completar fora de ordem e notificar as mesmas inserções uma segunda vez,
+    // divergindo getItemCount() de _items.Count → "Inconsistency detected" no GapWorker.
+    // Mantém o invariante: getItemCount() == _items.Count e cada Notify* corresponde
+    // exatamente à mutação feita em _items.
+    public void ReplaceAll(List<object> newItems, int newHeightPx)
     {
         _itemHeightPx = newHeightPx;
         _cachingLm?.InvalidateCache();
-        _ = RunDiffAsync(newItems);
-    }
-
-    private async Task RunDiffAsync(List<object> newItems)
-    {
-        _diffCts?.Cancel();
-        _diffCts?.Dispose();
-        _diffCts = new CancellationTokenSource();
-        var token   = _diffCts.Token;
-        var oldList = _items;
-
-        DiffUtil.DiffResult result;
-        try
-        {
-            result = await Task.Run(
-                () => DiffUtil.CalculateDiff(new VrDiffCallback(oldList, newItems), true),
-                token);
-        }
-        catch (OperationCanceledException) { return; }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[VrAdapter] DiffUtil error: {ex}");
-            if (!token.IsCancellationRequested)
-            {
-                _items = newItems;
-                NotifyDataSetChanged();
-            }
-            return;
-        }
-        if (token.IsCancellationRequested) return;
-
         _items = newItems;
-        result.DispatchUpdatesTo(this);
+        NotifyDataSetChanged();
     }
 
     protected override void Dispose(bool disposing)
@@ -722,9 +807,6 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         _disposed = true;
         if (disposing)
         {
-            _diffCts?.Cancel();
-            _diffCts?.Dispose();
-            _diffCts = null;
             lock (_allHolders)
             {
                 foreach (var h in _allHolders)
@@ -748,6 +830,10 @@ internal sealed class VrViewHolder : RecyclerView.ViewHolder
     public MauiView MauiView { get; }
     internal CancellationTokenSource? BindCts;
 
+    // MeasureFirst: observador de layout + callback pendente da medição da altura.
+    private LayoutObserver? _measureListener;
+    private Action<int>?    _measureCallback;
+
     public VrViewHolder(AView platformView, MauiView mauiView)
         : base(platformView) => MauiView = mauiView;
 
@@ -756,28 +842,60 @@ internal sealed class VrViewHolder : RecyclerView.ViewHolder
         BindCts?.Cancel();
         BindCts?.Dispose();
         BindCts = null;
+        CancelMeasureFirst();
     }
-}
 
-internal sealed class VrDiffCallback : DiffUtil.Callback
-{
-    private readonly IList<object> _old;
-    private readonly IList<object> _new;
-
-    public VrDiffCallback(IList<object> old, IList<object> @new)
+    // Reporta a altura real do item assim que ela for > 0. Diferente de um Post único,
+    // re-tenta a cada relayout — então funciona mesmo que o item nasça com altura 0
+    // (controle ainda sem dimensões) e só ganhe tamanho quando a tela fica visível.
+    public void MeasureFirstHeight(Action<int> onMeasured)
     {
-        _old = old;
-        _new = @new;
+        CancelMeasureFirst();
+        _measureCallback = onMeasured;
+
+        _measureListener = new LayoutObserver(TryReportMeasure);
+        ItemView.AddOnLayoutChangeListener(_measureListener);
+
+        // Caso o item já tenha altura e nenhum relayout dispare, mede no próximo frame.
+        ItemView.Post(TryReportMeasure);
     }
 
-    public override int OldListSize => _old.Count;
-    public override int NewListSize => _new.Count;
+    private void TryReportMeasure()
+    {
+        if (_measureCallback is null) return;
+        int real = ItemView.Height;
+        if (real <= 0) return;
 
-    public override bool AreItemsTheSame(int op, int np) =>
-        ReferenceEquals(_old[op], _new[np]) || (_old[op]?.Equals(_new[np]) ?? false);
+        var cb = _measureCallback;
+        CancelMeasureFirst();   // mede uma única vez; remove o observador
+        cb(real);
+    }
 
-    public override bool AreContentsTheSame(int op, int np) =>
-        AreItemsTheSame(op, np);
+    private void CancelMeasureFirst()
+    {
+        _measureCallback = null;
+        if (_measureListener is not null)
+        {
+            ItemView.RemoveOnLayoutChangeListener(_measureListener);
+            _measureListener.Dispose();
+            _measureListener = null;
+        }
+    }
+
+    // Dispara o callback quando o layout do ItemView muda (incl. quando ganha altura).
+    private sealed class LayoutObserver : Java.Lang.Object, AView.IOnLayoutChangeListener
+    {
+        private readonly Action? _onLayout;
+        public LayoutObserver(Action onLayout) => _onLayout = onLayout;
+
+        // Construtor de ativação: exigido pelo runtime se o peer gerenciado for coletado
+        // enquanto o Java ainda referencia o listener — sem ele, NotSupportedException.
+        public LayoutObserver(IntPtr handle, global::Android.Runtime.JniHandleOwnership transfer)
+            : base(handle, transfer) { }
+
+        public void OnLayoutChange(AView? v, int l, int t, int r, int b,
+                                   int oldL, int oldT, int oldR, int oldB) => _onLayout?.Invoke();
+    }
 }
 
 internal sealed class VrScrollListener : RecyclerView.OnScrollListener

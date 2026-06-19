@@ -84,6 +84,8 @@ public partial class VirtualizedCollectionView
             case nameof(Orientation):
             case nameof(ItemSpacing):             SyncLayout();                                          break;
             case nameof(ItemSizingStrategy):       SyncSizingStrategy();                                 break;
+            case nameof(VerticalScrollBarVisibility):   _cv.VerticalScrollBarVisibility   = VerticalScrollBarVisibility;   break;
+            case nameof(HorizontalScrollBarVisibility): _cv.HorizontalScrollBarVisibility = HorizontalScrollBarVisibility; break;
         }
     }
 
@@ -102,6 +104,10 @@ public partial class VirtualizedCollectionView
 
     private void SyncSizingStrategy()
     {
+        // Vincula ao ItemSizingStrategy nativo do CollectionView do MAUI:
+        //   Dynamic      → MeasureAllItems (mede cada item)
+        //   MeasureFirst → MeasureFirstItem (mede o 1º e aplica a todos)
+        //   Fixed        → MeasureFirstItem (CollectionView não tem altura fixa real)
         _cv.ItemSizingStrategy = ItemSizingStrategy == Agile.Maui.ItemSizingStrategy.Dynamic
             ? MauiItemSizingStrategy.MeasureAllItems
             : MauiItemSizingStrategy.MeasureFirstItem;

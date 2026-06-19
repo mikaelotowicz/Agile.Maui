@@ -12,9 +12,10 @@ The property controls which `LayoutManager` is created and how cell heights are 
 
 | `ItemSizingStrategy` | `ItemHeight` | Android behavior |
 |---|---|---|
-| `Fixed` | any | `LinearLayoutManager` or `GridLayoutManager`. All cells forced to `ItemHeight` when set, otherwise `ItemHeightRequest`. Fastest path. |
+| `Fixed` | any | `LinearLayoutManager` or `GridLayoutManager`. Cells forced to `ItemHeightRequest` (Android ignores `ItemHeight` in this mode). Fastest path. |
 | `Dynamic` | `≤ 0` (default `-1`) | `CachingLinearLayoutManager`. Cells use `WrapContent`; heights are measured from content. Only for `Span=1, Orientation=Vertical`. |
 | `Dynamic` | `> 0` | Explicit `ItemHeight` wins: normal fixed-height layout. |
+| `MeasureFirst` | any | `LinearLayoutManager`/`GridLayoutManager` (no caching manager). Cells start `WrapContent`; the first bound item is measured (`View.post`), its height is fixed for all via `SetFixedHeight` + relayout. Same scroll cost as `Fixed`; assumes uniform heights (taller items clip). |
 
 > **Grid (`Span > 1`) always uses `GridLayoutManager` with fixed sizing**, regardless of `ItemSizingStrategy`. Dynamic self-sizing is not supported in multi-column mode on Android.
 
@@ -28,6 +29,11 @@ The property controls which `LayoutManager` is created and how cell heights are 
 <agile:VirtualizedCollectionView
     ItemSizingStrategy="Dynamic"
     ItemHeightRequest="200" />
+
+<!-- MeasureFirst: first item measured, its height applied to all (uniform items) -->
+<agile:VirtualizedCollectionView
+    ItemSizingStrategy="MeasureFirst"
+    ItemHeightRequest="200" />
 ```
 
 ### Layout Managers
@@ -37,7 +43,7 @@ Three managers are used, selected automatically:
 | Condition | Manager | `InitialPrefetchItemCount` |
 |---|---|---|
 | `Dynamic`, `Span=1`, vertical, `ItemHeight <= 0` | `CachingLinearLayoutManager` | `4` |
-| `Fixed`, `Span=1` | `LinearLayoutManager` | `6` |
+| `Fixed` or `MeasureFirst`, `Span=1` | `LinearLayoutManager` | `6` |
 | `Span > 1` | `GridLayoutManager` | `Span × 3` |
 
 `InitialPrefetchItemCount` tells RecyclerView's `GapWorker` how many items to pre-inflate during idle frames. Higher values reduce visible inflate jank at the cost of more CPU on the first frame.
@@ -121,6 +127,10 @@ Every layout change rebuilds a `UICollectionViewCompositionalLayout`. The dimens
 | `ItemHeight > 0` | `CreateAbsolute(ItemHeight)` | Fixed height, overrides `ItemSizingStrategy` |
 | `ItemHeight ≤ 0` and `ItemSizingStrategy = Fixed` | `CreateAbsolute(ItemHeightRequest)` | Fixed height from the request hint |
 | `ItemHeight ≤ 0` and `ItemSizingStrategy = Dynamic` | `CreateEstimated(ItemHeightRequest)` | Self-sizing via `PreferredLayoutAttributesFitting` |
+| `ItemHeight ≤ 0` and `ItemSizingStrategy = MeasureFirst`, before measuring | `CreateEstimated(ItemHeightRequest)` | Self-sizing; the first measured cell reports its height back to the handler |
+| `ItemHeight ≤ 0` and `ItemSizingStrategy = MeasureFirst`, after measuring | `CreateAbsolute(measuredHeight)` | Layout rebuilt with the first cell's height for all items |
+
+`MeasureFirst` flow: the cell reports its measured height via a callback (`VrDataSource.ReportFirstMeasure` → `OnFirstCellMeasured`); the handler stores it in `_measureFirstHeight` and rebuilds the compositional layout as `Absolute` (deferred via `BeginInvokeOnMainThread` to avoid reentrancy during the layout pass). `RefreshLayout` resets `_measureFirstHeight` so a layout/strategy/height change re-measures.
 
 The estimated height is clamped to a minimum of 44 pt (`Math.Max(44, ItemHeightRequest)`).
 
@@ -181,7 +191,7 @@ MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualizat
 | `Span` | Mapped to `GridItemsLayout` (> 1) or `LinearItemsLayout` |
 | `ItemSpacing` | Mapped to `HorizontalItemSpacing` / `VerticalItemSpacing` / `ItemSpacing` |
 | `ItemHeight` | **Ignored.** Windows delegates sizing to the MAUI layout engine. |
-| `ItemSizingStrategy` | Mapped to MAUI `CollectionView.ItemSizingStrategy`: `Fixed` → `MeasureFirstItem`, `Dynamic` → `MeasureAllItems` |
+| `ItemSizingStrategy` | Mapped to MAUI `CollectionView.ItemSizingStrategy`: `Dynamic` → `MeasureAllItems`; `Fixed` and `MeasureFirst` → `MeasureFirstItem` |
 | `ItemHeightRequest` | **Ignored** on Windows. MAUI `CollectionView` has no estimated item height hint. |
 | `EmptyView` / `EmptyViewTemplate` | Forwarded to `CollectionView` |
 | `RemainingItemsThreshold` | Forwarded; fired by MAUI `CollectionView.RemainingItemsThresholdReached` |
@@ -228,9 +238,14 @@ MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualizat
 ```
 Which ItemSizingStrategy should I use?
 │
-├─ All items same height?
+├─ All items same height, and you know it?
 │   └─ Fixed + ItemHeightRequest = <that height>
 │       Best performance on all platforms.
+│
+├─ All items same height, but you'd rather not hardcode it?
+│   └─ MeasureFirst + ItemHeightRequest = <estimate>
+│       First item is measured and its height applied to all.
+│       Same scroll cost as Fixed. Taller items would clip.
 │
 ├─ Items have variable height (text wrapping, expandable sections)?
 │   ├─ Android:  Dynamic + ItemHeightRequest = <average expected height>
