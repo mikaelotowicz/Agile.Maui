@@ -161,7 +161,7 @@ public sealed class AnchoredMenu : IAnchoredMenu
     // ── Animação / fechamento ─────────────────────────────────────────────────
 
     private static async Task AnimateInAsync(VisualElement card)
-        => await Task.WhenAll(card.FadeTo(1, 120), card.ScaleTo(1, 120, Easing.CubicOut));
+        => await Task.WhenAll(card.FadeToAsync(1, 120), card.ScaleToAsync(1, 120, Easing.CubicOut));
 
     private async void Dismiss()
     {
@@ -171,7 +171,7 @@ public sealed class AnchoredMenu : IAnchoredMenu
         _overlay = null;
         _host    = null;
 
-        await overlay.FadeTo(0, 90);
+        await overlay.FadeToAsync(0, 90);
         host.Children.Remove(overlay);
     }
 

@@ -1,12 +1,17 @@
 // Controls/VirtualizedCollectionView.cs
 using System.Collections;
 using System.Windows.Input;
+using Microsoft.Maui;
 
 namespace Agile.Maui;
 
 public enum VirtualizedOrientation { Vertical, Horizontal }
 
-public enum ItemSizingStrategy { Fixed, Dynamic }
+// Fixed        → altura definida em ItemHeightRequest (mais rápido; corta conteúdo maior).
+// Dynamic      → cada item se ajusta ao conteúdo (WrapContent); mede item a item.
+// MeasureFirst → mede o 1º item exibido e aplica essa altura a todos (rápido como Fixed,
+//                sem número mágico; assume itens de altura uniforme, senão corta).
+public enum ItemSizingStrategy { Fixed, Dynamic, MeasureFirst }
 
 // ContentView como base: no Windows, Content = CollectionView nativo do MAUI e nenhum
 // handler customizado é necessário. No Android/iOS os handlers criam RecyclerView /
@@ -66,6 +71,14 @@ public partial class VirtualizedCollectionView : ContentView
     public static readonly BindableProperty ItemHeightRequestProperty =
         BindableProperty.Create(nameof(ItemHeightRequest), typeof(double),
             typeof(VirtualizedCollectionView), 350.0);
+
+    public static readonly BindableProperty VerticalScrollBarVisibilityProperty =
+        BindableProperty.Create(nameof(VerticalScrollBarVisibility), typeof(ScrollBarVisibility),
+            typeof(VirtualizedCollectionView), ScrollBarVisibility.Default);
+
+    public static readonly BindableProperty HorizontalScrollBarVisibilityProperty =
+        BindableProperty.Create(nameof(HorizontalScrollBarVisibility), typeof(ScrollBarVisibility),
+            typeof(VirtualizedCollectionView), ScrollBarVisibility.Default);
 
     public IEnumerable? ItemsSource
     {
@@ -144,6 +157,24 @@ public partial class VirtualizedCollectionView : ContentView
     {
         get => (double)GetValue(ItemHeightRequestProperty);
         set => SetValue(ItemHeightRequestProperty, value);
+    }
+
+    /// <summary>
+    /// Visibilidade da barra de rolagem vertical.
+    /// <c>Always</c> = sempre visível; <c>Never</c> = oculta;
+    /// <c>Default</c> = padrão da plataforma (Android: oculta; iOS: indicador nativo que some sozinho).
+    /// </summary>
+    public ScrollBarVisibility VerticalScrollBarVisibility
+    {
+        get => (ScrollBarVisibility)GetValue(VerticalScrollBarVisibilityProperty);
+        set => SetValue(VerticalScrollBarVisibilityProperty, value);
+    }
+
+    /// <summary>Visibilidade da barra de rolagem horizontal (ver <see cref="VerticalScrollBarVisibility"/>).</summary>
+    public ScrollBarVisibility HorizontalScrollBarVisibility
+    {
+        get => (ScrollBarVisibility)GetValue(HorizontalScrollBarVisibilityProperty);
+        set => SetValue(HorizontalScrollBarVisibilityProperty, value);
     }
 
     public event EventHandler? RemainingItemsThresholdReached;
