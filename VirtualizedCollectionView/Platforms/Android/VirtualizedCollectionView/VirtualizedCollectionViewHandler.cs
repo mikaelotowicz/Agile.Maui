@@ -1,13 +1,16 @@
 // Platforms/Android/VirtualizedCollectionView/VirtualizedCollectionViewHandler.cs
 using System.Collections;
 using System.Collections.Specialized;
+using System.Runtime.Versioning;
 using Android.App;
 using Android.Content;
 using Android.Graphics;
+using Android.Runtime;
 using Android.Util;
 using Bumptech.Glide;
 using Android.Views;
 using AndroidX.RecyclerView.Widget;
+using Microsoft.Maui;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 
@@ -262,7 +265,7 @@ public sealed class VirtualizedCollectionViewHandler
             : VirtualView.VerticalScrollBarVisibility;
 
         var visible = vis == Microsoft.Maui.ScrollBarVisibility.Always
-                   && OperatingSystem.IsAndroidVersionAtLeast(29);
+                   && SupportsScrollbarThumbDrawable();
 
         if (visible)
         {
@@ -273,8 +276,10 @@ public sealed class VirtualizedCollectionViewHandler
             thumb.SetCornerRadius(rv.Context!.Resources!.DisplayMetrics!.Density * 4);
             thumb.SetColor(global::Android.Graphics.Color.Argb(128, 136, 136, 136));
 
+#pragma warning disable CA1416
             if (horizontal) rv.HorizontalScrollbarThumbDrawable = thumb;
             else            rv.VerticalScrollbarThumbDrawable   = thumb;
+#pragma warning restore CA1416
 
             rv.ScrollBarSize          = ViewConfiguration.Get(rv.Context)!.ScaledScrollBarSize;
             rv.ScrollbarFadingEnabled = false; // Always = sempre visível
@@ -283,6 +288,9 @@ public sealed class VirtualizedCollectionViewHandler
         rv.VerticalScrollBarEnabled   = visible && !horizontal;
         rv.HorizontalScrollBarEnabled = visible && horizontal;
     }
+
+    [SupportedOSPlatformGuard("android29.0")]
+    private static bool SupportsScrollbarThumbDrawable() => OperatingSystem.IsAndroidVersionAtLeast(29);
 
     private void UpdateEmptyView()
     {
@@ -294,20 +302,23 @@ public sealed class VirtualizedCollectionViewHandler
     private AView? BuildEmptyNativeView()
     {
         var src = VirtualView.EmptyView;
-        if (src is null || MauiContext is null) return null;
+        if (MauiContext is null) return null;
+
+        if (VirtualView.EmptyViewTemplate is { } t)
+        {
+            var tv = (MauiView)t.CreateContent();
+            if (src is not null)
+                tv.BindingContext = src;
+            return tv.ToPlatform(MauiContext);
+        }
+
+        if (src is null) return null;
 
         if (src is string s)
             return MakeEmptyLabel(s);
 
         if (src is MauiView v)
             return v.ToPlatform(MauiContext);
-
-        if (VirtualView.EmptyViewTemplate is { } t)
-        {
-            var tv = (MauiView)t.CreateContent();
-            tv.BindingContext = src;
-            return tv.ToPlatform(MauiContext);
-        }
 
         return MakeEmptyLabel(src.ToString() ?? string.Empty);
     }
@@ -352,7 +363,8 @@ public sealed class VirtualizedCollectionViewHandler
         if (_adapter is null || !ReferenceEquals(_adapter.Template, template))
         {
             _adapter?.Dispose();
-            _adapter = new VrAdapter(items, template, MauiContext, heightPx, Context!);
+            _adapter = new VrAdapter(items, template, MauiContext, heightPx, Context!,
+                VirtualView.Orientation == VirtualizedOrientation.Vertical);
             if (_cachingLm is not null)
                 _adapter.SetCachingLayoutManager(_cachingLm);
             PlatformView.Rv.SetAdapter(_adapter);
@@ -477,9 +489,10 @@ public sealed class VirtualizedCollectionViewHandler
 // VrContainerView — FrameLayout que envolve RecyclerView + EmptyView
 // ─────────────────────────────────────────────────────────────────────────────
 
+[Register("agile/maui/virtualizedcollectionview/VrContainerView")]
 public sealed class VrContainerView : global::Android.Widget.FrameLayout
 {
-    internal readonly VrClippedRecyclerView Rv;
+    internal readonly VrClippedRecyclerView Rv = null!;
     private AView? _emptyView;
 
     public VrContainerView(Context context) : base(context)
@@ -502,8 +515,17 @@ public sealed class VrContainerView : global::Android.Widget.FrameLayout
             ViewGroup.LayoutParams.MatchParent));
     }
 
+    public VrContainerView(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer) { }
+
     protected override void OnLayout(bool changed, int left, int top, int right, int bottom)
     {
+        if (Rv is null)
+        {
+            base.OnLayout(changed, left, top, right, bottom);
+            return;
+        }
+
         // FrameLayout.onLayout posicionaria filhos usando getMeasuredWidth(), que pode ser
         // menor que (right-left) quando MAUI mede antes de calcular o layout final —
         // VrHandlerChain confirmou: VrContainerView width=1035, measured=850.
@@ -545,11 +567,20 @@ public sealed class VrContainerView : global::Android.Widget.FrameLayout
 // VrSpacingDecoration — espaçamento uniforme entre itens
 // ─────────────────────────────────────────────────────────────────────────────
 
+[Register("agile/maui/virtualizedcollectionview/VrSpacingDecoration")]
 internal sealed class VrSpacingDecoration : RecyclerView.ItemDecoration
 {
     private readonly int  _spacePx;
     private readonly int  _columns;
     private readonly bool _horizontal;
+
+    public VrSpacingDecoration(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer)
+    {
+        _spacePx = 0;
+        _columns = 1;
+        _horizontal = false;
+    }
 
     public VrSpacingDecoration(int spacePx, int columns, bool horizontal)
     {
@@ -587,6 +618,7 @@ internal sealed class VrSpacingDecoration : RecyclerView.ItemDecoration
 // VrAdapter — RecyclerView.Adapter com DiffUtil assíncrono e MAUI view recycling
 // ─────────────────────────────────────────────────────────────────────────────
 
+[Register("agile/maui/virtualizedcollectionview/VrAdapter")]
 internal sealed class VrAdapter : RecyclerView.Adapter
 {
     private readonly DataTemplate        _template;
@@ -598,11 +630,17 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     private          bool                _disposed;
     private          CachingLinearLayoutManager? _cachingLm;
     private          bool                _measureFirst;
+    private readonly bool                _coerceWidth;
 
     public DataTemplate Template    => _template;
     public int          ItemHeightPx => _itemHeightPx;
 
-    public void SetFixedHeight(int px) => _itemHeightPx = px;
+    public void SetFixedHeight(int px)
+    {
+        _measureFirst  = false;
+        _itemHeightPx  = px;
+        AplicarAlturaFixaATodos();
+    }
 
     public void SetCachingLayoutManager(CachingLinearLayoutManager? clm) => _cachingLm = clm;
 
@@ -614,13 +652,25 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         if (value) _itemHeightPx = ViewGroup.LayoutParams.WrapContent;
     }
 
-    public VrAdapter(List<object> items, DataTemplate template, IMauiContext mauiContext, int itemHeightPx, Context context)
+    public VrAdapter(List<object> items, DataTemplate template, IMauiContext mauiContext, int itemHeightPx, Context context, bool coerceWidth)
     {
         _items        = items;
         _template     = template;
         _mauiContext  = mauiContext;
         _itemHeightPx = itemHeightPx;
         _context      = context;
+        _coerceWidth  = coerceWidth;
+    }
+
+    public VrAdapter(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer)
+    {
+        _items       = [];
+        _template    = null!;
+        _mauiContext = null!;
+        _itemHeightPx = ViewGroup.LayoutParams.WrapContent;
+        _context     = null!;
+        _coerceWidth = false;
     }
 
     public override int ItemCount => _items.Count;
@@ -636,10 +686,25 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         int h = (_cachingLm == null && _itemHeightPx > 0)
             ? _itemHeightPx
             : ViewGroup.LayoutParams.WrapContent;
-        nativeView.LayoutParameters = new RecyclerView.LayoutParams(
-            ViewGroup.LayoutParams.MatchParent, h);
 
-        var holder = new VrViewHolder(nativeView, mauiView);
+        AView itemRoot;
+        if (_coerceWidth)
+        {
+            var host = new VrItemHost(_context, mauiView);
+            host.AddView(nativeView, new global::Android.Widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+            host.LayoutParameters = new RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, h);
+            itemRoot = host;
+        }
+        else
+        {
+            nativeView.LayoutParameters = new RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, h);
+            itemRoot = nativeView;
+        }
+
+        var holder = new VrViewHolder(itemRoot, mauiView);
         lock (_allHolders) _allHolders.Add(holder);
         return holder;
     }
@@ -821,10 +886,108 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     }
 }
 
+// RecyclerView measures item roots natively, but MAUI templates still need an
+// explicit MAUI measure/arrange pass with the final row width.
+[Register("agile/maui/virtualizedcollectionview/VrItemHost")]
+internal sealed class VrItemHost : global::Android.Widget.FrameLayout
+{
+    private readonly MauiView? _mauiView;
+
+    public VrItemHost(Context context, MauiView mauiView) : base(context)
+    {
+        _mauiView = mauiView;
+        SetClipChildren(false);
+    }
+
+    public VrItemHost(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer) { }
+
+    protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
+    {
+        var target = GetTargetWidth(widthMeasureSpec);
+        if (target <= 0 || ChildCount == 0)
+        {
+            base.OnMeasure(widthMeasureSpec, heightMeasureSpec);
+            return;
+        }
+
+        var child = GetChildAt(0)!;
+        var childWidth = Math.Max(0, target - PaddingLeft - PaddingRight);
+        var childWidthSpec = AView.MeasureSpec.MakeMeasureSpec(childWidth, MeasureSpecMode.Exactly);
+
+        var heightMode = AView.MeasureSpec.GetMode(heightMeasureSpec);
+        var heightSize = AView.MeasureSpec.GetSize(heightMeasureSpec);
+        var childHeight = heightMode == MeasureSpecMode.Unspecified
+            ? 0
+            : Math.Max(0, heightSize - PaddingTop - PaddingBottom);
+        if (_mauiView is not null)
+        {
+            var widthDip = Context.FromPixels(childWidth);
+            var heightDip = heightMode == MeasureSpecMode.Exactly
+                ? Context.FromPixels(childHeight)
+                : double.PositiveInfinity;
+            var measured = ((IView)_mauiView).Measure(widthDip, heightDip);
+            if (heightMode != MeasureSpecMode.Exactly)
+                childHeight = Math.Max(1, (int)Math.Ceiling(Context.ToPixels(measured.Height)));
+        }
+        else if (heightMode != MeasureSpecMode.Exactly)
+        {
+            child.Measure(childWidthSpec, heightMeasureSpec);
+            childHeight = Math.Max(1, child.MeasuredHeight);
+        }
+
+        var childHeightSpec = AView.MeasureSpec.MakeMeasureSpec(childHeight, MeasureSpecMode.Exactly);
+
+        child.Measure(childWidthSpec, childHeightSpec);
+
+        var desiredHeight = heightMode == MeasureSpecMode.Exactly
+            ? heightSize
+            : childHeight + PaddingTop + PaddingBottom;
+
+        SetMeasuredDimension(target, ResolveSize(desiredHeight, heightMeasureSpec));
+    }
+
+    protected override void OnLayout(bool changed, int left, int top, int right, int bottom)
+    {
+        if (ChildCount == 0) return;
+        var childWidth = Math.Max(0, right - left - PaddingLeft - PaddingRight);
+        var childHeight = Math.Max(0, bottom - top - PaddingTop - PaddingBottom);
+        if (_mauiView is not null)
+        {
+            ((IView)_mauiView).Arrange(new Microsoft.Maui.Graphics.Rect(
+                0,
+                0,
+                Context.FromPixels(childWidth),
+                Context.FromPixels(childHeight)));
+        }
+
+        GetChildAt(0)!.Layout(
+            PaddingLeft,
+            PaddingTop,
+            right - left - PaddingRight,
+            bottom - top - PaddingBottom);
+    }
+
+    private int GetTargetWidth(int widthMeasureSpec)
+    {
+        var mode = AView.MeasureSpec.GetMode(widthMeasureSpec);
+        var size = AView.MeasureSpec.GetSize(widthMeasureSpec);
+
+        var target = mode != MeasureSpecMode.Unspecified && size > 0 ? size : -1;
+        if (target <= 0 && Parent is AView p && p.Width > 0)
+            target = p.Width - p.PaddingLeft - p.PaddingRight;
+        if (target <= 0 && Parent is AView mp && mp.MeasuredWidth > 0)
+            target = mp.MeasuredWidth - mp.PaddingLeft - mp.PaddingRight;
+
+        return target;
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers internos
 // ─────────────────────────────────────────────────────────────────────────────
 
+[Register("agile/maui/virtualizedcollectionview/VrViewHolder")]
 internal sealed class VrViewHolder : RecyclerView.ViewHolder
 {
     public MauiView MauiView { get; }
@@ -836,6 +999,9 @@ internal sealed class VrViewHolder : RecyclerView.ViewHolder
 
     public VrViewHolder(AView platformView, MauiView mauiView)
         : base(platformView) => MauiView = mauiView;
+
+    public VrViewHolder(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer) => MauiView = null!;
 
     public void CancelHeavyBind()
     {
@@ -883,6 +1049,7 @@ internal sealed class VrViewHolder : RecyclerView.ViewHolder
     }
 
     // Dispara o callback quando o layout do ItemView muda (incl. quando ganha altura).
+    [Register("agile/maui/virtualizedcollectionview/VrLayoutObserver")]
     private sealed class LayoutObserver : Java.Lang.Object, AView.IOnLayoutChangeListener
     {
         private readonly Action? _onLayout;
@@ -890,7 +1057,7 @@ internal sealed class VrViewHolder : RecyclerView.ViewHolder
 
         // Construtor de ativação: exigido pelo runtime se o peer gerenciado for coletado
         // enquanto o Java ainda referencia o listener — sem ele, NotSupportedException.
-        public LayoutObserver(IntPtr handle, global::Android.Runtime.JniHandleOwnership transfer)
+        public LayoutObserver(IntPtr handle, JniHandleOwnership transfer)
             : base(handle, transfer) { }
 
         public void OnLayoutChange(AView? v, int l, int t, int r, int b,
@@ -898,10 +1065,13 @@ internal sealed class VrViewHolder : RecyclerView.ViewHolder
     }
 }
 
+[Register("agile/maui/virtualizedcollectionview/VrScrollListener")]
 internal sealed class VrScrollListener : RecyclerView.OnScrollListener
 {
     private readonly Action<int, int> _onScrolled;
     public VrScrollListener(Action<int, int> onScrolled) => _onScrolled = onScrolled;
+    public VrScrollListener(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer) => _onScrolled = static (_, _) => { };
     public override void OnScrolled(RecyclerView recyclerView, int dx, int dy) => _onScrolled(dx, dy);
 }
 
@@ -910,9 +1080,13 @@ internal sealed class VrScrollListener : RecyclerView.OnScrollListener
 // posiciona o primeiro item com top negativo (scroll parcial), o desenho dos
 // filhos jamais ultrapassa a área retangular dos bounds do RecyclerView. Isso
 // impede a row visível vazar acima do RecyclerView e cobrir a SearchBar/header.
+[Register("agile/maui/virtualizedcollectionview/VrClippedRecyclerView")]
 internal sealed class VrClippedRecyclerView : RecyclerView
 {
     public VrClippedRecyclerView(Context context) : base(context) { }
+
+    public VrClippedRecyclerView(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer) { }
 
     protected override void DispatchDraw(Canvas? canvas)
     {
@@ -929,6 +1103,7 @@ internal sealed class VrClippedRecyclerView : RecyclerView
 // é devolvido ao pool (antes de ser revinculado a outro item).
 // ─────────────────────────────────────────────────────────────────────────────
 
+[Register("agile/maui/virtualizedcollectionview/VrRecyclerListener")]
 internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyclerListener
 {
     private readonly Context? _context;
@@ -937,7 +1112,7 @@ internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyc
 
     // Construtor de ativação: usado pelo runtime se o peer gerenciado for coletado
     // enquanto o Java ainda referencia o listener — sem ele, NotSupportedException.
-    public VrRecyclerListener(IntPtr handle, global::Android.Runtime.JniHandleOwnership transfer)
+    public VrRecyclerListener(IntPtr handle, JniHandleOwnership transfer)
         : base(handle, transfer) { }
 
     public void OnViewRecycled(RecyclerView.ViewHolder holder)
@@ -958,6 +1133,7 @@ internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyc
 // quando itens têm alturas heterogêneas (ex: GalleryView com imagens de tamanhos variados).
 // ─────────────────────────────────────────────────────────────────────────────
 
+[Register("agile/maui/virtualizedcollectionview/VrCachingLinearLayoutManager")]
 internal sealed class CachingLinearLayoutManager : LinearLayoutManager
 {
     private readonly SparseIntArray _cache = new();
@@ -971,6 +1147,12 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
     public CachingLinearLayoutManager(Context ctx, int fallbackPx) : base(ctx)
     {
         _fallbackHeightPx = fallbackPx;
+    }
+
+    public CachingLinearLayoutManager(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer)
+    {
+        _fallbackHeightPx = 0;
     }
 
     public void CacheItemHeight(int position, int heightPx)
