@@ -57,7 +57,11 @@ public sealed class VirtualizedCollectionViewHandler
     private UIView?                   _emptyNativeView;
     private readonly List<NotifyCollectionChangedEventArgs> _pendingChanges = [];
     private bool _flushScheduled;
-    private int _lastRemainingThresholdItemCount = -1;
+    private bool _remainingThresholdInsideZone;
+    private bool _hasLastScrollOffset;
+    private bool _lastScrollWasTowardEnd;
+    private double _lastScrollX;
+    private double _lastScrollY;
     // Coalescing de ItemsSource + ItemTemplate: ambos disparam no connect via mapper —
     // sem isso ReloadData() seria chamado duas vezes antes do primeiro render.
     private bool _reloadScheduled;
@@ -87,12 +91,8 @@ public sealed class VirtualizedCollectionViewHandler
         base.ConnectHandler(platformView);
         platformView.PrefetchingEnabled = false;
         _delegate = new VrCollectionDelegate(
-            onScrolled:    (x, y) =>
-            {
-                if (VirtualView?.HasScrolledObservers == true)
-                    VirtualView.RaiseScrolled(x, y);
-            },
-            onScrollEnded: CheckRemainingThreshold);
+            onScrolled: OnScrolled,
+            onScrollEnded: OnScrollEnded);
         platformView.Delegate = _delegate;
         ApplyScrollIndicators();
         // ReloadItems() não é necessário aqui — o mapper dispara ItemsSource e ItemTemplate
@@ -326,7 +326,10 @@ public sealed class VirtualizedCollectionViewHandler
         var isMixed     = Array.Exists(pending, e => e.Action != firstAction);
         var hasMove     = Array.Exists(pending, e => e.Action == NotifyCollectionChangedAction.Move);
 
-        if (pending.Length > 30 || isMixed || hasMove)
+        if (pending.Length > 30 ||
+            isMixed ||
+            hasMove ||
+            !CanApplyPendingChanges(pending, _dataSource.Items.Count))
         {
             ReloadItems();
             return;
@@ -352,10 +355,78 @@ public sealed class VirtualizedCollectionViewHandler
             }
         }, null);
 
+        ResetRemainingThresholdGate();
         UpdateEmptyVisibility(_dataSource.Items.Count == 0);
     }
 
+    private static bool CanApplyPendingChanges(NotifyCollectionChangedEventArgs[] pending, int currentCount)
+    {
+        foreach (var e in pending)
+        {
+            switch (e.Action)
+            {
+                case NotifyCollectionChangedAction.Add when e.NewItems is not null:
+                    if (e.NewItems.Count <= 0 ||
+                        e.NewStartingIndex < 0 ||
+                        e.NewStartingIndex > currentCount)
+                        return false;
+                    currentCount += e.NewItems.Count;
+                    break;
+                case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
+                    if (e.OldItems.Count <= 0 ||
+                        e.OldStartingIndex < 0 ||
+                        e.OldStartingIndex + e.OldItems.Count > currentCount)
+                        return false;
+                    currentCount -= e.OldItems.Count;
+                    break;
+                case NotifyCollectionChangedAction.Replace when e.NewItems is not null && e.OldItems is not null:
+                    if (e.NewItems.Count <= 0 ||
+                        e.NewItems.Count != e.OldItems.Count ||
+                        e.NewStartingIndex < 0 ||
+                        e.NewStartingIndex + e.NewItems.Count > currentCount)
+                        return false;
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
     // ── Threshold / scroll ────────────────────────────────────────────────────
+
+    private void OnScrolled(double x, double y)
+    {
+        var view = VirtualView;
+        if (view is null) return;
+
+        var dx = _hasLastScrollOffset ? x - _lastScrollX : 0;
+        var dy = _hasLastScrollOffset ? y - _lastScrollY : 0;
+        _lastScrollX = x;
+        _lastScrollY = y;
+        _hasLastScrollOffset = true;
+
+        _lastScrollWasTowardEnd = IsScrollingTowardEnd(dx, dy);
+
+        if (view.HasScrolledObservers)
+            view.RaiseScrolled(x, y);
+
+        if (view.RemainingItemsThreshold >= 0 &&
+            (_lastScrollWasTowardEnd || _remainingThresholdInsideZone))
+        {
+            CheckRemainingThreshold();
+        }
+    }
+
+    private void OnScrollEnded()
+    {
+        if (_lastScrollWasTowardEnd || _remainingThresholdInsideZone)
+            CheckRemainingThreshold();
+    }
+
+    private bool IsScrollingTowardEnd(double dx, double dy) =>
+        VirtualView?.Orientation == VirtualizedOrientation.Horizontal ? dx > 0 : dy > 0;
 
     private void CheckRemainingThreshold()
     {
@@ -363,10 +434,11 @@ public sealed class VirtualizedCollectionViewHandler
         var threshold = view?.RemainingItemsThreshold ?? -1;
         if (threshold < 0 || _dataSource is null || PlatformView is null) return;
         var total = _dataSource.Items.Count;
-        if (total <= 0 ||
-            total == _lastRemainingThresholdItemCount ||
-            view?.CanRaiseRemainingItemsThresholdReached != true)
+        if (total <= 0)
+        {
+            _remainingThresholdInsideZone = false;
             return;
+        }
 
         var visiblePaths = PlatformView.IndexPathsForVisibleItems;
         if (visiblePaths.Length == 0) return;
@@ -379,14 +451,26 @@ public sealed class VirtualizedCollectionViewHandler
         }
         if (lastVisible < 0) return;
 
-        if (total - 1 - lastVisible <= threshold)
+        var insideZone = total - 1 - lastVisible <= threshold;
+        if (!insideZone)
         {
-            _lastRemainingThresholdItemCount = total;
-            view.RaiseRemainingItemsThresholdReached();
+            _remainingThresholdInsideZone = false;
+            return;
         }
+
+        if (_remainingThresholdInsideZone || view?.CanRaiseRemainingItemsThresholdReached != true)
+            return;
+
+        _remainingThresholdInsideZone = true;
+        view.RaiseRemainingItemsThresholdReached();
     }
 
-    private void ResetRemainingThresholdGate() => _lastRemainingThresholdItemCount = -1;
+    private void ResetRemainingThresholdGate()
+    {
+        _remainingThresholdInsideZone = false;
+        _hasLastScrollOffset = false;
+        _lastScrollWasTowardEnd = false;
+    }
 
     // ── EmptyView ─────────────────────────────────────────────────────────────
 
@@ -435,7 +519,10 @@ public sealed class VirtualizedCollectionViewHandler
         if ((uint)req.Index >= (uint)handler._dataSource.Items.Count) return;
 
         var indexPath = NSIndexPath.FromItemSection(req.Index, 0);
-        handler.PlatformView.ScrollToItem(indexPath, UICollectionViewScrollPosition.Top, req.Animated);
+        var position = view.Orientation == VirtualizedOrientation.Horizontal
+            ? UICollectionViewScrollPosition.Left
+            : UICollectionViewScrollPosition.Top;
+        handler.PlatformView.ScrollToItem(indexPath, position, req.Animated);
     }
 
     private static NSIndexPath[] IndexPaths(int start, int count)

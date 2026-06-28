@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="sample.CollectionBenchmarkPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:sample"
+    xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedCollection"
+    Title="Collection Benchmark"
+    BackgroundColor="{StaticResource BackdropLight}">
+
+    <ContentPage.Resources>
+        <DataTemplate x:Key="BenchmarkItemTemplate" x:DataType="local:ProductItem">
+            <Grid
+                Padding="8,5"
+                HeightRequest="136">
+                <Border
+                    Padding="10,8"
+                    BackgroundColor="{StaticResource SurfaceLight}"
+                    Stroke="{StaticResource OutlineLight}"
+                    StrokeThickness="1">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="8" />
+                    </Border.StrokeShape>
+
+                    <Grid
+                        ColumnDefinitions="48,*,Auto"
+                        ColumnSpacing="10"
+                        RowDefinitions="Auto,Auto,Auto,Auto"
+                        RowSpacing="4">
+                        <Border
+                            Grid.Column="0"
+                            Grid.RowSpan="4"
+                            BackgroundColor="{StaticResource Secondary}"
+                            HeightRequest="44"
+                            StrokeThickness="0"
+                            VerticalOptions="Center"
+                            WidthRequest="44">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="8" />
+                            </Border.StrokeShape>
+                            <Label
+                                FontAttributes="Bold"
+                                FontSize="12"
+                                HorizontalTextAlignment="Center"
+                                Text="{Binding Id}"
+                                TextColor="{StaticResource Accent}"
+                                VerticalTextAlignment="Center" />
+                        </Border>
+
+                        <HorizontalStackLayout
+                            Grid.Column="1"
+                            Grid.Row="0"
+                            Spacing="6">
+                            <Border
+                                Padding="7,2"
+                                BackgroundColor="{StaticResource SurfaceAltLight}"
+                                StrokeThickness="0">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="8" />
+                                </Border.StrokeShape>
+                                <Label
+                                    FontAttributes="Bold"
+                                    FontSize="10"
+                                    LineBreakMode="TailTruncation"
+                                    MaxLines="1"
+                                    Text="{Binding Category}"
+                                    TextColor="{StaticResource OnSurfaceVariantLight}" />
+                            </Border>
+
+                            <Border
+                                Padding="7,2"
+                                BackgroundColor="{StaticResource SuccessContainerLight}"
+                                StrokeThickness="0">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="8" />
+                                </Border.StrokeShape>
+                                <Label
+                                    FontSize="10"
+                                    LineBreakMode="TailTruncation"
+                                    MaxLines="1"
+                                    Text="{Binding SpecMaterial}"
+                                    TextColor="{StaticResource OnSurfaceLight}" />
+                            </Border>
+                        </HorizontalStackLayout>
+
+                        <Label
+                            Grid.Column="1"
+                            Grid.Row="1"
+                            FontAttributes="Bold"
+                            FontSize="15"
+                            LineBreakMode="TailTruncation"
+                            MaxLines="1"
+                            Text="{Binding Name}" />
+
+                        <Label
+                            Grid.Column="1"
+                            Grid.Row="2"
+                            FontSize="12"
+                            LineBreakMode="TailTruncation"
+                            MaxLines="2"
+                            Text="{Binding Description}"
+                            TextColor="{StaticResource OnSurfaceVariantLight}" />
+
+                        <HorizontalStackLayout
+                            Grid.Column="1"
+                            Grid.Row="3"
+                            Spacing="10">
+                            <Label
+                                FontSize="11"
+                                LineBreakMode="TailTruncation"
+                                MaxLines="1"
+                                Text="{Binding SpecDimensions, StringFormat='Dim {0}'}"
+                                TextColor="{StaticResource OnSurfaceVariantLight}" />
+                            <Label
+                                FontSize="11"
+                                LineBreakMode="TailTruncation"
+                                MaxLines="1"
+                                Text="{Binding SpecOrigin, StringFormat='Origin {0}'}"
+                                TextColor="{StaticResource OnSurfaceVariantLight}" />
+                        </HorizontalStackLayout>
+
+                        <VerticalStackLayout
+                            Grid.Column="2"
+                            Grid.RowSpan="4"
+                            Spacing="2"
+                            VerticalOptions="Center">
+                            <Label
+                                FontAttributes="Bold"
+                                FontSize="13"
+                                HorizontalTextAlignment="End"
+                                Text="{Binding PriceText}"
+                                TextColor="{StaticResource Accent}" />
+                            <Label
+                                FontSize="11"
+                                HorizontalTextAlignment="End"
+                                Text="{Binding RatingText}"
+                                TextColor="{StaticResource Warning}" />
+                            <BoxView
+                                Margin="0,3"
+                                HeightRequest="1" />
+                            <Label
+                                FontSize="10"
+                                HorizontalTextAlignment="End"
+                                Text="{Binding SpecWeight}"
+                                TextColor="{StaticResource OnSurfaceVariantLight}" />
+                            <Label
+                                FontSize="10"
+                                HorizontalTextAlignment="End"
+                                Text="{Binding SpecWarranty}"
+                                TextColor="{StaticResource OnSurfaceVariantLight}" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </Border>
+            </Grid>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="0">
+        <Border
+            Grid.Row="0"
+            Padding="12,10"
+            BackgroundColor="{StaticResource SurfaceLight}"
+            Stroke="{StaticResource OutlineLight}"
+            StrokeThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <VerticalStackLayout Spacing="1">
+                    <Label
+                        x:Name="StatusLabel"
+                        FontAttributes="Bold"
+                        FontSize="15"
+                        Text="Ready"
+                        TextColor="{StaticResource OnSurfaceLight}" />
+                    <Label
+                        x:Name="PhaseLabel"
+                        FontSize="11"
+                        Text="0 / 2"
+                        TextColor="{StaticResource OnSurfaceVariantLight}" />
+                    <Label
+                        x:Name="WinnerLabel"
+                        FontAttributes="Bold"
+                        FontSize="12"
+                        LineBreakMode="WordWrap"
+                        MaxLines="2"
+                        Text="Result: awaiting execution"
+                        TextColor="{StaticResource Accent}" />
+                </VerticalStackLayout>
+
+                <Grid
+                    Grid.Column="1"
+                    ColumnDefinitions="Auto,Auto"
+                    ColumnSpacing="6"
+                    RowDefinitions="Auto,Auto"
+                    RowSpacing="6">
+                    <Button
+                        x:Name="RunButton"
+                        Grid.Row="0"
+                        Grid.Column="0"
+                        Clicked="OnRunClicked"
+                        HeightRequest="36"
+                        Padding="10,0"
+                        Text="Jump" />
+
+                    <Button
+                        x:Name="ManualCollectionButton"
+                        Grid.Row="0"
+                        Grid.Column="1"
+                        Clicked="OnManualCollectionClicked"
+                        HeightRequest="36"
+                        Padding="10,0"
+                        Text="CV 10s" />
+
+                    <Button
+                        x:Name="ManualVirtualizedButton"
+                        Grid.Row="1"
+                        Grid.Column="0"
+                        Clicked="OnManualVirtualizedClicked"
+                        HeightRequest="36"
+                        Padding="10,0"
+                        Text="VCV 10s" />
+
+                    <Button
+                        x:Name="ResetButton"
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        BackgroundColor="{StaticResource Gray200}"
+                        Clicked="OnResetClicked"
+                        HeightRequest="36"
+                        Padding="10,0"
+                        Text="Reset"
+                        TextColor="{StaticResource OnSurfaceLight}" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Grid
+            Grid.Row="1"
+            Padding="8,8,8,6"
+            ColumnDefinitions="*,*"
+            ColumnSpacing="8">
+            <Border
+                x:Name="CollectionResultPanel"
+                Grid.Column="0"
+                Padding="10"
+                BackgroundColor="{StaticResource SurfaceLight}"
+                Stroke="{StaticResource OutlineLight}">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="8" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="4">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="13"
+                        Text="CollectionView" />
+                    <Label
+                        x:Name="CollectionMetricsLabel"
+                        FontSize="11"
+                        LineBreakMode="WordWrap"
+                        Text="Awaiting run"
+                        TextColor="{StaticResource OnSurfaceVariantLight}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border
+                x:Name="VirtualizedResultPanel"
+                Grid.Column="1"
+                Padding="10"
+                BackgroundColor="{StaticResource SurfaceLight}"
+                Stroke="{StaticResource OutlineLight}">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="8" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="4">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="13"
+                        Text="VirtualizedCollectionView" />
+                    <Label
+                        x:Name="VirtualizedMetricsLabel"
+                        FontSize="11"
+                        LineBreakMode="WordWrap"
+                        Text="Awaiting run"
+                        TextColor="{StaticResource OnSurfaceVariantLight}" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="2" BackgroundColor="{StaticResource BackdropLight}">
+            <CollectionView
+                x:Name="CollectionList"
+                IsVisible="False"
+                ItemSizingStrategy="MeasureFirstItem"
+                ItemTemplate="{StaticResource BenchmarkItemTemplate}"
+                ItemsSource="{Binding CollectionItems}"
+                Scrolled="OnCollectionScrolled"
+                SelectionMode="None"
+                VerticalScrollBarVisibility="Always" />
+
+            <virtualized:VirtualizedCollectionView
+                x:Name="VirtualizedList"
+                IsVisible="False"
+                ItemHeightRequest="136"
+                ItemSizingStrategy="Fixed"
+                ItemTemplate="{StaticResource BenchmarkItemTemplate}"
+                ItemsSource="{Binding VirtualizedItems}"
+                Scrolled="OnVirtualizedScrolled"
+                VerticalScrollBarVisibility="Always" />
+
+            <Grid
+                x:Name="IdleOverlay"
+                BackgroundColor="{StaticResource BackdropLight}"
+                IsVisible="True">
+                <Label
+                    FontAttributes="Bold"
+                    FontSize="16"
+                    HorizontalOptions="Center"
+                    Text="Run benchmark"
+                    TextColor="{StaticResource OnSurfaceVariantLight}"
+                    VerticalOptions="Center" />
+            </Grid>
+        </Grid>
+
+    </Grid>
+</ContentPage>

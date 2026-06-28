@@ -12,7 +12,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 dotnet build
 dotnet build -f net10.0-android
 dotnet build -f net10.0-ios
-dotnet build -f net10.0-maccatalyst
+dotnet build -f net11.0-maccatalyst
 dotnet build -f net10.0-windows10.0.19041.0
 ```
 
@@ -40,7 +40,7 @@ builder.UseZoomImageView();
 
 ### MacCatalyst compartilha iOS
 
-O `Controls.csproj` inclui `Platforms/iOS/**/*.cs` na compilação `net10.0-maccatalyst`. O `MauiAppBuilderExtensions` usa `#if IOS || MACCATALYST` para registrar o mesmo handler.
+O `Controls.csproj` inclui `Platforms/iOS/**/*.cs` na compilação `net11.0-maccatalyst`. O `MauiAppBuilderExtensions` usa `#if IOS || MACCATALYST` para registrar o mesmo handler.
 
 ### Zoom fullscreen Android — Matrix nativo
 

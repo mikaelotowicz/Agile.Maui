@@ -505,7 +505,7 @@ Viewer.LinkTapped += async (sender, e) =>
 dotnet build PDFViewer\PDFViewer.csproj
 dotnet build PDFViewer\PDFViewer.csproj -f net10.0-android
 dotnet build PDFViewer\PDFViewer.csproj -f net10.0-ios
-dotnet build PDFViewer\PDFViewer.csproj -f net10.0-maccatalyst
+dotnet build PDFViewer\PDFViewer.csproj -f net11.0-maccatalyst
 dotnet build PDFViewer\PDFViewer.csproj -f net10.0-windows10.0.19041.0
 ```
 
