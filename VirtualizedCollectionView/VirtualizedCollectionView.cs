@@ -26,6 +26,24 @@ public partial class VirtualizedCollectionView : ContentView
         BindableProperty.Create(nameof(ItemTemplate), typeof(DataTemplate),
             typeof(VirtualizedCollectionView), null);
 
+    public static readonly BindableProperty HeaderProperty =
+        BindableProperty.Create(nameof(Header), typeof(object),
+            typeof(VirtualizedCollectionView), null,
+            propertyChanged: OnHeaderFooterChanged);
+
+    public static readonly BindableProperty HeaderTemplateProperty =
+        BindableProperty.Create(nameof(HeaderTemplate), typeof(DataTemplate),
+            typeof(VirtualizedCollectionView), null);
+
+    public static readonly BindableProperty FooterProperty =
+        BindableProperty.Create(nameof(Footer), typeof(object),
+            typeof(VirtualizedCollectionView), null,
+            propertyChanged: OnHeaderFooterChanged);
+
+    public static readonly BindableProperty FooterTemplateProperty =
+        BindableProperty.Create(nameof(FooterTemplate), typeof(DataTemplate),
+            typeof(VirtualizedCollectionView), null);
+
     public static readonly BindableProperty ItemHeightProperty =
         BindableProperty.Create(nameof(ItemHeight), typeof(double),
             typeof(VirtualizedCollectionView), -1.0);
@@ -72,6 +90,10 @@ public partial class VirtualizedCollectionView : ContentView
         BindableProperty.Create(nameof(ItemHeightRequest), typeof(double),
             typeof(VirtualizedCollectionView), 350.0);
 
+    public static readonly BindableProperty ItemWidthRequestProperty =
+        BindableProperty.Create(nameof(ItemWidthRequest), typeof(double),
+            typeof(VirtualizedCollectionView), -1.0);
+
     public static readonly BindableProperty VerticalScrollBarVisibilityProperty =
         BindableProperty.Create(nameof(VerticalScrollBarVisibility), typeof(ScrollBarVisibility),
             typeof(VirtualizedCollectionView), ScrollBarVisibility.Default);
@@ -90,6 +112,30 @@ public partial class VirtualizedCollectionView : ContentView
     {
         get => (DataTemplate?)GetValue(ItemTemplateProperty);
         set => SetValue(ItemTemplateProperty, value);
+    }
+
+    public object? Header
+    {
+        get => GetValue(HeaderProperty);
+        set => SetValue(HeaderProperty, value);
+    }
+
+    public DataTemplate? HeaderTemplate
+    {
+        get => (DataTemplate?)GetValue(HeaderTemplateProperty);
+        set => SetValue(HeaderTemplateProperty, value);
+    }
+
+    public object? Footer
+    {
+        get => GetValue(FooterProperty);
+        set => SetValue(FooterProperty, value);
+    }
+
+    public DataTemplate? FooterTemplate
+    {
+        get => (DataTemplate?)GetValue(FooterTemplateProperty);
+        set => SetValue(FooterTemplateProperty, value);
     }
 
     /// <summary>Altura fixa do item em DIPs. -1 = wrap_content. Ignorado no Windows.</summary>
@@ -159,6 +205,12 @@ public partial class VirtualizedCollectionView : ContentView
         set => SetValue(ItemHeightRequestProperty, value);
     }
 
+    public double ItemWidthRequest
+    {
+        get => (double)GetValue(ItemWidthRequestProperty);
+        set => SetValue(ItemWidthRequestProperty, value);
+    }
+
     /// <summary>
     /// Visibilidade da barra de rolagem vertical.
     /// <c>Always</c> = sempre visível; <c>Never</c> = oculta;
@@ -179,6 +231,22 @@ public partial class VirtualizedCollectionView : ContentView
 
     public event EventHandler? RemainingItemsThresholdReached;
     public event EventHandler<VirtualizedScrolledEventArgs>? Scrolled;
+
+    protected override void OnBindingContextChanged()
+    {
+        base.OnBindingContextChanged();
+        ApplyInheritedContext(Header);
+        ApplyInheritedContext(Footer);
+    }
+
+    private void ApplyInheritedContext(object? content)
+    {
+        if (content is BindableObject bindable && bindable.BindingContext is null)
+            bindable.BindingContext = BindingContext;
+    }
+
+    private static void OnHeaderFooterChanged(BindableObject bindable, object oldValue, object newValue) =>
+        ((VirtualizedCollectionView)bindable).ApplyInheritedContext(newValue);
 
     internal bool HasScrolledObservers =>
         Scrolled is not null || ScrolledCommand is not null;
@@ -221,6 +289,9 @@ public partial class VirtualizedCollectionView : ContentView
 #if !WINDOWS
     public void ScrollTo(int index, bool animated = true) =>
         Handler?.Invoke(nameof(ScrollTo), new ScrollToRequest(index, animated));
+
+    public void ScrollToStart(bool animated = true) =>
+        Handler?.Invoke(nameof(ScrollToStart), new ScrollToRequest(0, animated));
 #endif
 
     public readonly record struct ScrollToRequest(int Index, bool Animated);

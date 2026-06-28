@@ -11,6 +11,7 @@ using Bumptech.Glide;
 using Android.Views;
 using AndroidX.RecyclerView.Widget;
 using Microsoft.Maui;
+using Microsoft.Maui.Controls;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 
@@ -29,6 +30,10 @@ public sealed class VirtualizedCollectionViewHandler
         {
             [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ScheduleReload(),
             [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.Header)]                                 = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.HeaderTemplate)]                         = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.Footer)]                                 = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.FooterTemplate)]                         = (h, _) => h.ScheduleReload(),
             [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.ApplySizeStrategy(),
             [nameof(VirtualizedCollectionView.Span)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyCacheSizes(); },
             [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyScrollBars(); },
@@ -40,6 +45,7 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
             [nameof(VirtualizedCollectionView.ItemSizingStrategy)]                       = (h, _) => h.ApplySizeStrategy(),
             [nameof(VirtualizedCollectionView.ItemHeightRequest)]                      = (h, _) => h.ApplySizeStrategy(),
+            [nameof(VirtualizedCollectionView.ItemWidthRequest)]                       = (h, _) => h.ApplySizeStrategy(),
             [nameof(VirtualizedCollectionView.VerticalScrollBarVisibility)]            = (h, _) => h.ApplyScrollBars(),
             [nameof(VirtualizedCollectionView.HorizontalScrollBarVisibility)]          = (h, _) => h.ApplyScrollBars(),
         };
@@ -48,6 +54,7 @@ public sealed class VirtualizedCollectionViewHandler
         new(ViewHandler.ViewCommandMapper)
         {
             [nameof(VirtualizedCollectionView.ScrollTo)] = MapScrollTo,
+            [nameof(VirtualizedCollectionView.ScrollToStart)] = MapScrollToStart,
         };
 
     private VrAdapter?                  _adapter;
@@ -162,7 +169,7 @@ public sealed class VirtualizedCollectionViewHandler
             VirtualView.ItemSizingStrategy == ItemSizingStrategy.Dynamic &&
             VirtualView.ItemHeight <= 0)
         {
-            var clm = new CachingLinearLayoutManager(Context!, GetFallbackHeightPx())
+            var clm = new CachingLinearLayoutManager(Context!, GetFallbackItemSizePx())
             {
                 InitialPrefetchItemCount = 4
             };
@@ -183,6 +190,7 @@ public sealed class VirtualizedCollectionViewHandler
             else
             {
                 var grid = new GridLayoutManager(Context, columns, direction, false);
+                grid.SetSpanSizeLookup(new VrSpanSizeLookup(_adapter, columns));
                 grid.InitialPrefetchItemCount = columns * 3;
                 llm = grid;
             }
@@ -191,22 +199,36 @@ public sealed class VirtualizedCollectionViewHandler
         PlatformView.Rv.HasFixedSize = true;
         PlatformView.Rv.SetLayoutManager(llm);
         if (_adapter is not null)
+        {
+            ApplySpanSizeLookup();
             PlatformView.Rv.SetAdapter(_adapter);
+        }
     }
 
-    private int GetFallbackHeightPx()
+    private void ApplySpanSizeLookup()
     {
-        var dp = VirtualView.ItemHeightRequest > 0 ? VirtualView.ItemHeightRequest : 350.0;
+        if (PlatformView?.Rv.GetLayoutManager() is GridLayoutManager grid)
+            grid.SetSpanSizeLookup(new VrSpanSizeLookup(_adapter, Math.Max(1, VirtualView.Span)));
+    }
+
+    private int GetFallbackItemSizePx()
+    {
+        var dp = VirtualView.Orientation == VirtualizedOrientation.Horizontal &&
+                 VirtualView.ItemWidthRequest > 0
+            ? VirtualView.ItemWidthRequest
+            : VirtualView.ItemHeightRequest > 0
+                ? VirtualView.ItemHeightRequest
+                : 350.0;
         return (int)(dp * Context!.Resources!.DisplayMetrics!.Density);
     }
 
-    private int GetResolvedItemHeightPx()
+    private int GetResolvedItemMainAxisPx()
     {
         if (VirtualView.ItemHeight > 0)
             return Math.Max(1, (int)Math.Ceiling(Context.ToPixels(VirtualView.ItemHeight)));
 
         return VirtualView.ItemSizingStrategy == ItemSizingStrategy.Fixed
-            ? GetFallbackHeightPx()
+            ? GetFallbackItemSizePx()
             : RecyclerView.LayoutParams.WrapContent;
     }
 
@@ -214,9 +236,9 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (PlatformView is null) return;
         ApplyLayoutManager();
-        var heightPx = GetResolvedItemHeightPx();
-        if (heightPx > 0)
-            _adapter?.SetFixedHeight(heightPx);
+        var itemMainAxisPx = GetResolvedItemMainAxisPx();
+        if (itemMainAxisPx > 0)
+            _adapter?.SetFixedHeight(itemMainAxisPx);
         else if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst)
             // Reconstrói em modo "mede o 1º e fixa" (itens voltam a WrapContent até a medição).
             ScheduleReload();
@@ -269,7 +291,8 @@ public sealed class VirtualizedCollectionViewHandler
         _spacingDecoration = new VrSpacingDecoration(
             spacingPx,
             VirtualView.Span,
-            VirtualView.Orientation == VirtualizedOrientation.Horizontal);
+            VirtualView.Orientation == VirtualizedOrientation.Horizontal,
+            _adapter);
         PlatformView.Rv.AddItemDecoration(_spacingDecoration);
     }
 
@@ -323,7 +346,7 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (PlatformView is null) return;
         PlatformView.SetEmptyView(BuildEmptyNativeView());
-        PlatformView.UpdateEmptyVisibility(_adapter is null || _adapter.ItemCount == 0);
+        PlatformView.UpdateEmptyVisibility(_adapter is null || _adapter.DataItemCount == 0);
     }
 
     private AView? BuildEmptyNativeView()
@@ -380,32 +403,48 @@ public sealed class VirtualizedCollectionViewHandler
         }
 
         var items    = SnapshotItems(VirtualView.ItemsSource);
-        var heightPx = GetResolvedItemHeightPx();
+        var heightPx = GetResolvedItemMainAxisPx();
+        var header   = VirtualView.Header;
+        var footer   = VirtualView.Footer;
+        var headerTemplate = VirtualView.HeaderTemplate;
+        var footerTemplate = VirtualView.FooterTemplate;
 
         UnsubscribeCollection();
 
         // Recria o adapter se o template mudou em runtime; sem esse check,
         // OnCreateViewHolder continuaria usando o template antigo.
-        if (_adapter is null || !ReferenceEquals(_adapter.Template, template))
+        if (_adapter is null ||
+            !_adapter.CanReuse(template, header, headerTemplate, footer, footerTemplate))
         {
             _adapter?.Dispose();
-            _adapter = new VrAdapter(items, template, MauiContext, heightPx, Context!,
-                VirtualView.Orientation == VirtualizedOrientation.Vertical);
+            _adapter = new VrAdapter(
+                items,
+                template,
+                MauiContext,
+                heightPx,
+                Context!,
+                VirtualView.Orientation == VirtualizedOrientation.Vertical,
+                header,
+                headerTemplate,
+                footer,
+                footerTemplate);
             if (_cachingLm is not null)
                 _adapter.SetCachingLayoutManager(_cachingLm);
+            ApplySpanSizeLookup();
             PlatformView.Rv.SetAdapter(_adapter);
         }
         else
         {
-            _adapter.ReplaceAll(items, heightPx);
+            _adapter.ReplaceAll(items, heightPx, header, headerTemplate, footer, footerTemplate);
         }
 
         _adapter.SetMeasureFirst(
             VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst &&
             VirtualView.ItemHeight <= 0);
+        _spacingDecoration?.SetAdapter(_adapter);
 
         SubscribeCollection(VirtualView.ItemsSource);
-        PlatformView.UpdateEmptyVisibility(items.Count == 0);
+        PlatformView.UpdateEmptyVisibility(_adapter.DataItemCount == 0);
     }
 
     private void SubscribeCollection(IEnumerable? source)
@@ -470,7 +509,7 @@ public sealed class VirtualizedCollectionViewHandler
         var shouldReload = pending.Length > 30 ||
                            isMixed ||
                            (hasMove && pending.Length > 1) ||
-                           !CanApplyPendingChanges(pending, _adapter.ItemCount);
+                           !CanApplyPendingChanges(pending, _adapter.DataItemCount);
 
         if (!shouldReload)
         {
@@ -504,7 +543,7 @@ public sealed class VirtualizedCollectionViewHandler
         }
 
         ResetRemainingThresholdGate();
-        PlatformView.UpdateEmptyVisibility(_adapter.ItemCount == 0);
+        PlatformView.UpdateEmptyVisibility(_adapter.DataItemCount == 0);
     }
 
     private static bool CanApplyPendingChanges(PendingCollectionChange[] pending, int currentCount)
@@ -577,7 +616,7 @@ public sealed class VirtualizedCollectionViewHandler
     {
         var threshold = VirtualView.RemainingItemsThreshold;
         if (threshold < 0 || _adapter is null || PlatformView is null) return;
-        var total = _adapter.ItemCount;
+        var total = _adapter.DataItemCount;
         if (total <= 0)
         {
             _remainingThresholdInsideZone = false;
@@ -586,7 +625,7 @@ public sealed class VirtualizedCollectionViewHandler
 
         var llm = PlatformView.Rv.GetLayoutManager() as LinearLayoutManager;
         if (llm is null) return;
-        var lastVisible = llm.FindLastVisibleItemPosition();
+        var lastVisible = _adapter.ToLastDataIndex(llm.FindLastVisibleItemPosition());
         var insideZone = lastVisible >= 0 && total - 1 - lastVisible <= threshold;
         if (!insideZone)
         {
@@ -609,10 +648,24 @@ public sealed class VirtualizedCollectionViewHandler
         object?                          args)
     {
         if (args is not VirtualizedCollectionView.ScrollToRequest r || handler.PlatformView is null) return;
+        if (handler._adapter is null || (uint)r.Index >= (uint)handler._adapter.DataItemCount) return;
+        var adapterIndex = handler._adapter.ToAdapterIndex(r.Index);
         if (r.Animated)
-            handler.PlatformView.Rv.SmoothScrollToPosition(r.Index);
+            handler.PlatformView.Rv.SmoothScrollToPosition(adapterIndex);
         else
-            handler.PlatformView.Rv.ScrollToPosition(r.Index);
+            handler.PlatformView.Rv.ScrollToPosition(adapterIndex);
+    }
+
+    private static void MapScrollToStart(
+        VirtualizedCollectionViewHandler handler,
+        VirtualizedCollectionView        view,
+        object?                          args)
+    {
+        if (args is not VirtualizedCollectionView.ScrollToRequest r || handler.PlatformView is null) return;
+        if (r.Animated)
+            handler.PlatformView.Rv.SmoothScrollToPosition(0);
+        else
+            handler.PlatformView.Rv.ScrollToPosition(0);
     }
 
     private static List<object> SnapshotItems(IEnumerable? source)
@@ -705,7 +758,7 @@ public sealed class VrContainerView : global::Android.Widget.FrameLayout
 
     public void UpdateEmptyVisibility(bool isEmpty)
     {
-        Rv.Visibility = isEmpty ? ViewStates.Gone : ViewStates.Visible;
+        Rv.Visibility = isEmpty && _emptyView is not null ? ViewStates.Gone : ViewStates.Visible;
         if (_emptyView is not null)
             _emptyView.Visibility = isEmpty ? ViewStates.Visible : ViewStates.Gone;
     }
@@ -721,6 +774,7 @@ internal sealed class VrSpacingDecoration : RecyclerView.ItemDecoration
     private readonly int  _spacePx;
     private readonly int  _columns;
     private readonly bool _horizontal;
+    private          VrAdapter? _adapter;
 
     public VrSpacingDecoration(IntPtr handle, JniHandleOwnership transfer)
         : base(handle, transfer)
@@ -730,23 +784,34 @@ internal sealed class VrSpacingDecoration : RecyclerView.ItemDecoration
         _horizontal = false;
     }
 
-    public VrSpacingDecoration(int spacePx, int columns, bool horizontal)
+    public VrSpacingDecoration(int spacePx, int columns, bool horizontal, VrAdapter? adapter)
     {
         _spacePx    = spacePx;
         _columns    = columns;
         _horizontal = horizontal;
+        _adapter    = adapter;
     }
+
+    public void SetAdapter(VrAdapter? adapter) => _adapter = adapter;
 
     public override void GetItemOffsets(
         global::Android.Graphics.Rect outRect, AView view, RecyclerView parent, RecyclerView.State state)
     {
         var pos = parent.GetChildAdapterPosition(view);
         if (pos < 0) return;
+        if (_adapter?.IsStructuralPosition(pos) == true)
+        {
+            if (_horizontal) outRect.Right = _spacePx;
+            else             outRect.Bottom = _spacePx;
+            return;
+        }
+
+        var layoutPos = _adapter?.ToDataLayoutIndex(pos) ?? pos;
 
         if (!_horizontal)
         {
             // Scroll vertical: distribui espaço horizontal entre colunas (sem borda externa)
-            var col        = pos % _columns;
+            var col        = layoutPos % _columns;
             outRect.Left   = col * _spacePx / _columns;
             outRect.Right  = _spacePx - (col + 1) * _spacePx / _columns;
             outRect.Bottom = _spacePx;
@@ -754,7 +819,7 @@ internal sealed class VrSpacingDecoration : RecyclerView.ItemDecoration
         else
         {
             // Scroll horizontal: distribui espaço vertical entre linhas
-            var row        = pos % _columns;
+            var row        = layoutPos % _columns;
             outRect.Top    = row * _spacePx / _columns;
             outRect.Bottom = _spacePx - (row + 1) * _spacePx / _columns;
             outRect.Right  = _spacePx;
@@ -766,9 +831,32 @@ internal sealed class VrSpacingDecoration : RecyclerView.ItemDecoration
 // VrAdapter — RecyclerView.Adapter com DiffUtil assíncrono e MAUI view recycling
 // ─────────────────────────────────────────────────────────────────────────────
 
+[Register("agile/maui/virtualizedcollectionview/VrSpanSizeLookup")]
+internal sealed class VrSpanSizeLookup : GridLayoutManager.SpanSizeLookup
+{
+    private readonly VrAdapter? _adapter;
+    private readonly int _spanCount;
+
+    public VrSpanSizeLookup(VrAdapter? adapter, int spanCount)
+    {
+        _adapter = adapter;
+        _spanCount = Math.Max(1, spanCount);
+    }
+
+    public VrSpanSizeLookup(IntPtr handle, JniHandleOwnership transfer)
+        : base(handle, transfer) { }
+
+    public override int GetSpanSize(int position) =>
+        _adapter?.IsStructuralPosition(position) == true ? _spanCount : 1;
+}
+
 [Register("agile/maui/virtualizedcollectionview/VrAdapter")]
 internal sealed class VrAdapter : RecyclerView.Adapter
 {
+    private const int ItemViewType   = 0;
+    private const int HeaderViewType = 1;
+    private const int FooterViewType = 2;
+
     private readonly DataTemplate        _template;
     private readonly IMauiContext        _mauiContext;
     private readonly Context             _context;
@@ -779,9 +867,17 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     private          CachingLinearLayoutManager? _cachingLm;
     private          bool                _measureFirst;
     private readonly bool                _coerceWidth;
+    private          object?             _header;
+    private          DataTemplate?       _headerTemplate;
+    private          object?             _footer;
+    private          DataTemplate?       _footerTemplate;
 
     public DataTemplate Template    => _template;
     public int          ItemHeightPx => _itemHeightPx;
+    public int          DataItemCount => _items.Count;
+    private bool        HasHeader => _header is not null || _headerTemplate is not null;
+    private bool        HasFooter => _footer is not null || _footerTemplate is not null;
+    private int         HeaderOffset => HasHeader ? 1 : 0;
 
     public void SetFixedHeight(int px)
     {
@@ -807,7 +903,17 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         if (value) _itemHeightPx = ViewGroup.LayoutParams.WrapContent;
     }
 
-    public VrAdapter(List<object> items, DataTemplate template, IMauiContext mauiContext, int itemHeightPx, Context context, bool coerceWidth)
+    public VrAdapter(
+        List<object> items,
+        DataTemplate template,
+        IMauiContext mauiContext,
+        int itemHeightPx,
+        Context context,
+        bool coerceWidth,
+        object? header,
+        DataTemplate? headerTemplate,
+        object? footer,
+        DataTemplate? footerTemplate)
     {
         _items        = items;
         _template     = template;
@@ -815,6 +921,10 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         _itemHeightPx = itemHeightPx;
         _context      = context;
         _coerceWidth  = coerceWidth;
+        _header       = header;
+        _headerTemplate = headerTemplate;
+        _footer       = footer;
+        _footerTemplate = footerTemplate;
     }
 
     public VrAdapter(IntPtr handle, JniHandleOwnership transfer)
@@ -828,17 +938,61 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         _coerceWidth = false;
     }
 
-    public override int ItemCount => _items.Count;
+    public bool CanReuse(
+        DataTemplate itemTemplate,
+        object? header,
+        DataTemplate? headerTemplate,
+        object? footer,
+        DataTemplate? footerTemplate) =>
+        ReferenceEquals(_template, itemTemplate) &&
+        ReferenceEquals(_header, header) &&
+        ReferenceEquals(_headerTemplate, headerTemplate) &&
+        ReferenceEquals(_footer, footer) &&
+        ReferenceEquals(_footerTemplate, footerTemplate);
+
+    public override int ItemCount => HeaderOffset + _items.Count + (HasFooter ? 1 : 0);
+
+    public int ToAdapterIndex(int dataIndex) => dataIndex + HeaderOffset;
+
+    public int ToDataLayoutIndex(int adapterPosition) => Math.Max(0, adapterPosition - HeaderOffset);
+
+    public int ToLastDataIndex(int adapterPosition)
+    {
+        if (_items.Count == 0 || adapterPosition < HeaderOffset)
+            return -1;
+
+        return Math.Min(adapterPosition - HeaderOffset, _items.Count - 1);
+    }
+
+    public bool IsStructuralPosition(int adapterPosition) =>
+        (HasHeader && adapterPosition == 0) ||
+        (HasFooter && adapterPosition == ItemCount - 1);
+
+    public override int GetItemViewType(int position)
+    {
+        if (HasHeader && position == 0)
+            return HeaderViewType;
+
+        if (HasFooter && position == ItemCount - 1)
+            return FooterViewType;
+
+        return ItemViewType;
+    }
 
     public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType)
     {
-        var content  = _template.CreateContent();
-        var mauiView = (MauiView)content;
+        if (viewType == HeaderViewType)
+            return CreateStructuralViewHolder(_header, _headerTemplate);
+
+        if (viewType == FooterViewType)
+            return CreateStructuralViewHolder(_footer, _footerTemplate);
+
+        var mauiView = CreateMauiView(null, _template);
 
         mauiView.HorizontalOptions = LayoutOptions.Fill;
 
         var nativeView = mauiView.ToPlatform(_mauiContext);
-        int h = (_cachingLm == null && _itemHeightPx > 0)
+        int mainAxisSize = (_cachingLm == null && _itemHeightPx > 0)
             ? _itemHeightPx
             : ViewGroup.LayoutParams.WrapContent;
 
@@ -849,14 +1003,17 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             host.AddView(nativeView, new global::Android.Widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
             host.LayoutParameters = new RecyclerView.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, h);
+                ViewGroup.LayoutParams.MatchParent, mainAxisSize);
             itemRoot = host;
         }
         else
         {
-            nativeView.LayoutParameters = new RecyclerView.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, h);
-            itemRoot = nativeView;
+            var host = new VrItemHost(_context, mauiView);
+            host.AddView(nativeView, new global::Android.Widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+            host.LayoutParameters = new RecyclerView.LayoutParams(
+                mainAxisSize, ViewGroup.LayoutParams.MatchParent);
+            itemRoot = host;
         }
 
         var holder = new VrViewHolder(itemRoot, mauiView);
@@ -864,16 +1021,81 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         return holder;
     }
 
+    private RecyclerView.ViewHolder CreateStructuralViewHolder(object? source, DataTemplate? template)
+    {
+        var mauiView = CreateMauiView(source, template);
+        mauiView.HorizontalOptions = LayoutOptions.Fill;
+
+        var nativeView = mauiView.ToPlatform(_mauiContext);
+        AView itemRoot;
+        if (_coerceWidth)
+        {
+            var host = new VrItemHost(_context, mauiView);
+            host.AddView(nativeView, new global::Android.Widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+            host.LayoutParameters = new RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            itemRoot = host;
+        }
+        else
+        {
+            nativeView.LayoutParameters = new RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.MatchParent);
+            itemRoot = nativeView;
+        }
+
+        var holder = new VrViewHolder(itemRoot, mauiView, isStructural: true);
+        lock (_allHolders) _allHolders.Add(holder);
+        return holder;
+    }
+
+    private static MauiView CreateMauiView(object? source, DataTemplate? template)
+    {
+        if (template is not null)
+        {
+            var content = template.CreateContent();
+            if (content is MauiView templatedView)
+            {
+                templatedView.BindingContext = source;
+                return templatedView;
+            }
+        }
+
+        if (source is MauiView view)
+            return view;
+
+        return new Label
+        {
+            Text = source?.ToString() ?? string.Empty,
+            HorizontalOptions = LayoutOptions.Fill,
+            VerticalOptions = LayoutOptions.Center
+        };
+    }
+
     private void BindItem(VrViewHolder holder, int position)
     {
-        var item = _items[position];
+        var itemIndex = position - HeaderOffset;
+        if ((uint)itemIndex >= (uint)_items.Count)
+            return;
+
+        var item = _items[itemIndex];
         if (!ReferenceEquals(holder.MauiView.BindingContext, item))
             holder.MauiView.BindingContext = item;
     }
 
     public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
     {
-        if (holder is VrViewHolder h && (uint)position < (uint)_items.Count)
+        if (holder is not VrViewHolder h)
+            return;
+
+        if (h.IsStructural)
+        {
+            CacheStructuralHeight(h, position);
+            return;
+        }
+
+        var itemIndex = position - HeaderOffset;
+        if ((uint)itemIndex < (uint)_items.Count)
         {
             var bindGeneration = h.NextBindGeneration();
 
@@ -943,10 +1165,27 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         {
             foreach (var hh in _allHolders)
             {
-                if (hh.ItemView.LayoutParameters is RecyclerView.LayoutParams lp &&
-                    lp.Height != _itemHeightPx)
+                if (hh.IsStructural)
+                    continue;
+
+                if (hh.ItemView.LayoutParameters is not RecyclerView.LayoutParams lp)
+                    continue;
+
+                var changed = _coerceWidth
+                    ? lp.Width != ViewGroup.LayoutParams.MatchParent || lp.Height != _itemHeightPx
+                    : lp.Width != _itemHeightPx || lp.Height != ViewGroup.LayoutParams.MatchParent;
+                if (changed)
                 {
-                    lp.Height = _itemHeightPx;
+                    if (_coerceWidth)
+                    {
+                        lp.Width = ViewGroup.LayoutParams.MatchParent;
+                        lp.Height = _itemHeightPx;
+                    }
+                    else
+                    {
+                        lp.Width = _itemHeightPx;
+                        lp.Height = ViewGroup.LayoutParams.MatchParent;
+                    }
                     hh.ItemView.LayoutParameters = lp; // dispara requestLayout
                 }
             }
@@ -956,8 +1195,10 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position,
         IList<Java.Lang.Object> payloads)
     {
+        var itemIndex = position - HeaderOffset;
         if (payloads is { Count: > 0 } && holder is VrViewHolder h &&
-            (uint)position < (uint)_items.Count)
+            !h.IsStructural &&
+            (uint)itemIndex < (uint)_items.Count)
         {
             h.NextBindGeneration();
             BindItem(h, position);
@@ -977,12 +1218,27 @@ internal sealed class VrAdapter : RecyclerView.Adapter
 
         _items.InsertRange(startIndex, newItems);
         // Insert desloca os indices a partir de startIndex → invalida as alturas dali em diante.
-        _cachingLm?.InvalidateFrom(startIndex);
+        var adapterIndex = ToAdapterIndex(startIndex);
+        _cachingLm?.InvalidateFrom(adapterIndex);
         if (newItems.Count == 1)
-            NotifyItemInserted(startIndex);
+            NotifyItemInserted(adapterIndex);
         else
-            NotifyItemRangeInserted(startIndex, newItems.Count);
+            NotifyItemRangeInserted(adapterIndex, newItems.Count);
         return true;
+    }
+
+    private void CacheStructuralHeight(VrViewHolder holder, int position)
+    {
+        if (_cachingLm is null || _cachingLm.HasCachedHeight(position))
+            return;
+
+        holder.ItemView.Post(() =>
+        {
+            if (_disposed) return;
+            var real = holder.ItemView.Height;
+            if (real > 0)
+                _cachingLm?.CacheItemHeight(position, real);
+        });
     }
 
     public bool TryIncrementalRemove(int startIndex, int count)
@@ -991,11 +1247,12 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             return false;
 
         _items.RemoveRange(startIndex, count);
-        _cachingLm?.InvalidateFrom(startIndex);
+        var adapterIndex = ToAdapterIndex(startIndex);
+        _cachingLm?.InvalidateFrom(adapterIndex);
         if (count == 1)
-            NotifyItemRemoved(startIndex);
+            NotifyItemRemoved(adapterIndex);
         else
-            NotifyItemRangeRemoved(startIndex, count);
+            NotifyItemRangeRemoved(adapterIndex, count);
         return true;
     }
 
@@ -1007,8 +1264,9 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         for (int i = 0; i < newItems.Count && startIndex + i < _items.Count; i++)
             _items[startIndex + i] = newItems[i];
         // Itens trocados podem ter alturas diferentes; indices nao deslocam.
-        _cachingLm?.InvalidateRange(startIndex, newItems.Count);
-        NotifyItemRangeChanged(startIndex, newItems.Count);
+        var adapterIndex = ToAdapterIndex(startIndex);
+        _cachingLm?.InvalidateRange(adapterIndex, newItems.Count);
+        NotifyItemRangeChanged(adapterIndex, newItems.Count);
         return true;
     }
 
@@ -1022,8 +1280,10 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         var item = _items[from];
         _items.RemoveAt(from);
         _items.Insert(to, item);
-        _cachingLm?.InvalidateFrom(Math.Min(from, to));
-        NotifyItemMoved(from, to);
+        var fromAdapter = ToAdapterIndex(from);
+        var toAdapter = ToAdapterIndex(to);
+        _cachingLm?.InvalidateFrom(Math.Min(fromAdapter, toAdapter));
+        NotifyItemMoved(fromAdapter, toAdapter);
         return true;
     }
 
@@ -1037,9 +1297,19 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     // divergindo getItemCount() de _items.Count → "Inconsistency detected" no GapWorker.
     // Mantém o invariante: getItemCount() == _items.Count e cada Notify* corresponde
     // exatamente à mutação feita em _items.
-    public void ReplaceAll(List<object> newItems, int newHeightPx)
+    public void ReplaceAll(
+        List<object> newItems,
+        int newHeightPx,
+        object? header,
+        DataTemplate? headerTemplate,
+        object? footer,
+        DataTemplate? footerTemplate)
     {
         _itemHeightPx = newHeightPx;
+        _header = header;
+        _headerTemplate = headerTemplate;
+        _footer = footer;
+        _footerTemplate = footerTemplate;
         _cachingLm?.InvalidateCache();
         _items = newItems;
         AplicarAlturaFixaATodos();
@@ -1168,14 +1438,19 @@ internal sealed class VrItemHost : global::Android.Widget.FrameLayout
 internal sealed class VrViewHolder : RecyclerView.ViewHolder
 {
     public MauiView MauiView { get; }
+    public bool IsStructural { get; }
     private int _bindGeneration;
 
     // MeasureFirst: observador de layout + callback pendente da medição da altura.
     private LayoutObserver? _measureListener;
     private Action<int>?    _measureCallback;
 
-    public VrViewHolder(AView platformView, MauiView mauiView)
-        : base(platformView) => MauiView = mauiView;
+    public VrViewHolder(AView platformView, MauiView mauiView, bool isStructural = false)
+        : base(platformView)
+    {
+        MauiView = mauiView;
+        IsStructural = isStructural;
+    }
 
     public VrViewHolder(IntPtr handle, JniHandleOwnership transfer)
         : base(handle, transfer) => MauiView = null!;
@@ -1303,6 +1578,9 @@ internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyc
         if (holder is VrViewHolder vh)
         {
             vh.CancelHeavyBind();
+            if (vh.IsStructural)
+                return;
+
             if (_context is not null && vh.ItemView is global::Android.Widget.ImageView)
                 Glide.With(_context).Clear(vh.ItemView);
             vh.MauiView.BindingContext = null;
