@@ -180,19 +180,36 @@ public partial class VirtualizedCollectionView : ContentView
     public event EventHandler? RemainingItemsThresholdReached;
     public event EventHandler<VirtualizedScrolledEventArgs>? Scrolled;
 
+    internal bool HasScrolledObservers =>
+        Scrolled is not null || ScrolledCommand is not null;
+
+    internal bool CanRaiseRemainingItemsThresholdReached =>
+        RemainingItemsThresholdReached is not null ||
+        RemainingItemsThresholdReachedCommand?.CanExecute(null) == true;
+
     internal void RaiseRemainingItemsThresholdReached()
     {
+        var command = RemainingItemsThresholdReachedCommand;
+        var canExecute = command?.CanExecute(null) == true;
+
+        if (RemainingItemsThresholdReached is null && !canExecute)
+            return;
+
         RemainingItemsThresholdReached?.Invoke(this, EventArgs.Empty);
-        if (RemainingItemsThresholdReachedCommand?.CanExecute(null) == true)
-            RemainingItemsThresholdReachedCommand.Execute(null);
+        if (canExecute)
+            command!.Execute(null);
     }
 
     internal void RaiseScrolled(double scrollX, double scrollY)
     {
+        var command = ScrolledCommand;
+        if (Scrolled is null && command is null)
+            return;
+
         var args = new VirtualizedScrolledEventArgs(scrollX, scrollY);
         Scrolled?.Invoke(this, args);
-        if (ScrolledCommand?.CanExecute(args) == true)
-            ScrolledCommand.Execute(args);
+        if (command?.CanExecute(args) == true)
+            command.Execute(args);
     }
 
     // ── Windows ───────────────────────────────────────────────────────────────
