@@ -23,7 +23,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
     private UIImageView[]?              _imageViews;
     private UIActivityIndicatorView[]?  _spinners;
     private GalleryZoomScrollDelegate[]? _zoomDelegates;
-    private CancellationTokenSource[]?  _pageCts;
+    private CancellationTokenSource?[]? _pageCts;
 
     private UIButton?                  _closeButton;
     private UILabel?                   _indicator;
@@ -142,7 +142,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
         _imageViews      = new UIImageView[_pageCount];
         _spinners        = new UIActivityIndicatorView[_pageCount];
         _zoomDelegates   = new GalleryZoomScrollDelegate[_pageCount];
-        _pageCts         = new CancellationTokenSource[_pageCount];
+        _pageCts         = new CancellationTokenSource?[_pageCount];
 
         for (int i = 0; i < _pageCount; i++)
         {
@@ -184,7 +184,8 @@ public sealed class FullscreenGalleryViewController : UIViewController
             _spinners[i]        = spinner;
 
             // Double-tap gesture on zoom scroll view
-            var doubleTap = new UITapGestureRecognizer(r => OnDoubleTap(r, i))
+            int pageIndex = i;
+            var doubleTap = new UITapGestureRecognizer(r => OnDoubleTap(r, pageIndex))
                 { NumberOfTapsRequired = 2 };
             zoomSv.AddGestureRecognizer(doubleTap);
         }
@@ -246,8 +247,28 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
     internal void LoadVisiblePages(int page)
     {
+        UnloadOffscreenPages(page);
         for (int i = Math.Max(0, page - 1); i <= Math.Min(_pageCount - 1, page + 1); i++)
             LoadPage(i);
+    }
+
+    private void UnloadOffscreenPages(int center)
+    {
+        if (_imageViews is null || _zoomScrollViews is null || _pageCts is null || _spinners is null)
+            return;
+
+        for (int i = 0; i < _pageCount; i++)
+        {
+            if (i >= center - 1 && i <= center + 1)
+                continue;
+
+            _pageCts[i]?.Cancel();
+            _pageCts[i]?.Dispose();
+            _pageCts[i] = null;
+            _imageViews[i].Image = null;
+            _spinners[i].StopAnimating();
+            _zoomScrollViews[i].ZoomScale = _zoomScrollViews[i].MinimumZoomScale;
+        }
     }
 
     private void LoadPage(int index)
@@ -262,15 +283,15 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
         var source = _images[index];
 
-        if (_isUrl)
+        if (ImageSourceResolver.IsRemote(source, _isUrl))
             _ = LoadFromUrlAsync(index, source, _pageCts[index].Token);
         else
-            LoadFromBundle(index, source);
+            LoadFromLocal(index, source);
     }
 
-    private void LoadFromBundle(int index, string name)
+    private void LoadFromLocal(int index, string name)
     {
-        var image = UIImage.FromBundle(name);
+        var image = AppleImageCache.LoadLocal(name, GetPageMaxPixelSize(index), UIScreen.MainScreen.Scale);
         if (image is not null)
             SetPageImage(index, image);
         else
@@ -279,8 +300,19 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
     private async Task LoadFromUrlAsync(int index, string url, CancellationToken token)
     {
+        var maxPixelSize = GetPageMaxPixelSize(index);
+        var cacheKey = AppleImageCache.Key(url, maxPixelSize);
         try
         {
+            if (AppleImageCache.Get(cacheKey) is { } cached)
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested) SetPageImage(index, cached);
+                });
+                return;
+            }
+
             var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url));
 
             if (token.IsCancellationRequested) return;
@@ -291,7 +323,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
                 return;
             }
 
-            var image = UIImage.LoadFromData(result.Data);
+            var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
             if (image is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(() => ApplyPagePlaceholder(index));
@@ -300,7 +332,11 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (!token.IsCancellationRequested) SetPageImage(index, image);
+                if (!token.IsCancellationRequested)
+                {
+                    AppleImageCache.Set(cacheKey, image);
+                    SetPageImage(index, image);
+                }
             });
         }
         catch (OperationCanceledException) { }
@@ -310,6 +346,14 @@ public sealed class FullscreenGalleryViewController : UIViewController
                 $"[FullscreenGalleryViewController] Page {index} load error: {ex.Message}");
             await MainThread.InvokeOnMainThreadAsync(() => ApplyPagePlaceholder(index));
         }
+    }
+
+    private int GetPageMaxPixelSize(int index)
+    {
+        var bounds = _zoomScrollViews?[index].Bounds ?? View?.Bounds ?? UIScreen.MainScreen.Bounds;
+        var maxPoints = Math.Max(bounds.Width, bounds.Height);
+        var scaled = (int)Math.Ceiling(maxPoints * UIScreen.MainScreen.Scale * Math.Max(1f, Math.Min(_maxZoom, 3f)));
+        return Math.Clamp(scaled, 720, 4096);
     }
 
     private void SetPageImage(int index, UIImage image)
@@ -325,7 +369,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
         _spinners![index].StopAnimating();
         if (!string.IsNullOrWhiteSpace(_placeholder))
         {
-            var ph = UIImage.FromBundle(_placeholder);
+            var ph = AppleImageCache.LoadLocal(_placeholder, GetPageMaxPixelSize(index), UIScreen.MainScreen.Scale);
             if (ph is not null)
             {
                 _imageViews![index].Image = ph;

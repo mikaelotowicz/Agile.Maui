@@ -9,7 +9,7 @@ public class GalleryView : View
         BindableProperty.Create(nameof(Images), typeof(IList<string>), typeof(GalleryView), null);
 
     public static readonly BindableProperty IsUrlProperty =
-        BindableProperty.Create(nameof(IsUrl), typeof(bool), typeof(GalleryView), false);
+        BindableProperty.Create("IsUrl", typeof(bool), typeof(GalleryView), false);
 
     public static readonly BindableProperty PlaceholderProperty =
         BindableProperty.Create(nameof(Placeholder), typeof(string), typeof(GalleryView), null);
@@ -50,7 +50,9 @@ public class GalleryView : View
             validateValue: (_, v) => (int)v >= 64);
 
     public IList<string>? Images { get => (IList<string>?)GetValue(ImagesProperty); set => SetValue(ImagesProperty, value); }
+    [Obsolete("IsUrl nao e mais necessario. O GalleryView detecta automaticamente imagens http/https. Remova esta propriedade do XAML.")]
     public bool IsUrl { get => (bool)GetValue(IsUrlProperty); set => SetValue(IsUrlProperty, value); }
+    internal bool LegacyIsUrl => (bool)GetValue(IsUrlProperty);
     public string? Placeholder { get => (string?)GetValue(PlaceholderProperty); set => SetValue(PlaceholderProperty, value); }
     public int SelectedIndex { get => (int)GetValue(SelectedIndexProperty); set => SetValue(SelectedIndexProperty, value); }
     public ZoomImageAspect AspectMode { get => (ZoomImageAspect)GetValue(AspectModeProperty); set => SetValue(AspectModeProperty, value); }

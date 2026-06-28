@@ -208,9 +208,9 @@ MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualizat
 
 **Android:** passed to Glide as `RequestOptions.Override(ThumbMaxPx, ThumbMaxPx)`. Glide decodes the bitmap at this pixel dimension, never into the original resolution. Lowering `ThumbMaxPx` reduces peak memory per thumbnail at the cost of visual quality for very large images.
 
-**iOS:** thumbnails are downloaded full-size via `NSUrlSession`. `ThumbMaxPx` does not limit the decode on iOS — use server-side resizing to bound memory usage.
+**iOS/MacCatalyst:** thumbnails are downloaded with `NSUrlSession` and decoded through `AppleImageCache` using `ThumbMaxPx` as the maximum pixel size.
 
-**Windows:** thumbnails are loaded via `BitmapImage`. `ThumbMaxPx` has no effect on Windows.
+**Windows:** thumbnails are loaded via `BitmapImage` using `DecodePixelWidth` and `DecodePixelHeight`.
 
 **When to change it:**
 
@@ -220,13 +220,49 @@ MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualizat
 
 ---
 
+## ImageView - DecodeMaxPx
+
+| Property | Type | Default | Minimum |
+|---|---|---|---|
+| `DecodeMaxPx` | `int` | `720` | `64` |
+
+`DecodeMaxPx` controls the bitmap decode limit for a single `ImageView`.
+It does not change the visual size of the view; layout still comes from MAUI
+properties such as `HeightRequest`, `WidthRequest`, grid constraints, and
+`AspectMode`.
+
+**Android:** passed to Glide as `RequestOptions.Override(DecodeMaxPx, DecodeMaxPx)`.
+Glide may still serve a cached transformed resource. When testing quality
+changes, clear the app/cache or change the image URL/name.
+
+**iOS/MacCatalyst:** local and remote sources are decoded through
+`AppleImageCache` using `DecodeMaxPx` or the measured target size when available.
+
+**Windows:** mapped to `BitmapImage.DecodePixelWidth` and `DecodePixelHeight`.
+
+**When to change it:**
+
+- Product/list thumbnails: use `128`, `192`, or `256` depending on rendered size.
+- Larger detail thumbnails: use `512` or `720`.
+- Fullscreen/detail quality: keep the thumbnail small and set `FullscreenSource`
+  to a higher-quality source.
+- Values below `64` are rejected/clamped and should only be considered while
+  temporarily debugging the component internals.
+
+`ImageView.IsLoading` is read-only and is updated by each platform handler. It is
+safe to bind to indicators or behaviors, but application code should not try to
+set it.
+
+---
+
 ## Images inside VirtualizedCollectionView cells
 
 `VirtualizedCollectionView` renders arbitrary MAUI `DataTemplate` content. The list handler has no control over image decoding inside templates. These rules apply regardless of platform:
 
 | Recommendation | Reason |
 |---|---|
-| Use `<agile:ImageView>` in cell templates (Android) | Glide applies `RequestOptions.Override(ThumbMaxPx, ThumbMaxPx)` automatically |
+| Use `<agile:ImageView>` in cell templates | Bounded decode, cancellation/reuse behavior, and platform cache are handled by the component |
+| Set `DecodeMaxPx` close to the rendered thumbnail size | Avoids decoding full-resolution images for small cards |
 | Use server-side thumbnail URLs | Eliminates decoding full-resolution bitmaps in memory |
 | Set a fixed `ItemHeight` matching the image aspect ratio | UICollectionView / RecyclerView skips re-measurement on decode |
 | Avoid MAUI `<Image>` for remote URLs in large lists | No bounded decode size; no per-cell cancellation |
@@ -234,6 +270,10 @@ MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualizat
 **iOS cell image cancellation:** `VrMauiCell.PrepareForReuse` sets `_mauiView.BindingContext = null`, which triggers `DisconnectHandler` on any MAUI handler inside the template — including `ImageViewHandler`, which cancels its `CancellationTokenSource` and aborts the `NSUrlSession` download.
 
 ---
+
+Note for image-heavy screens: for galleries use `GalleryView.ThumbMaxPx`; for
+single images inside list/card templates use `ImageView.DecodeMaxPx`. Both have
+a minimum of `64` and should be paired with server-side thumbnails when possible.
 
 ## Quick decision guide
 
@@ -261,9 +301,10 @@ Which ItemSizingStrategy should I use?
 ```
 
 ```
-How do I reduce memory in a large gallery?
+How do I reduce memory in a large gallery or image-heavy list?
+Current rule: lower GalleryView.ThumbMaxPx for galleries, or ImageView.DecodeMaxPx for single images in cards/lists.
 │
-├─ Lower ThumbMaxPx (Android only — Glide decode bound)
+├─ Lower GalleryView.ThumbMaxPx or ImageView.DecodeMaxPx
 ├─ Serve pre-resized thumbnails from server (all platforms)
 └─ Avoid MAUI <Image> for remote URLs in cell templates
 ```

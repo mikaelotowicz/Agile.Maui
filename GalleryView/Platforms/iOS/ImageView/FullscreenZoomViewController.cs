@@ -58,7 +58,7 @@ public sealed class FullscreenZoomViewController
         else
         {
             if (_isUrl) _ = LoadFromUrlAsync(_source);
-            else LoadFromBundle(_source);
+            else LoadFromLocal(_source);
         }
     }
 
@@ -182,9 +182,9 @@ public sealed class FullscreenZoomViewController
     }
 
     // ── Carregamento ──────────────────────────────────────────────────────
-    private void LoadFromBundle(string name)
+    private void LoadFromLocal(string name)
     {
-        var image = UIImage.FromBundle(name);
+        var image = AppleImageCache.LoadLocal(name, GetFullscreenMaxPixelSize(), UIScreen.MainScreen.Scale);
         if (image is not null) SetImage(image);
         else ApplyPlaceholder();
     }
@@ -195,9 +195,20 @@ public sealed class FullscreenZoomViewController
         _loadCts?.Dispose();
         _loadCts = new CancellationTokenSource();
         var token = _loadCts.Token;
+        var maxPixelSize = GetFullscreenMaxPixelSize();
+        var cacheKey = AppleImageCache.Key(url, maxPixelSize);
 
         try
         {
+            if (AppleImageCache.Get(cacheKey) is { } cached)
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested) SetImage(cached);
+                });
+                return;
+            }
+
             var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url));
 
             if (token.IsCancellationRequested) return;
@@ -208,7 +219,7 @@ public sealed class FullscreenZoomViewController
                 return;
             }
 
-            var image = UIImage.LoadFromData(result.Data);
+            var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
             if (image is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(ApplyPlaceholder);
@@ -217,7 +228,11 @@ public sealed class FullscreenZoomViewController
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (!token.IsCancellationRequested) SetImage(image);
+                if (!token.IsCancellationRequested)
+                {
+                    AppleImageCache.Set(cacheKey, image);
+                    SetImage(image);
+                }
             });
         }
         catch (OperationCanceledException) { }
@@ -227,6 +242,14 @@ public sealed class FullscreenZoomViewController
                 $"[FullscreenZoomViewController] Load error: {ex.Message}");
             await MainThread.InvokeOnMainThreadAsync(ApplyPlaceholder);
         }
+    }
+
+    private int GetFullscreenMaxPixelSize()
+    {
+        var bounds = View?.Bounds ?? UIScreen.MainScreen.Bounds;
+        var maxPoints = Math.Max(bounds.Width, bounds.Height);
+        var scaled = (int)Math.Ceiling(maxPoints * UIScreen.MainScreen.Scale * Math.Max(1f, Math.Min(_maxZoom, 3f)));
+        return Math.Clamp(scaled, 720, 4096);
     }
 
     private void SetImage(UIImage image)
@@ -242,7 +265,7 @@ public sealed class FullscreenZoomViewController
         _spinner!.StopAnimating();
         if (!string.IsNullOrWhiteSpace(_placeholder))
         {
-            var ph = UIImage.FromBundle(_placeholder);
+            var ph = AppleImageCache.LoadLocal(_placeholder, GetFullscreenMaxPixelSize(), UIScreen.MainScreen.Scale);
             if (ph is not null) _imageView!.Image = ph;
         }
         UpdateZoomScale();

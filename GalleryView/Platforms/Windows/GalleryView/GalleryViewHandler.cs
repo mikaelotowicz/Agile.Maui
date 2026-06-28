@@ -19,9 +19,10 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
         {
             [nameof(GalleryView.Images)]        = (h, _) => h.LoadImages(),
             [nameof(GalleryView.SelectedIndex)] = (h, _) => h.SyncPage(),
-            [nameof(GalleryView.IsUrl)]         = (h, _) => h.LoadImages(),
+            ["IsUrl"]                           = (h, _) => h.LoadImages(),
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.LoadImages(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.LoadImages(),
+            [nameof(GalleryView.ThumbMaxPx)]    = (h, _) => h.LoadImages(),
             [nameof(GalleryView.MaxZoom)]                = (h, _) => { },
             [nameof(GalleryView.ShowIndicator)]          = (h, _) => h.UpdateDots(),
             [nameof(GalleryView.IndicatorColor)]         = (h, _) => h.UpdateDots(),
@@ -86,19 +87,23 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
             ExceptionRoutedEventHandler failedHandler = (_, _) => { ApplyPlaceholder(img); VirtualView?.RaiseImageFailed(); };
             img.ImageOpened += openedHandler;
             img.ImageFailed += failedHandler;
-            _imageHandlerCleanup.Add(() => { img.ImageOpened -= openedHandler; img.ImageFailed -= failedHandler; });
+            _imageHandlerCleanup.Add(() =>
+            {
+                img.ImageOpened -= openedHandler;
+                img.ImageFailed -= failedHandler;
+                img.Source = null;
+            });
 
-            if (VirtualView.IsUrl)
+            if (ImageSourceResolver.IsRemote(source, VirtualView.LegacyIsUrl))
             {
                 if (Uri.TryCreate(source, UriKind.Absolute, out var uri))
-                    img.Source = new BitmapImage(uri);
+                    img.Source = CreateBitmap(uri);
                 else
                     ApplyPlaceholder(img);
             }
             else
             {
-                var filename = System.IO.Path.HasExtension(source) ? source : source + ".png";
-                img.Source = new BitmapImage(new Uri($"ms-appx:///{filename}"));
+                img.Source = CreateLocalBitmap(source);
             }
 
             PlatformView.Pager.Items.Add(img);
@@ -211,10 +216,30 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
     private void ApplyPlaceholder(NativeImage img)
     {
         if (string.IsNullOrWhiteSpace(VirtualView?.Placeholder)) return;
-        var filename = System.IO.Path.HasExtension(VirtualView.Placeholder)
-            ? VirtualView.Placeholder
-            : VirtualView.Placeholder + ".png";
-        img.Source = new BitmapImage(new Uri($"ms-appx:///{filename}"));
+        img.Source = CreateLocalBitmap(VirtualView.Placeholder);
+    }
+
+    private BitmapImage CreateLocalBitmap(string source)
+    {
+        if (ImageSourceResolver.TryGetLocalFilePath(source, out var path))
+            return CreateBitmap(new Uri(path, UriKind.Absolute));
+
+        if (ImageSourceResolver.TryGetAbsoluteLocalUri(source, out var uri))
+            return CreateBitmap(uri);
+
+        var filename = ImageSourceResolver.MauiResourcePath(source);
+        return CreateBitmap(new Uri($"ms-appx:///{filename}"));
+    }
+
+    private BitmapImage CreateBitmap(Uri uri)
+    {
+        var maxPx = Math.Max(64, VirtualView?.ThumbMaxPx ?? 720);
+        return new BitmapImage
+        {
+            DecodePixelWidth = maxPx,
+            DecodePixelHeight = maxPx,
+            UriSource = uri
+        };
     }
 }
 

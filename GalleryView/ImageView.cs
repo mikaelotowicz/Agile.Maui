@@ -17,7 +17,7 @@ public class ImageView : View
 
     public static readonly BindableProperty IsUrlProperty =
         BindableProperty.Create(
-            nameof(IsUrl), typeof(bool), typeof(ImageView), false);
+            "IsUrl", typeof(bool), typeof(ImageView), false);
 
     public static readonly BindableProperty PlaceholderProperty =
         BindableProperty.Create(
@@ -47,6 +47,15 @@ public class ImageView : View
     public static readonly BindableProperty ImageFailedCommandProperty =
         BindableProperty.Create(nameof(ImageFailedCommand), typeof(ICommand), typeof(ImageView), null);
 
+    public static readonly BindableProperty DecodeMaxPxProperty =
+        BindableProperty.Create(nameof(DecodeMaxPx), typeof(int), typeof(ImageView), 720,
+            validateValue: (_, v) => (int)v >= 64);
+
+    private static readonly BindablePropertyKey IsLoadingPropertyKey =
+        BindableProperty.CreateReadOnly(nameof(IsLoading), typeof(bool), typeof(ImageView), false);
+
+    public static readonly BindableProperty IsLoadingProperty = IsLoadingPropertyKey.BindableProperty;
+
     /// <summary>Nome do drawable local ou URL completa.</summary>
     public string? Source
     {
@@ -55,11 +64,14 @@ public class ImageView : View
     }
 
     /// <summary>True quando Source é uma URL HTTP/HTTPS.</summary>
+    [Obsolete("IsUrl nao e mais necessario. O ImageView detecta automaticamente Source http/https. Remova esta propriedade do XAML.")]
     public bool IsUrl
     {
         get => (bool)GetValue(IsUrlProperty);
         set => SetValue(IsUrlProperty, value);
     }
+
+    internal bool LegacyIsUrl => (bool)GetValue(IsUrlProperty);
 
     /// <summary>Drawable usado como placeholder e fallback de erro.</summary>
     public string? Placeholder
@@ -98,6 +110,8 @@ public class ImageView : View
 
     public ICommand? ImageLoadedCommand { get => (ICommand?)GetValue(ImageLoadedCommandProperty); set => SetValue(ImageLoadedCommandProperty, value); }
     public ICommand? ImageFailedCommand { get => (ICommand?)GetValue(ImageFailedCommandProperty); set => SetValue(ImageFailedCommandProperty, value); }
+    public int DecodeMaxPx { get => (int)GetValue(DecodeMaxPxProperty); set => SetValue(DecodeMaxPxProperty, value); }
+    public bool IsLoading => (bool)GetValue(IsLoadingProperty);
 
     /// <summary>Disparado quando a imagem carrega com sucesso.</summary>
     public event EventHandler? ImageLoaded;
@@ -107,6 +121,7 @@ public class ImageView : View
 
     internal void RaiseImageLoaded()
     {
+        SetIsLoading(false);
         ImageLoaded?.Invoke(this, EventArgs.Empty);
         if (ImageLoadedCommand?.CanExecute(null) == true)
             ImageLoadedCommand.Execute(null);
@@ -114,9 +129,16 @@ public class ImageView : View
 
     internal void RaiseImageFailed()
     {
+        SetIsLoading(false);
         ImageFailed?.Invoke(this, EventArgs.Empty);
         if (ImageFailedCommand?.CanExecute(null) == true)
             ImageFailedCommand.Execute(null);
+    }
+
+    internal void SetIsLoading(bool isLoading)
+    {
+        if (IsLoading != isLoading)
+            SetValue(IsLoadingPropertyKey, isLoading);
     }
 }
 

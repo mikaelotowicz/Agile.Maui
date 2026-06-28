@@ -14,9 +14,10 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
         {
             [nameof(GalleryView.Images)]        = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.SelectedIndex)] = (h, _) => h.SyncPage(),
-            [nameof(GalleryView.IsUrl)]         = (h, _) => h.Reconfigure(),
+            ["IsUrl"]                           = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.Reconfigure(),
+            [nameof(GalleryView.ThumbMaxPx)]    = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.MaxZoom)]                = (h, _) => { },
             [nameof(GalleryView.ShowIndicator)]          = (h, _) => h.UpdateIndicator(),
             [nameof(GalleryView.IndicatorColor)]         = (h, _) => h.UpdateIndicator(),
@@ -61,8 +62,9 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
             : UIViewContentMode.ScaleAspectFit;
         PlatformView.Configure(
             images:      images?.ToArray() ?? [],
-            isUrl:       VirtualView.IsUrl,
+            isUrl:       VirtualView.LegacyIsUrl,
             placeholder: VirtualView.Placeholder,
+            thumbMaxPx:  VirtualView.ThumbMaxPx,
             contentMode: contentMode);
         SubscribeImages(images);
         SyncPage();
@@ -131,7 +133,7 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
 
         var gallery = new FullscreenGalleryViewController(
             images:         arr,
-            isUrl:          VirtualView.IsUrl,
+            isUrl:          VirtualView.LegacyIsUrl,
             placeholder:    VirtualView.Placeholder,
             maxZoom:        VirtualView.MaxZoom,
             startIndex:     idx,
@@ -177,6 +179,7 @@ internal sealed class ThumbGalleryView : UIView
     private string[]                 _images      = [];
     private bool                     _isUrl;
     private string?                  _placeholder;
+    private int                      _thumbMaxPx = 720;
     private UIViewContentMode        _contentMode = UIViewContentMode.ScaleAspectFill;
     private List<PageEntry>          _pages       = [];
     private bool                     _ignoreScroll;
@@ -213,11 +216,12 @@ internal sealed class ThumbGalleryView : UIView
         AddSubview(_pageControl);
     }
 
-    public void Configure(string[] images, bool isUrl, string? placeholder, UIViewContentMode contentMode)
+    public void Configure(string[] images, bool isUrl, string? placeholder, int thumbMaxPx, UIViewContentMode contentMode)
     {
         _images      = images;
         _isUrl       = isUrl;
         _placeholder = placeholder;
+        _thumbMaxPx  = Math.Max(64, thumbMaxPx);
         _contentMode = contentMode;
 
         foreach (var p in _pages)
@@ -354,7 +358,7 @@ internal sealed class ThumbGalleryView : UIView
         var entry  = _pages[index];
         var source = _images[index];
 
-        if (_isUrl)
+        if (ImageSourceResolver.IsRemote(source, _isUrl))
         {
             var cts = new CancellationTokenSource();
             _pages[index] = new PageEntry(entry.ImageView, cts);
@@ -362,7 +366,12 @@ internal sealed class ThumbGalleryView : UIView
         }
         else
         {
-            var image = UIImage.FromBundle(source);
+            var maxPixelSize = AppleImageCache.ResolveMaxPixelSize(
+                entry.ImageView.Bounds.Width,
+                entry.ImageView.Bounds.Height,
+                UIScreen.MainScreen.Scale,
+                _thumbMaxPx);
+            var image = AppleImageCache.LoadLocal(source, maxPixelSize, UIScreen.MainScreen.Scale);
             if (image is not null)
             {
                 entry.ImageView.Image = image;
@@ -381,6 +390,25 @@ internal sealed class ThumbGalleryView : UIView
         try
         {
             ApplyPlaceholder(iv);
+            var maxPixelSize = AppleImageCache.ResolveMaxPixelSize(
+                iv.Bounds.Width,
+                iv.Bounds.Height,
+                UIScreen.MainScreen.Scale,
+                _thumbMaxPx);
+            var cacheKey = AppleImageCache.Key(url, maxPixelSize);
+            if (AppleImageCache.Get(cacheKey) is { } cached)
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested)
+                    {
+                        iv.Image = cached;
+                        OnImageLoaded?.Invoke();
+                    }
+                });
+                return;
+            }
+
             var result = await _urlSession.CreateDataTaskAsync(new NSUrl(url)).ConfigureAwait(false);
             if (token.IsCancellationRequested) return;
 
@@ -390,7 +418,7 @@ internal sealed class ThumbGalleryView : UIView
                 return;
             }
 
-            var image = UIImage.LoadFromData(result.Data);
+            var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
             if (image is null)
             {
                 await FailAsync(iv, token);
@@ -401,6 +429,7 @@ internal sealed class ThumbGalleryView : UIView
             {
                 if (!token.IsCancellationRequested)
                 {
+                    AppleImageCache.Set(cacheKey, image);
                     iv.Image = image;
                     OnImageLoaded?.Invoke();
                 }
@@ -425,7 +454,7 @@ internal sealed class ThumbGalleryView : UIView
     private void ApplyPlaceholder(UIImageView iv)
     {
         if (string.IsNullOrWhiteSpace(_placeholder)) return;
-        var ph = UIImage.FromBundle(_placeholder);
+        var ph = AppleImageCache.LoadLocal(_placeholder, _thumbMaxPx, UIScreen.MainScreen.Scale);
         if (ph is not null) iv.Image = ph;
     }
 

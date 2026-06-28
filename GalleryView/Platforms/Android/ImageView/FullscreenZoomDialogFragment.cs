@@ -207,17 +207,14 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
         if (_imageView is null) return;
 
         var options = BuildRequestOptions();
-        var glide   = Glide.With(this);
-        var target  = _isUrl
-            ? glide.Load(_source)
-            : glide.Load(ResolveDrawable(_source));
-
-        target
-            .Apply(options)
-            .Listener(new ZoomGlideRequestListener(
+        AndroidImageLoader.LoadInto(
+            _imageView,
+            _source,
+            options,
+            new ZoomGlideRequestListener(
                 onReady: OnImageReady,
-                onFail:  HideProgress))
-            .Into(_imageView);
+                onFail:  HideProgress),
+            _isUrl);
     }
 
     // Post() garante que a view ja esta layoutada antes de calcular a matrix
@@ -232,9 +229,20 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
 
     private RequestOptions BuildRequestOptions()
     {
-        var options = new RequestOptions().FitCenter();
+        var metrics = RequireContext().Resources?.DisplayMetrics;
+        var maxScreenPx = Math.Max(metrics?.WidthPixels ?? 0, metrics?.HeightPixels ?? 0);
+        var decodePx = Math.Clamp(
+            (int)(maxScreenPx * Math.Max(1f, Math.Min(_maxZoom, 3f))),
+            720,
+            4096);
 
-        var placeholderId = ResolveDrawable(_placeholder);
+        var options = new RequestOptions()
+            .FitCenter()
+            .Override(decodePx, decodePx)
+            .DontAnimate();
+        options.SetDiskCacheStrategy(DiskCacheStrategy.Automatic!);
+
+        var placeholderId = AndroidImageLoader.ResolveDrawable(RequireContext(), _placeholder);
         if (placeholderId != 0)
             options = options.Clone().Placeholder(placeholderId).Error(placeholderId);
 
@@ -254,8 +262,7 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
     private int ResolveDrawable(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return 0;
-        return RequireContext().Resources?.GetIdentifier(
-            name, "drawable", RequireContext().PackageName) ?? 0;
+        return AndroidImageLoader.ResolveDrawable(RequireContext(), name);
     }
 }
 

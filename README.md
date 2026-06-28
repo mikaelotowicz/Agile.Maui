@@ -46,7 +46,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 
 | Module | Key features |
 |---|---|
-| `Agile.Maui.Gallery` | `ImageView` with zoom/fullscreen on supported platforms and `GalleryView` with image navigation. |
+| `Agile.Maui.Gallery` | `ImageView` with native loading, bounded decode, load state, zoom/fullscreen, and `GalleryView` with image navigation. |
 | `Agile.Maui.Pdf` | Base `PdfViewer` and a ready-to-use `PdfReaderView` with search, print/share, zoom, thumbnails, and navigation. |
 | `Agile.Maui.VirtualizedCollection` | High-performance virtualized list for large volumes of items. |
 | `Agile.Maui.ChipGroup` | Chip selection control with single/multiple selection and wrap, horizontal, or vertical layout modes. |
@@ -116,8 +116,8 @@ xmlns:signature="clr-namespace:Agile.Maui;assembly=Agile.Maui.SignaturePad"
 Example:
 
 ```xml
-<gallery:ImageView Source="photo" />
-<gallery:GalleryView Images="{Binding Photos}" />
+<gallery:ImageView Source="photo" DecodeMaxPx="256" />
+<gallery:GalleryView Images="{Binding Photos}" ThumbMaxPx="512" />
 <pdf:PdfViewer Source="{Binding PdfPath}" />
 <pdf:PdfReaderView Source="manual.pdf" />
 <virtualized:VirtualizedCollectionView ItemsSource="{Binding Items}" />
@@ -129,7 +129,7 @@ Example:
 
 | Component | Android | iOS / MacCatalyst | Windows |
 |---|---|---|---|
-| `ImageView` | `Android.Widget.ImageView` + Glide + native fullscreen zoom | `UIImageView` + `UIScrollView` fullscreen | `Microsoft.UI.Xaml.Controls.Image` |
+| `ImageView` | `Android.Widget.ImageView` + Glide + bounded decode + native fullscreen zoom | `UIImageView` + bounded decode + `UIScrollView` fullscreen | `Microsoft.UI.Xaml.Controls.Image` + bounded decode |
 | `GalleryView` | `ViewPager2` + `RecyclerView` | paginated `UIScrollView` + `UIPageControl` | `FlipView` |
 | `PdfViewer` | `PdfRenderer` for rendering + PDFium for text/search | `PdfKit.PdfView` | PDFium |
 | `VirtualizedCollectionView` | `RecyclerView` | `UICollectionViewCompositionalLayout` | MAUI `CollectionView` |
@@ -141,6 +141,8 @@ Example:
 - `VirtualizedCollectionView` uses native handlers and virtualization to reduce cost on large lists.
 - `PdfViewer` renders pages on demand and provides a configurable cache/prefetch.
 - `GalleryView` and `ImageView` use native per-platform loading and cache where applicable.
+- `ImageView.DecodeMaxPx` and `GalleryView.ThumbMaxPx` limit thumbnail decode size; use `FullscreenSource` for high-detail fullscreen images.
+- `ImageView.IsLoading` is a read-only state from the platform handler and can drive indicators or fade-in behaviors.
 - `SignaturePad` stores strokes as vector data and exports images on demand.
 
 ## Troubleshooting
