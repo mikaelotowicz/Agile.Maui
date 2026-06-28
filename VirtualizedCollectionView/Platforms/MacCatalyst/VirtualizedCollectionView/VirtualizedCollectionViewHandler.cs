@@ -36,8 +36,8 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.EmptyView)]                              = (h, _) => h.UpdateEmptyView(),
             [nameof(VirtualizedCollectionView.EmptyViewTemplate)]                      = (h, _) => h.UpdateEmptyView(),
-            [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => { },
-            [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => { },
+            [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => h.ResetRemainingThresholdGate(),
+            [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => h.ResetRemainingThresholdGate(),
             [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
             [nameof(VirtualizedCollectionView.VerticalScrollBarVisibility)]            = (h, _) => h.ApplyScrollIndicators(),
             [nameof(VirtualizedCollectionView.HorizontalScrollBarVisibility)]          = (h, _) => h.ApplyScrollIndicators(),
@@ -57,6 +57,7 @@ public sealed class VirtualizedCollectionViewHandler
     private UIView?                   _emptyNativeView;
     private readonly List<NotifyCollectionChangedEventArgs> _pendingChanges = [];
     private bool _flushScheduled;
+    private int _lastRemainingThresholdItemCount = -1;
     // Coalescing de ItemsSource + ItemTemplate: ambos disparam no connect via mapper —
     // sem isso ReloadData() seria chamado duas vezes antes do primeiro render.
     private bool _reloadScheduled;
@@ -86,7 +87,11 @@ public sealed class VirtualizedCollectionViewHandler
         base.ConnectHandler(platformView);
         platformView.PrefetchingEnabled = false;
         _delegate = new VrCollectionDelegate(
-            onScrolled:    (x, y) => VirtualView?.RaiseScrolled(x, y),
+            onScrolled:    (x, y) =>
+            {
+                if (VirtualView?.HasScrolledObservers == true)
+                    VirtualView.RaiseScrolled(x, y);
+            },
             onScrollEnded: CheckRemainingThreshold);
         platformView.Delegate = _delegate;
         ApplyScrollIndicators();
@@ -167,9 +172,7 @@ public sealed class VirtualizedCollectionViewHandler
             var groupSize = NSCollectionLayoutSize.Create(
                 NSCollectionLayoutDimension.CreateFractionalWidth((nfloat)1),
                 heightDim);
-            var items = Enumerable.Range(0, columns)
-                .Select(_ => NSCollectionLayoutItem.Create(itemSize))
-                .ToArray();
+            var items = CreateLayoutItems(columns, itemSize);
             group = NSCollectionLayoutGroup.CreateHorizontal(groupSize, items);
         }
         else
@@ -184,9 +187,7 @@ public sealed class VirtualizedCollectionViewHandler
             var groupSize = NSCollectionLayoutSize.Create(
                 widthDim,
                 NSCollectionLayoutDimension.CreateFractionalHeight((nfloat)1));
-            var items = Enumerable.Range(0, columns)
-                .Select(_ => NSCollectionLayoutItem.Create(itemSize))
-                .ToArray();
+            var items = CreateLayoutItems(columns, itemSize);
             group = NSCollectionLayoutGroup.CreateVertical(groupSize, items);
         }
 
@@ -202,6 +203,14 @@ public sealed class VirtualizedCollectionViewHandler
                 : UICollectionViewScrollDirection.Vertical,
         };
         return new UICollectionViewCompositionalLayout(section, config);
+    }
+
+    private static NSCollectionLayoutItem[] CreateLayoutItems(int count, NSCollectionLayoutSize itemSize)
+    {
+        var items = new NSCollectionLayoutItem[count];
+        for (var i = 0; i < count; i++)
+            items[i] = NSCollectionLayoutItem.Create(itemSize);
+        return items;
     }
 
     // Altura medida do 1º item no modo MeasureFirst (0 = ainda não medido).
@@ -237,6 +246,7 @@ public sealed class VirtualizedCollectionViewHandler
     private void ReloadItems()
     {
         if (PlatformView is null || MauiContext is null) return;
+        ResetRemainingThresholdGate();
 
         // Recarga total ressincroniza a partir do snapshot atual da fonte, que já reflete
         // toda mutação ocorrida até aqui. Qualquer evento incremental ainda enfileirado é
@@ -349,8 +359,14 @@ public sealed class VirtualizedCollectionViewHandler
 
     private void CheckRemainingThreshold()
     {
-        var threshold = VirtualView?.RemainingItemsThreshold ?? -1;
+        var view = VirtualView;
+        var threshold = view?.RemainingItemsThreshold ?? -1;
         if (threshold < 0 || _dataSource is null || PlatformView is null) return;
+        var total = _dataSource.Items.Count;
+        if (total <= 0 ||
+            total == _lastRemainingThresholdItemCount ||
+            view?.CanRaiseRemainingItemsThresholdReached != true)
+            return;
 
         var visiblePaths = PlatformView.IndexPathsForVisibleItems;
         if (visiblePaths.Length == 0) return;
@@ -363,10 +379,14 @@ public sealed class VirtualizedCollectionViewHandler
         }
         if (lastVisible < 0) return;
 
-        var total = _dataSource.Items.Count;
-        if (total > 0 && total - 1 - lastVisible <= threshold)
-            VirtualView?.RaiseRemainingItemsThresholdReached();
+        if (total - 1 - lastVisible <= threshold)
+        {
+            _lastRemainingThresholdItemCount = total;
+            view.RaiseRemainingItemsThresholdReached();
+        }
     }
+
+    private void ResetRemainingThresholdGate() => _lastRemainingThresholdItemCount = -1;
 
     // ── EmptyView ─────────────────────────────────────────────────────────────
 
@@ -419,9 +439,12 @@ public sealed class VirtualizedCollectionViewHandler
     }
 
     private static NSIndexPath[] IndexPaths(int start, int count)
-        => Enumerable.Range(start, count)
-            .Select(i => NSIndexPath.FromItemSection(i, 0))
-            .ToArray();
+    {
+        var paths = new NSIndexPath[count];
+        for (var i = 0; i < count; i++)
+            paths[i] = NSIndexPath.FromItemSection(start + i, 0);
+        return paths;
+    }
 
     private static List<object> SnapshotItems(IEnumerable? source)
     {
@@ -481,7 +504,8 @@ internal sealed class VrMauiCell : UICollectionViewCell
             ContentView.AddSubview(_nativeView);
         }
 
-        _mauiView.BindingContext = item;
+        if (!ReferenceEquals(_mauiView.BindingContext, item))
+            _mauiView.BindingContext = item;
         SetNeedsLayout();
     }
 
@@ -619,7 +643,7 @@ internal sealed class VrDataSource : UICollectionViewDataSource
         switch (e.Action)
         {
             case NotifyCollectionChangedAction.Add when e.NewItems is not null:
-                Items.InsertRange(e.NewStartingIndex, e.NewItems.Cast<object>());
+                Items.InsertRange(e.NewStartingIndex, CopyItems(e.NewItems));
                 break;
             case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
                 Items.RemoveRange(e.OldStartingIndex, e.OldItems.Count);
@@ -634,6 +658,14 @@ internal sealed class VrDataSource : UICollectionViewDataSource
                 Items.Insert(e.NewStartingIndex, moved);
                 break;
         }
+    }
+
+    private static List<object> CopyItems(IList items)
+    {
+        var list = new List<object>(items.Count);
+        foreach (var item in items)
+            list.Add(item!);
+        return list;
     }
 }
 

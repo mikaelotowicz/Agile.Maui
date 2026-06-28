@@ -35,8 +35,8 @@ public sealed class VirtualizedCollectionViewHandler
             [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.ApplyItemSpacing(),
             [nameof(VirtualizedCollectionView.EmptyView)]                              = (h, _) => h.UpdateEmptyView(),
             [nameof(VirtualizedCollectionView.EmptyViewTemplate)]                      = (h, _) => h.UpdateEmptyView(),
-            [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => { },
-            [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => { },
+            [nameof(VirtualizedCollectionView.RemainingItemsThreshold)]                = (h, _) => h.ResetRemainingThresholdGate(),
+            [nameof(VirtualizedCollectionView.RemainingItemsThresholdReachedCommand)]  = (h, _) => h.ResetRemainingThresholdGate(),
             [nameof(VirtualizedCollectionView.ScrolledCommand)]                        = (h, _) => { },
             [nameof(VirtualizedCollectionView.ItemSizingStrategy)]                       = (h, _) => h.ApplySizeStrategy(),
             [nameof(VirtualizedCollectionView.ItemHeightRequest)]                      = (h, _) => h.ApplySizeStrategy(),
@@ -56,6 +56,7 @@ public sealed class VirtualizedCollectionViewHandler
     private INotifyCollectionChanged?   _collectionChangedSource;
     private CachingLinearLayoutManager? _cachingLm;
     private VrRecyclerListener?         _recyclerListener;
+    private int                         _lastRemainingThresholdItemCount = -1;
     // Coalescing de ItemsSource + ItemTemplate + ItemHeight: todos disparam no connect
     // via mapper — sem isso o adapter seria recriado até 3× antes do primeiro render.
     private bool                        _reloadScheduled;
@@ -337,6 +338,7 @@ public sealed class VirtualizedCollectionViewHandler
     private void ReloadItems()
     {
         if (PlatformView is null || MauiContext is null) return;
+        ResetRemainingThresholdGate();
 
         var template = VirtualView.ItemTemplate;
         if (template is null)
@@ -416,38 +418,55 @@ public sealed class VirtualizedCollectionViewHandler
                      or NotifyCollectionChangedAction.Move
                 ? null
                 : SnapshotItems(VirtualView.ItemsSource);
+        var action = e.Action;
+        var newStartingIndex = e.NewStartingIndex;
+        var oldStartingIndex = e.OldStartingIndex;
+        var newItems = action is NotifyCollectionChangedAction.Add
+                              or NotifyCollectionChangedAction.Replace
+            ? e.NewItems is not null ? CopyItems(e.NewItems) : null
+            : null;
+        var oldItemsCount = e.OldItems?.Count ?? 0;
 
-        MainThread.BeginInvokeOnMainThread(() =>
+        void ApplyChange()
         {
             if (_adapter is null) return;
-            switch (e.Action)
+            switch (action)
             {
-                case NotifyCollectionChangedAction.Add when e.NewItems is not null:
-                    _adapter.IncrementalAdd(e.NewStartingIndex, e.NewItems.Cast<object>().ToList());
+                case NotifyCollectionChangedAction.Add when newItems is not null:
+                    _adapter.IncrementalAdd(newStartingIndex, newItems);
                     break;
-                case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
-                    _adapter.IncrementalRemove(e.OldStartingIndex, e.OldItems.Count);
+                case NotifyCollectionChangedAction.Remove when oldItemsCount > 0:
+                    _adapter.IncrementalRemove(oldStartingIndex, oldItemsCount);
                     break;
-                case NotifyCollectionChangedAction.Replace when e.NewItems is not null:
-                    _adapter.IncrementalReplace(e.NewStartingIndex, e.NewItems.Cast<object>().ToList());
+                case NotifyCollectionChangedAction.Replace when newItems is not null:
+                    _adapter.IncrementalReplace(newStartingIndex, newItems);
                     break;
                 case NotifyCollectionChangedAction.Move:
-                    _adapter.IncrementalMove(e.OldStartingIndex, e.NewStartingIndex);
+                    _adapter.IncrementalMove(oldStartingIndex, newStartingIndex);
                     break;
                 default:
+                    ResetRemainingThresholdGate();
                     _adapter.ReplaceAll(resetSnapshot ?? SnapshotItems(VirtualView.ItemsSource), _adapter.ItemHeightPx);
                     break;
             }
             PlatformView?.UpdateEmptyVisibility(_adapter.ItemCount == 0);
-        });
+        }
+
+        MainThread.BeginInvokeOnMainThread(ApplyChange);
     }
 
     private void OnScrolled(int dx, int dy)
     {
         if (VirtualView is null || PlatformView is null) return;
-        VirtualView.RaiseScrolled(
-            Context.FromPixels(PlatformView.Rv.ComputeHorizontalScrollOffset()),
-            Context.FromPixels(PlatformView.Rv.ComputeVerticalScrollOffset()));
+
+        if (VirtualView.HasScrolledObservers)
+        {
+            var rv = PlatformView.Rv;
+            VirtualView.RaiseScrolled(
+                Context.FromPixels(rv.ComputeHorizontalScrollOffset()),
+                Context.FromPixels(rv.ComputeVerticalScrollOffset()));
+        }
+
         CheckRemainingThreshold();
     }
 
@@ -455,13 +474,23 @@ public sealed class VirtualizedCollectionViewHandler
     {
         var threshold = VirtualView.RemainingItemsThreshold;
         if (threshold < 0 || _adapter is null || PlatformView is null) return;
+        var total = _adapter.ItemCount;
+        if (total <= 0 ||
+            total == _lastRemainingThresholdItemCount ||
+            !VirtualView.CanRaiseRemainingItemsThresholdReached)
+            return;
+
         var llm = PlatformView.Rv.GetLayoutManager() as LinearLayoutManager;
         if (llm is null) return;
         var lastVisible = llm.FindLastVisibleItemPosition();
-        var total       = _adapter.ItemCount;
-        if (total > 0 && total - 1 - lastVisible <= threshold)
+        if (lastVisible >= 0 && total - 1 - lastVisible <= threshold)
+        {
+            _lastRemainingThresholdItemCount = total;
             VirtualView.RaiseRemainingItemsThresholdReached();
+        }
     }
+
+    private void ResetRemainingThresholdGate() => _lastRemainingThresholdItemCount = -1;
 
     private static void MapScrollTo(
         VirtualizedCollectionViewHandler handler,
@@ -481,6 +510,14 @@ public sealed class VirtualizedCollectionViewHandler
         var capacity = source is System.Collections.ICollection c ? c.Count : 0;
         var list     = new List<object>(capacity > 0 ? capacity : 16);
         foreach (var item in source) list.Add(item);
+        return list;
+    }
+
+    private static List<object> CopyItems(IList items)
+    {
+        var list = new List<object>(items.Count);
+        foreach (var item in items)
+            list.Add(item!);
         return list;
     }
 }
@@ -709,10 +746,19 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         return holder;
     }
 
+    private void BindItem(VrViewHolder holder, int position)
+    {
+        var item = _items[position];
+        if (!ReferenceEquals(holder.MauiView.BindingContext, item))
+            holder.MauiView.BindingContext = item;
+    }
+
     public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
     {
         if (holder is VrViewHolder h && (uint)position < (uint)_items.Count)
         {
+            var bindGeneration = h.NextBindGeneration();
+
             if (_cachingLm != null)
             {
                 // WrapContent: o item se dimensiona pelo conteúdo, expanders funcionam.
@@ -726,24 +772,22 @@ internal sealed class VrAdapter : RecyclerView.Adapter
                         ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
                 }
 
-                h.MauiView.BindingContext = null;
-                h.MauiView.BindingContext = _items[position];
+                BindItem(h, position);
 
                 // So mede/cacheia a altura na PRIMEIRA vez que a posicao aparece. Em posicoes
-                // ja medidas, evita alocar CTS + closure + Post a cada bind — a maior fonte de
+                // ja medidas, evita token + Post a cada bind — a maior fonte de
                 // lixo no scroll. O cache alimenta apenas a ESTIMATIVA de scroll (offset/range);
                 // o layout real continua por WrapContent, entao a altura exibida nao e afetada.
                 if (!_cachingLm.HasCachedHeight(position))
                 {
-                    h.CancelHeavyBind();
-                    h.BindCts = new CancellationTokenSource();
-                    var token       = h.BindCts.Token;
-                    var capturedLm  = _cachingLm;
-                    var capturedPos = position;
+                    var capturedHolder     = h;
+                    var capturedGeneration = bindGeneration;
+                    var capturedLm         = _cachingLm;
+                    var capturedPos        = position;
                     h.ItemView.Post(() =>
                     {
-                        if (token.IsCancellationRequested) return;
-                        int real = h.ItemView.Height;
+                        if (_disposed || !capturedHolder.IsCurrentBind(capturedGeneration)) return;
+                        int real = capturedHolder.ItemView.Height;
                         if (real > 0)
                             capturedLm.CacheItemHeight(capturedPos, real);
                     });
@@ -751,8 +795,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             }
             else
             {
-                h.MauiView.BindingContext = null;
-                h.MauiView.BindingContext = _items[position];
+                BindItem(h, position);
 
                 // MeasureFirst: mede o 1º item exibido (WrapContent) e fixa essa altura para todos.
                 // A medição via Post "tiro único" falha quando o item nasce com altura 0 — o que
@@ -798,8 +841,8 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         if (payloads is { Count: > 0 } && holder is VrViewHolder h &&
             (uint)position < (uint)_items.Count)
         {
-            h.MauiView.BindingContext = null;
-            h.MauiView.BindingContext = _items[position];
+            h.NextBindGeneration();
+            BindItem(h, position);
         }
         else
         {
@@ -991,7 +1034,7 @@ internal sealed class VrItemHost : global::Android.Widget.FrameLayout
 internal sealed class VrViewHolder : RecyclerView.ViewHolder
 {
     public MauiView MauiView { get; }
-    internal CancellationTokenSource? BindCts;
+    private int _bindGeneration;
 
     // MeasureFirst: observador de layout + callback pendente da medição da altura.
     private LayoutObserver? _measureListener;
@@ -1003,11 +1046,17 @@ internal sealed class VrViewHolder : RecyclerView.ViewHolder
     public VrViewHolder(IntPtr handle, JniHandleOwnership transfer)
         : base(handle, transfer) => MauiView = null!;
 
+    public int NextBindGeneration()
+    {
+        unchecked { _bindGeneration++; }
+        return _bindGeneration;
+    }
+
+    public bool IsCurrentBind(int generation) => generation == _bindGeneration;
+
     public void CancelHeavyBind()
     {
-        BindCts?.Cancel();
-        BindCts?.Dispose();
-        BindCts = null;
+        NextBindGeneration();
         CancelMeasureFirst();
     }
 
