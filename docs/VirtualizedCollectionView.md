@@ -189,6 +189,6 @@ fixed height on Windows, set `HeightRequest` within the `DataTemplate` itself.
 - Tune `ItemHeightRequest` to something close to the real average, especially on iOS/Mac (it is the scroll estimate in `Dynamic`/`MeasureFirst`).
 - Use `x:DataType` in your `DataTemplate`.
 - Avoid large remote images inside cells; prefer thumbnails or the `ImageView` from the `GalleryView` package.
-- Use `ObservableCollection` for incremental updates instead of swapping the entire list.
+- Use `ObservableRangeCollection<T>` for pagination (`AddRange`) and refresh/filter (`ReplaceAll`). `ObservableCollection<T>` works, but one `Add` per item generates more UI notifications and more work during scroll/load.
 
 See also [../TUNING.md](../TUNING.md) and [../PROFILING.md](../PROFILING.md).

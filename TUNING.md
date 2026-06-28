@@ -161,6 +161,8 @@ Using `SystemLayoutSizeFittingSize` instead would return `height = 0`, making ce
 
 Events from `ObservableCollection` are queued in `_pendingChanges` and flushed in a single `MainThread.BeginInvokeOnMainThread` callback, coalescing bursts of rapid changes (e.g., 500 × `Items.Add`) into one `UICollectionView.PerformBatchUpdates` call.
 
+For pagination, prefer `ObservableRangeCollection<T>.AddRange`: it emits one native batch notification for the whole page instead of one notification per item. For search/filter refreshes, prefer `ReplaceAll`.
+
 **Flush decision:**
 
 | Condition | Action |
@@ -174,7 +176,7 @@ Events from `ObservableCollection` are queued in `_pendingChanges` and flushed i
 
 ### ScrollTo
 
-`ScrollToItem` uses `UICollectionViewScrollPosition.Top`. For best results, ensure the collection layout has been applied before calling `ScrollTo` programmatically.
+`ScrollToItem` uses `UICollectionViewScrollPosition.Top` for vertical lists and `Left` for horizontal lists. For best results, ensure the collection layout has been applied before calling `ScrollTo` programmatically.
 
 ---
 

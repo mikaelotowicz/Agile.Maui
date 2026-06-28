@@ -29,7 +29,7 @@ public sealed class VirtualizedCollectionViewHandler
         {
             [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ScheduleReload(),
             [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ScheduleReload(),
-            [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.ApplySizeStrategy(),
             [nameof(VirtualizedCollectionView.Span)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyCacheSizes(); },
             [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => { h.ApplyLayoutManager(); h.ApplyItemSpacing(); h.ApplyScrollBars(); },
             [nameof(VirtualizedCollectionView.ItemSpacing)]                            = (h, _) => h.ApplyItemSpacing(),
@@ -56,10 +56,21 @@ public sealed class VirtualizedCollectionViewHandler
     private INotifyCollectionChanged?   _collectionChangedSource;
     private CachingLinearLayoutManager? _cachingLm;
     private VrRecyclerListener?         _recyclerListener;
-    private int                         _lastRemainingThresholdItemCount = -1;
+    private bool                        _remainingThresholdInsideZone;
+    private readonly List<PendingCollectionChange> _pendingChanges = [];
+    private bool                        _flushScheduled;
     // Coalescing de ItemsSource + ItemTemplate + ItemHeight: todos disparam no connect
     // via mapper — sem isso o adapter seria recriado até 3× antes do primeiro render.
     private bool                        _reloadScheduled;
+
+    private sealed class PendingCollectionChange
+    {
+        public NotifyCollectionChangedAction Action { get; init; }
+        public int NewStartingIndex { get; init; }
+        public int OldStartingIndex { get; init; }
+        public List<object>? NewItems { get; init; }
+        public int OldItemsCount { get; init; }
+    }
 
     public VirtualizedCollectionViewHandler() : base(Mapper, Commands) { }
 
@@ -104,6 +115,8 @@ public sealed class VirtualizedCollectionViewHandler
 
         UnsubscribeCollection();
         _reloadScheduled = false;
+        _flushScheduled  = false;
+        _pendingChanges.Clear();
 
         // Desanexar do RecyclerView ANTES de Dispose: SetAdapter(null) recicla as views
         // e ainda invoca callbacks no adapter/listener registrados — Dispose precoce mata
@@ -187,15 +200,28 @@ public sealed class VirtualizedCollectionViewHandler
         return (int)(dp * Context!.Resources!.DisplayMetrics!.Density);
     }
 
+    private int GetResolvedItemHeightPx()
+    {
+        if (VirtualView.ItemHeight > 0)
+            return Math.Max(1, (int)Math.Ceiling(Context.ToPixels(VirtualView.ItemHeight)));
+
+        return VirtualView.ItemSizingStrategy == ItemSizingStrategy.Fixed
+            ? GetFallbackHeightPx()
+            : RecyclerView.LayoutParams.WrapContent;
+    }
+
     private void ApplySizeStrategy()
     {
         if (PlatformView is null) return;
         ApplyLayoutManager();
-        if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.Fixed)
-            _adapter?.SetFixedHeight(GetFallbackHeightPx());
+        var heightPx = GetResolvedItemHeightPx();
+        if (heightPx > 0)
+            _adapter?.SetFixedHeight(heightPx);
         else if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst)
             // Reconstrói em modo "mede o 1º e fixa" (itens voltam a WrapContent até a medição).
             ScheduleReload();
+        else
+            _adapter?.SetWrapContentHeight();
     }
 
     internal void ApplyCacheSizes()
@@ -339,6 +365,8 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (PlatformView is null || MauiContext is null) return;
         ResetRemainingThresholdGate();
+        _pendingChanges.Clear();
+        _flushScheduled = false;
 
         var template = VirtualView.ItemTemplate;
         if (template is null)
@@ -352,11 +380,7 @@ public sealed class VirtualizedCollectionViewHandler
         }
 
         var items    = SnapshotItems(VirtualView.ItemsSource);
-        var heightPx = VirtualView.ItemSizingStrategy == ItemSizingStrategy.Fixed
-            ? GetFallbackHeightPx()
-            : VirtualView.ItemHeight > 0
-                ? (int)Context.ToPixels(VirtualView.ItemHeight)
-                : RecyclerView.LayoutParams.WrapContent;
+        var heightPx = GetResolvedItemHeightPx();
 
         UnsubscribeCollection();
 
@@ -376,7 +400,9 @@ public sealed class VirtualizedCollectionViewHandler
             _adapter.ReplaceAll(items, heightPx);
         }
 
-        _adapter.SetMeasureFirst(VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst);
+        _adapter.SetMeasureFirst(
+            VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst &&
+            VirtualView.ItemHeight <= 0);
 
         SubscribeCollection(VirtualView.ItemsSource);
         PlatformView.UpdateEmptyVisibility(items.Count == 0);
@@ -404,55 +430,125 @@ public sealed class VirtualizedCollectionViewHandler
     {
         if (_adapter is null) return;
 
-        // Para um Reset (substituição total) o snapshot DEVE ser capturado AGORA, no
-        // momento do evento — e não dentro do callback diferido abaixo. Capturá-lo no
-        // callback incluiria itens de eventos posteriores ainda enfileirados (ex.:
-        // Clear() seguido de AddRange() no mesmo tick), fazendo o Reset notificar as
-        // mesmas inserções que o Add seguinte também notifica → dupla contagem → crash.
-        // Os caminhos incrementais usam e.NewItems/e.OldItems (imutáveis), então não
-        // precisam de snapshot.
-        var resetSnapshot =
-            e.Action is NotifyCollectionChangedAction.Add
-                     or NotifyCollectionChangedAction.Remove
-                     or NotifyCollectionChangedAction.Replace
-                     or NotifyCollectionChangedAction.Move
-                ? null
-                : SnapshotItems(VirtualView.ItemsSource);
         var action = e.Action;
-        var newStartingIndex = e.NewStartingIndex;
-        var oldStartingIndex = e.OldStartingIndex;
-        var newItems = action is NotifyCollectionChangedAction.Add
-                              or NotifyCollectionChangedAction.Replace
-            ? e.NewItems is not null ? CopyItems(e.NewItems) : null
-            : null;
-        var oldItemsCount = e.OldItems?.Count ?? 0;
-
-        void ApplyChange()
+        if (action is not (NotifyCollectionChangedAction.Add
+                       or NotifyCollectionChangedAction.Remove
+                       or NotifyCollectionChangedAction.Replace
+                       or NotifyCollectionChangedAction.Move))
         {
-            if (_adapter is null) return;
-            switch (action)
-            {
-                case NotifyCollectionChangedAction.Add when newItems is not null:
-                    _adapter.IncrementalAdd(newStartingIndex, newItems);
-                    break;
-                case NotifyCollectionChangedAction.Remove when oldItemsCount > 0:
-                    _adapter.IncrementalRemove(oldStartingIndex, oldItemsCount);
-                    break;
-                case NotifyCollectionChangedAction.Replace when newItems is not null:
-                    _adapter.IncrementalReplace(newStartingIndex, newItems);
-                    break;
-                case NotifyCollectionChangedAction.Move:
-                    _adapter.IncrementalMove(oldStartingIndex, newStartingIndex);
-                    break;
-                default:
-                    ResetRemainingThresholdGate();
-                    _adapter.ReplaceAll(resetSnapshot ?? SnapshotItems(VirtualView.ItemsSource), _adapter.ItemHeightPx);
-                    break;
-            }
-            PlatformView?.UpdateEmptyVisibility(_adapter.ItemCount == 0);
+            _pendingChanges.Clear();
         }
 
-        MainThread.BeginInvokeOnMainThread(ApplyChange);
+        _pendingChanges.Add(new PendingCollectionChange
+        {
+            Action           = action,
+            NewStartingIndex = e.NewStartingIndex,
+            OldStartingIndex = e.OldStartingIndex,
+            NewItems         = action is NotifyCollectionChangedAction.Add
+                                      or NotifyCollectionChangedAction.Replace
+                ? e.NewItems is not null ? CopyItems(e.NewItems) : null
+                : null,
+            OldItemsCount    = e.OldItems?.Count ?? 0,
+        });
+
+        if (_flushScheduled) return;
+        _flushScheduled = true;
+        MainThread.BeginInvokeOnMainThread(FlushPendingChanges);
+    }
+
+    private void FlushPendingChanges()
+    {
+        _flushScheduled = false;
+        if (_adapter is null || PlatformView is null || _pendingChanges.Count == 0) return;
+
+        var pending = _pendingChanges.ToArray();
+        _pendingChanges.Clear();
+
+        var firstAction = pending[0].Action;
+        var isMixed     = Array.Exists(pending, p => p.Action != firstAction);
+        var hasMove     = Array.Exists(pending, p => p.Action == NotifyCollectionChangedAction.Move);
+        var shouldReload = pending.Length > 30 ||
+                           isMixed ||
+                           (hasMove && pending.Length > 1) ||
+                           !CanApplyPendingChanges(pending, _adapter.ItemCount);
+
+        if (!shouldReload)
+        {
+            foreach (var change in pending)
+            {
+                var applied = change.Action switch
+                {
+                    NotifyCollectionChangedAction.Add when change.NewItems is not null =>
+                        _adapter.TryIncrementalAdd(change.NewStartingIndex, change.NewItems),
+                    NotifyCollectionChangedAction.Remove when change.OldItemsCount > 0 =>
+                        _adapter.TryIncrementalRemove(change.OldStartingIndex, change.OldItemsCount),
+                    NotifyCollectionChangedAction.Replace when change.NewItems is not null =>
+                        _adapter.TryIncrementalReplace(change.NewStartingIndex, change.NewItems),
+                    NotifyCollectionChangedAction.Move =>
+                        _adapter.TryIncrementalMove(change.OldStartingIndex, change.NewStartingIndex),
+                    _ => false,
+                };
+
+                if (!applied)
+                {
+                    shouldReload = true;
+                    break;
+                }
+            }
+        }
+
+        if (shouldReload)
+        {
+            ReloadItems();
+            return;
+        }
+
+        ResetRemainingThresholdGate();
+        PlatformView.UpdateEmptyVisibility(_adapter.ItemCount == 0);
+    }
+
+    private static bool CanApplyPendingChanges(PendingCollectionChange[] pending, int currentCount)
+    {
+        foreach (var change in pending)
+        {
+            switch (change.Action)
+            {
+                case NotifyCollectionChangedAction.Add:
+                    var addCount = change.NewItems?.Count ?? 0;
+                    if (addCount <= 0 ||
+                        change.NewStartingIndex < 0 ||
+                        change.NewStartingIndex > currentCount)
+                        return false;
+                    currentCount += addCount;
+                    break;
+                case NotifyCollectionChangedAction.Remove:
+                    if (change.OldItemsCount <= 0 ||
+                        change.OldStartingIndex < 0 ||
+                        change.OldStartingIndex + change.OldItemsCount > currentCount)
+                        return false;
+                    currentCount -= change.OldItemsCount;
+                    break;
+                case NotifyCollectionChangedAction.Replace:
+                    var replaceCount = change.NewItems?.Count ?? 0;
+                    if (replaceCount <= 0 ||
+                        change.OldItemsCount != replaceCount ||
+                        change.NewStartingIndex < 0 ||
+                        change.NewStartingIndex + replaceCount > currentCount)
+                        return false;
+                    break;
+                case NotifyCollectionChangedAction.Move:
+                    if (change.OldStartingIndex < 0 ||
+                        change.NewStartingIndex < 0 ||
+                        change.OldStartingIndex >= currentCount ||
+                        change.NewStartingIndex >= currentCount)
+                        return false;
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     private void OnScrolled(int dx, int dy)
@@ -467,30 +563,45 @@ public sealed class VirtualizedCollectionViewHandler
                 Context.FromPixels(rv.ComputeVerticalScrollOffset()));
         }
 
-        CheckRemainingThreshold();
+        if (VirtualView.RemainingItemsThreshold >= 0 &&
+            (IsScrollingTowardEnd(dx, dy) || _remainingThresholdInsideZone))
+        {
+            CheckRemainingThreshold();
+        }
     }
+
+    private bool IsScrollingTowardEnd(int dx, int dy) =>
+        VirtualView.Orientation == VirtualizedOrientation.Horizontal ? dx > 0 : dy > 0;
 
     private void CheckRemainingThreshold()
     {
         var threshold = VirtualView.RemainingItemsThreshold;
         if (threshold < 0 || _adapter is null || PlatformView is null) return;
         var total = _adapter.ItemCount;
-        if (total <= 0 ||
-            total == _lastRemainingThresholdItemCount ||
-            !VirtualView.CanRaiseRemainingItemsThresholdReached)
+        if (total <= 0)
+        {
+            _remainingThresholdInsideZone = false;
             return;
+        }
 
         var llm = PlatformView.Rv.GetLayoutManager() as LinearLayoutManager;
         if (llm is null) return;
         var lastVisible = llm.FindLastVisibleItemPosition();
-        if (lastVisible >= 0 && total - 1 - lastVisible <= threshold)
+        var insideZone = lastVisible >= 0 && total - 1 - lastVisible <= threshold;
+        if (!insideZone)
         {
-            _lastRemainingThresholdItemCount = total;
-            VirtualView.RaiseRemainingItemsThresholdReached();
+            _remainingThresholdInsideZone = false;
+            return;
         }
+
+        if (_remainingThresholdInsideZone || !VirtualView.CanRaiseRemainingItemsThresholdReached)
+            return;
+
+        _remainingThresholdInsideZone = true;
+        VirtualView.RaiseRemainingItemsThresholdReached();
     }
 
-    private void ResetRemainingThresholdGate() => _lastRemainingThresholdItemCount = -1;
+    private void ResetRemainingThresholdGate() => _remainingThresholdInsideZone = false;
 
     private static void MapScrollTo(
         VirtualizedCollectionViewHandler handler,
@@ -679,6 +790,13 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         AplicarAlturaFixaATodos();
     }
 
+    public void SetWrapContentHeight()
+    {
+        _measureFirst = false;
+        _itemHeightPx = ViewGroup.LayoutParams.WrapContent;
+        AplicarAlturaFixaATodos();
+    }
+
     public void SetCachingLayoutManager(CachingLinearLayoutManager? clm) => _cachingLm = clm;
 
     // MeasureFirst: enquanto ativo, os itens ficam em WrapContent até o 1º ser medido;
@@ -852,8 +970,11 @@ internal sealed class VrAdapter : RecyclerView.Adapter
 
     // ── Operações incrementais ────────────────────────────────────────────────
 
-    public void IncrementalAdd(int startIndex, List<object> newItems)
+    public bool TryIncrementalAdd(int startIndex, List<object> newItems)
     {
+        if (newItems.Count <= 0 || startIndex < 0 || startIndex > _items.Count)
+            return false;
+
         _items.InsertRange(startIndex, newItems);
         // Insert desloca os indices a partir de startIndex → invalida as alturas dali em diante.
         _cachingLm?.InvalidateFrom(startIndex);
@@ -861,34 +982,49 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             NotifyItemInserted(startIndex);
         else
             NotifyItemRangeInserted(startIndex, newItems.Count);
+        return true;
     }
 
-    public void IncrementalRemove(int startIndex, int count)
+    public bool TryIncrementalRemove(int startIndex, int count)
     {
+        if (count <= 0 || startIndex < 0 || startIndex + count > _items.Count)
+            return false;
+
         _items.RemoveRange(startIndex, count);
         _cachingLm?.InvalidateFrom(startIndex);
         if (count == 1)
             NotifyItemRemoved(startIndex);
         else
             NotifyItemRangeRemoved(startIndex, count);
+        return true;
     }
 
-    public void IncrementalReplace(int startIndex, List<object> newItems)
+    public bool TryIncrementalReplace(int startIndex, List<object> newItems)
     {
+        if (newItems.Count <= 0 || startIndex < 0 || startIndex + newItems.Count > _items.Count)
+            return false;
+
         for (int i = 0; i < newItems.Count && startIndex + i < _items.Count; i++)
             _items[startIndex + i] = newItems[i];
         // Itens trocados podem ter alturas diferentes; indices nao deslocam.
         _cachingLm?.InvalidateRange(startIndex, newItems.Count);
         NotifyItemRangeChanged(startIndex, newItems.Count);
+        return true;
     }
 
-    public void IncrementalMove(int from, int to)
+    public bool TryIncrementalMove(int from, int to)
     {
+        if (from < 0 || to < 0 || from >= _items.Count || to >= _items.Count)
+            return false;
+        if (from == to)
+            return true;
+
         var item = _items[from];
         _items.RemoveAt(from);
         _items.Insert(to, item);
         _cachingLm?.InvalidateFrom(Math.Min(from, to));
         NotifyItemMoved(from, to);
+        return true;
     }
 
     // ── Substituição completa com DiffUtil assíncrono ─────────────────────────
@@ -906,6 +1042,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         _itemHeightPx = newHeightPx;
         _cachingLm?.InvalidateCache();
         _items = newItems;
+        AplicarAlturaFixaATodos();
         NotifyDataSetChanged();
     }
 
@@ -963,15 +1100,12 @@ internal sealed class VrItemHost : global::Android.Widget.FrameLayout
         var childHeight = heightMode == MeasureSpecMode.Unspecified
             ? 0
             : Math.Max(0, heightSize - PaddingTop - PaddingBottom);
-        if (_mauiView is not null)
+
+        if (_mauiView is not null && heightMode != MeasureSpecMode.Exactly)
         {
             var widthDip = Context.FromPixels(childWidth);
-            var heightDip = heightMode == MeasureSpecMode.Exactly
-                ? Context.FromPixels(childHeight)
-                : double.PositiveInfinity;
-            var measured = ((IView)_mauiView).Measure(widthDip, heightDip);
-            if (heightMode != MeasureSpecMode.Exactly)
-                childHeight = Math.Max(1, (int)Math.Ceiling(Context.ToPixels(measured.Height)));
+            var measured = ((IView)_mauiView).Measure(widthDip, double.PositiveInfinity);
+            childHeight = Math.Max(1, (int)Math.Ceiling(Context.ToPixels(measured.Height)));
         }
         else if (heightMode != MeasureSpecMode.Exactly)
         {
@@ -1169,7 +1303,7 @@ internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyc
         if (holder is VrViewHolder vh)
         {
             vh.CancelHeavyBind();
-            if (_context is not null)
+            if (_context is not null && vh.ItemView is global::Android.Widget.ImageView)
                 Glide.With(_context).Clear(vh.ItemView);
             vh.MauiView.BindingContext = null;
         }

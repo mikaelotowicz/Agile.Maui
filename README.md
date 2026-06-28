@@ -170,7 +170,7 @@ PROFILING.md
 dotnet build
 dotnet build -f net10.0-android
 dotnet build -f net10.0-ios
-dotnet build -f net10.0-maccatalyst
+dotnet build -f net11.0-maccatalyst
 dotnet build -f net10.0-windows10.0.19041.0
 ```
 

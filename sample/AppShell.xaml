@@ -100,6 +100,13 @@
         </ShellContent.Icon>
     </ShellContent>
 
+    <ShellContent Title="Collection Benchmark" Route="CollectionBenchmarkPage" ContentTemplate="{DataTemplate local:CollectionBenchmarkPage}">
+        <ShellContent.Icon>
+            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuList}"
+                Color="{StaticResource OnSurfaceLight}" />
+        </ShellContent.Icon>
+    </ShellContent>
+
     <ShellContent Title="ChipGroup" Route="ChipGroupPage" ContentTemplate="{DataTemplate local:ChipGroupPage}">
         <ShellContent.Icon>
             <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuChips}"

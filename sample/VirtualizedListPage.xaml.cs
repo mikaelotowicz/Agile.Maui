@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Agile.Maui;
 
 namespace sample;
@@ -11,7 +10,7 @@ public partial class VirtualizedListPage : ContentPage
 
     private readonly List<ProductItem> _allItems;
 
-    public ObservableCollection<ProductItem> Items { get; } = [];
+    public ObservableRangeCollection<ProductItem> Items { get; } = [];
 
     private int _nextId;
     private int _columnCount = 1;
@@ -74,8 +73,7 @@ public partial class VirtualizedListPage : ContentPage
     private void LoadInitialItems()
     {
         var batch = _allItems.Take(InitialBatch).ToList();
-        foreach (var item in batch)
-            Items.Add(item);
+        Items.AddRange(batch);
 
         UpdateCountLabel();
         StatusLabel.Text = $"{InitialBatch} products loaded. Scroll down to load more.";
@@ -100,8 +98,7 @@ public partial class VirtualizedListPage : ContentPage
 
         var start = Items.Count;
         var toAdd = _allItems.Skip(start).Take(LoadMoreBatch).ToList();
-        foreach (var item in toAdd)
-            Items.Add(item);
+        Items.AddRange(toAdd);
 
         UpdateCountLabel();
         StatusLabel.Text = $"+{toAdd.Count} items added. Total: {Items.Count}";
@@ -127,9 +124,7 @@ public partial class VirtualizedListPage : ContentPage
 
         if (string.IsNullOrEmpty(query))
         {
-            Items.Clear();
-            foreach (var item in _allItems.Take(InitialBatch))
-                Items.Add(item);
+            Items.ReplaceAll(_allItems.Take(InitialBatch));
             UpdateCountLabel();
             StatusLabel.Text = "Search cleared.";
             return;
@@ -147,9 +142,7 @@ public partial class VirtualizedListPage : ContentPage
         }
         catch (OperationCanceledException) { return; }
 
-        Items.Clear();
-        foreach (var item in results)
-            Items.Add(item);
+        Items.ReplaceAll(results);
 
         UpdateCountLabel();
         StatusLabel.Text = results.Count == 0
