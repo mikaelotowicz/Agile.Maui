@@ -77,6 +77,10 @@ public partial class VirtualizedCollectionView
         {
             case nameof(ItemsSource):             _cv.ItemsSource             = ItemsSource;             break;
             case nameof(ItemTemplate):            _cv.ItemTemplate            = ItemTemplate;            break;
+            case nameof(Header):                  _cv.Header                  = Header;                  break;
+            case nameof(HeaderTemplate):          _cv.HeaderTemplate          = HeaderTemplate;          break;
+            case nameof(Footer):                  _cv.Footer                  = Footer;                  break;
+            case nameof(FooterTemplate):          _cv.FooterTemplate          = FooterTemplate;          break;
             case nameof(EmptyView):               _cv.EmptyView               = EmptyView;               break;
             case nameof(EmptyViewTemplate):       _cv.EmptyViewTemplate       = EmptyViewTemplate;       break;
             case nameof(RemainingItemsThreshold): _cv.RemainingItemsThreshold = RemainingItemsThreshold; break;
@@ -115,6 +119,23 @@ public partial class VirtualizedCollectionView
 
     public void ScrollTo(int index, bool animated = true) =>
         _cv.ScrollTo(index, animate: animated);
+
+    public void ScrollToStart(bool animated = true)
+    {
+        if (_dragScrollViewer is not null)
+        {
+            _dragScrollViewer.ChangeView(0, 0, null, disableAnimation: !animated);
+            return;
+        }
+
+        if (_dragScrollView is not null)
+        {
+            _ = _dragScrollView.ScrollTo(0, 0);
+            return;
+        }
+
+        _cv.ScrollTo(0, animate: animated);
+    }
 
     // ── Ciclo de vida do handler ──────────────────────────────────────────────
 

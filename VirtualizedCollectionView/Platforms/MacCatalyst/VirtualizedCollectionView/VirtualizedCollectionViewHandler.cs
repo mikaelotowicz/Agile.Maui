@@ -12,6 +12,7 @@ using System.Collections;
 using System.Collections.Specialized;
 using CoreGraphics;
 using Foundation;
+using Microsoft.Maui.Controls;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 using UIKit;
@@ -28,8 +29,13 @@ public sealed class VirtualizedCollectionViewHandler
         {
             [nameof(VirtualizedCollectionView.ItemsSource)]                            = (h, _) => h.ScheduleReload(),
             [nameof(VirtualizedCollectionView.ItemTemplate)]                           = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.Header)]                                 = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.HeaderTemplate)]                         = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.Footer)]                                 = (h, _) => h.ScheduleReload(),
+            [nameof(VirtualizedCollectionView.FooterTemplate)]                         = (h, _) => h.ScheduleReload(),
             [nameof(VirtualizedCollectionView.ItemHeight)]                             = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.ItemHeightRequest)]                      = (h, _) => h.RefreshLayout(),
+            [nameof(VirtualizedCollectionView.ItemWidthRequest)]                       = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.ItemSizingStrategy)]                       = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.Span)]                            = (h, _) => h.RefreshLayout(),
             [nameof(VirtualizedCollectionView.Orientation)]                            = (h, _) => h.RefreshLayout(),
@@ -47,9 +53,13 @@ public sealed class VirtualizedCollectionViewHandler
         new(ViewCommandMapper)
         {
             [nameof(VirtualizedCollectionView.ScrollTo)] = MapScrollTo,
+            [nameof(VirtualizedCollectionView.ScrollToStart)] = MapScrollToStart,
         };
 
     private static readonly NSString CellId = new("VrMauiCell");
+    private const int HeaderSection = 0;
+    private const int ItemsSection = 1;
+    private const int FooterSection = 2;
 
     private VrDataSource?             _dataSource;
     private VrCollectionDelegate?     _delegate;
@@ -141,8 +151,24 @@ public sealed class VirtualizedCollectionViewHandler
 
     private UICollectionViewLayout BuildCompositionalLayout()
     {
+        var config = new UICollectionViewCompositionalLayoutConfiguration
+        {
+            ScrollDirection = VirtualView?.Orientation == VirtualizedOrientation.Horizontal
+                ? UICollectionViewScrollDirection.Horizontal
+                : UICollectionViewScrollDirection.Vertical,
+        };
+
+        return new UICollectionViewCompositionalLayout((sectionIndex, _) =>
+            sectionIndex == HeaderSection || sectionIndex == FooterSection
+                ? BuildStructuralSection()
+                : BuildItemsSection(), config);
+    }
+
+    private NSCollectionLayoutSection BuildItemsSection()
+    {
         var columns    = Math.Max(1, VirtualView?.Span ?? 1);
         var itemHeight = VirtualView?.ItemHeight ?? -1;
+        var itemWidthRequest = VirtualView?.ItemWidthRequest ?? -1;
         var horizontal = VirtualView?.Orientation == VirtualizedOrientation.Horizontal;
 
         // ItemHeight > 0  →  CreateAbsolute(itemHeight): altura explícita, sobrepõe tudo.
@@ -158,6 +184,7 @@ public sealed class VirtualizedCollectionViewHandler
         var absoluteH   = itemHeight > 0 ? (nfloat)itemHeight
                         : measuredFirst ? _measureFirstHeight
                         : estimatedH;
+        var absoluteW   = itemWidthRequest > 0 ? (nfloat)itemWidthRequest : absoluteH;
         var heightDim   = useAbsolute
             ? NSCollectionLayoutDimension.CreateAbsolute(absoluteH)
             : NSCollectionLayoutDimension.CreateEstimated(estimatedH);
@@ -178,9 +205,11 @@ public sealed class VirtualizedCollectionViewHandler
         else
         {
             // Scroll horizontal: cada grupo é uma coluna com `columns` itens de altura igual.
-            var widthDim = useAbsolute
-                ? NSCollectionLayoutDimension.CreateAbsolute(absoluteH)
-                : NSCollectionLayoutDimension.CreateEstimated(estimatedH);
+            var widthDim = itemWidthRequest > 0
+                ? NSCollectionLayoutDimension.CreateAbsolute(absoluteW)
+                : useAbsolute
+                    ? NSCollectionLayoutDimension.CreateAbsolute(absoluteH)
+                    : NSCollectionLayoutDimension.CreateEstimated(estimatedH);
             var itemSize  = NSCollectionLayoutSize.Create(
                 widthDim,
                 NSCollectionLayoutDimension.CreateFractionalHeight((nfloat)(1.0 / columns)));
@@ -195,14 +224,31 @@ public sealed class VirtualizedCollectionViewHandler
         group.InterItemSpacing = NSCollectionLayoutSpacing.CreateFixed(spacing);
         var section = NSCollectionLayoutSection.Create(group);
         section.InterGroupSpacing = spacing;
+        return section;
+    }
 
-        var config = new UICollectionViewCompositionalLayoutConfiguration
-        {
-            ScrollDirection = horizontal
-                ? UICollectionViewScrollDirection.Horizontal
-                : UICollectionViewScrollDirection.Vertical,
-        };
-        return new UICollectionViewCompositionalLayout(section, config);
+    private NSCollectionLayoutSection BuildStructuralSection()
+    {
+        var horizontal = VirtualView?.Orientation == VirtualizedOrientation.Horizontal;
+        var estimated = (nfloat)Math.Max(
+            44,
+            horizontal && VirtualView?.ItemWidthRequest > 0
+                ? VirtualView.ItemWidthRequest
+                : VirtualView?.ItemHeightRequest ?? 350);
+        var size = horizontal
+            ? NSCollectionLayoutSize.Create(
+                NSCollectionLayoutDimension.CreateEstimated(estimated),
+                NSCollectionLayoutDimension.CreateFractionalHeight((nfloat)1))
+            : NSCollectionLayoutSize.Create(
+                NSCollectionLayoutDimension.CreateFractionalWidth((nfloat)1),
+                NSCollectionLayoutDimension.CreateEstimated(estimated));
+
+        var item = NSCollectionLayoutItem.Create(size);
+        var group = horizontal
+            ? NSCollectionLayoutGroup.CreateHorizontal(size, [item])
+            : NSCollectionLayoutGroup.CreateVertical(size, [item]);
+
+        return NSCollectionLayoutSection.Create(group);
     }
 
     private static NSCollectionLayoutItem[] CreateLayoutItems(int count, NSCollectionLayoutSize itemSize)
@@ -262,7 +308,15 @@ public sealed class VirtualizedCollectionViewHandler
         var template = VirtualView.ItemTemplate;
 
         _dataSource?.Dispose();
-        _dataSource = new VrDataSource(items, template, MauiContext, CellId)
+        _dataSource = new VrDataSource(
+            items,
+            template,
+            MauiContext,
+            CellId,
+            VirtualView.Header,
+            VirtualView.HeaderTemplate,
+            VirtualView.Footer,
+            VirtualView.FooterTemplate)
         {
             ReportFirstMeasure = VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst
                 ? OnFirstCellMeasured
@@ -343,13 +397,13 @@ public sealed class VirtualizedCollectionViewHandler
                 switch (e.Action)
                 {
                     case NotifyCollectionChangedAction.Add when e.NewItems is not null:
-                        PlatformView.InsertItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count));
+                        PlatformView.InsertItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count, ItemsSection));
                         break;
                     case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
-                        PlatformView.DeleteItems(IndexPaths(e.OldStartingIndex, e.OldItems.Count));
+                        PlatformView.DeleteItems(IndexPaths(e.OldStartingIndex, e.OldItems.Count, ItemsSection));
                         break;
                     case NotifyCollectionChangedAction.Replace when e.NewItems is not null:
-                        PlatformView.ReloadItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count));
+                        PlatformView.ReloadItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count, ItemsSection));
                         break;
                 }
             }
@@ -446,6 +500,9 @@ public sealed class VirtualizedCollectionViewHandler
         var lastVisible = -1;
         foreach (var ip in visiblePaths)
         {
+            if (ip.Section != ItemsSection)
+                continue;
+
             var idx = (int)ip.Item;
             if (idx > lastVisible) lastVisible = idx;
         }
@@ -518,18 +575,27 @@ public sealed class VirtualizedCollectionViewHandler
         if (handler.PlatformView is null || handler._dataSource is null) return;
         if ((uint)req.Index >= (uint)handler._dataSource.Items.Count) return;
 
-        var indexPath = NSIndexPath.FromItemSection(req.Index, 0);
+        var indexPath = NSIndexPath.FromItemSection(req.Index, ItemsSection);
         var position = view.Orientation == VirtualizedOrientation.Horizontal
             ? UICollectionViewScrollPosition.Left
             : UICollectionViewScrollPosition.Top;
         handler.PlatformView.ScrollToItem(indexPath, position, req.Animated);
     }
 
-    private static NSIndexPath[] IndexPaths(int start, int count)
+    private static void MapScrollToStart(
+        VirtualizedCollectionViewHandler handler,
+        VirtualizedCollectionView        view,
+        object?                          arg)
+    {
+        if (arg is not VirtualizedCollectionView.ScrollToRequest req) return;
+        handler.PlatformView?.SetContentOffset(CGPoint.Empty, req.Animated);
+    }
+
+    private static NSIndexPath[] IndexPaths(int start, int count, int section)
     {
         var paths = new NSIndexPath[count];
         for (var i = 0; i < count; i++)
-            paths[i] = NSIndexPath.FromItemSection(start + i, 0);
+            paths[i] = NSIndexPath.FromItemSection(start + i, section);
         return paths;
     }
 
@@ -553,6 +619,8 @@ internal sealed class VrMauiCell : UICollectionViewCell
     private UIView?           _nativeView;
     private UICollectionView? _collectionView;
     private DataTemplate?     _template;
+    private View?             _directView;
+    private bool              _usesGeneratedLabel;
     private bool              _measureInvalidated;
     private bool              _layoutStabilized;
     private Action<nfloat>?   _reportFirstMeasure;
@@ -560,15 +628,19 @@ internal sealed class VrMauiCell : UICollectionViewCell
     [Export("initWithFrame:")]
     public VrMauiCell(CGRect frame) : base(frame) { }
 
-    public void Bind(object item, DataTemplate template, IMauiContext context, UICollectionView collectionView,
+    public void Bind(object? item, DataTemplate? template, IMauiContext context, UICollectionView collectionView,
         Action<nfloat>? reportFirstMeasure = null)
     {
         _collectionView     = collectionView;
         _reportFirstMeasure = reportFirstMeasure;
+        var directView = template is null ? item as View : null;
 
         // Recria a view quando o template muda em runtime; sem esse check,
         // cells do pool reuse manteriam a hierarquia do template antigo.
-        if (_mauiView is null || !ReferenceEquals(_template, template))
+        if (_mauiView is null ||
+            !ReferenceEquals(_template, template) ||
+            !ReferenceEquals(_directView, directView) ||
+            (_usesGeneratedLabel && (template is not null || directView is not null)))
         {
             if (_mauiView is not null)
             {
@@ -580,7 +652,9 @@ internal sealed class VrMauiCell : UICollectionViewCell
                 _layoutStabilized = false;
             }
             _template   = template;
-            _mauiView   = (View)template.CreateContent();
+            _directView = directView;
+            _usesGeneratedLabel = template is null && directView is null;
+            _mauiView   = CreateMauiView(item, template);
             _nativeView = _mauiView.ToPlatform(context);
             _mauiView.MeasureInvalidated += OnMauiMeasureInvalidated;
 
@@ -591,9 +665,32 @@ internal sealed class VrMauiCell : UICollectionViewCell
             ContentView.AddSubview(_nativeView);
         }
 
-        if (!ReferenceEquals(_mauiView.BindingContext, item))
+        if (_usesGeneratedLabel && _mauiView is Label label)
+            label.Text = item?.ToString() ?? string.Empty;
+
+        if (directView is null && !ReferenceEquals(_mauiView.BindingContext, item))
             _mauiView.BindingContext = item;
         SetNeedsLayout();
+    }
+
+    private static View CreateMauiView(object? item, DataTemplate? template)
+    {
+        if (template is not null)
+        {
+            var content = template.CreateContent();
+            if (content is View view)
+                return view;
+        }
+
+        if (item is View directView)
+            return directView;
+
+        return new Label
+        {
+            Text = item?.ToString() ?? string.Empty,
+            HorizontalOptions = LayoutOptions.Fill,
+            VerticalOptions = LayoutOptions.Center
+        };
     }
 
     private void OnMauiMeasureInvalidated(object? sender, EventArgs e)
@@ -629,7 +726,7 @@ internal sealed class VrMauiCell : UICollectionViewCell
         base.PrepareForReuse();
         _measureInvalidated = false;
         _layoutStabilized   = false;
-        if (_mauiView is not null)
+        if (_mauiView is not null && _directView is null)
             _mauiView.BindingContext = null;
     }
 
@@ -680,6 +777,7 @@ internal sealed class VrMauiCell : UICollectionViewCell
             _nativeView     = null;
             _mauiView       = null;
             _template       = null;
+            _directView     = null;
         }
         base.Dispose(disposing);
     }
@@ -691,9 +789,17 @@ internal sealed class VrMauiCell : UICollectionViewCell
 
 internal sealed class VrDataSource : UICollectionViewDataSource
 {
+    private const int HeaderSection = 0;
+    private const int ItemsSection = 1;
+    private const int FooterSection = 2;
+
     private readonly DataTemplate _template;
     private readonly IMauiContext _mauiContext;
     private readonly NSString     _cellId;
+    private readonly object?      _header;
+    private readonly DataTemplate? _headerTemplate;
+    private readonly object?      _footer;
+    private readonly DataTemplate? _footerTemplate;
 
     // Callback opcional: a 1ª célula medida reporta a altura (modo MeasureFirst).
     internal Action<nfloat>? ReportFirstMeasure;
@@ -704,24 +810,51 @@ internal sealed class VrDataSource : UICollectionViewDataSource
         List<object>   items,
         DataTemplate?  template,
         IMauiContext   mauiContext,
-        NSString       cellId)
+        NSString       cellId,
+        object?        header,
+        DataTemplate?  headerTemplate,
+        object?        footer,
+        DataTemplate?  footerTemplate)
     {
         Items        = items;
         _template    = template ?? new DataTemplate(typeof(Label));
         _mauiContext = mauiContext;
         _cellId      = cellId;
+        _header      = header;
+        _headerTemplate = headerTemplate;
+        _footer      = footer;
+        _footerTemplate = footerTemplate;
     }
 
-    public override nint NumberOfSections(UICollectionView collectionView) => 1;
+    public override nint NumberOfSections(UICollectionView collectionView) => 3;
 
     public override nint GetItemsCount(UICollectionView collectionView, nint section)
-        => Items.Count;
+    {
+        return (int)section switch
+        {
+            HeaderSection => _header is not null || _headerTemplate is not null ? 1 : 0,
+            ItemsSection => Items.Count,
+            FooterSection => _footer is not null || _footerTemplate is not null ? 1 : 0,
+            _ => 0
+        };
+    }
 
     public override UICollectionViewCell GetCell(UICollectionView collectionView, NSIndexPath indexPath)
     {
         var cell = (VrMauiCell)collectionView.DequeueReusableCell(_cellId, indexPath);
-        if ((uint)indexPath.Item < (uint)Items.Count)
+        if (indexPath.Section == HeaderSection)
+        {
+            cell.Bind(_header, _headerTemplate, _mauiContext, collectionView);
+        }
+        else if (indexPath.Section == FooterSection)
+        {
+            cell.Bind(_footer, _footerTemplate, _mauiContext, collectionView);
+        }
+        else if ((uint)indexPath.Item < (uint)Items.Count)
+        {
             cell.Bind(Items[(int)indexPath.Item], _template, _mauiContext, collectionView, ReportFirstMeasure);
+        }
+
         return cell;
     }
 
