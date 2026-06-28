@@ -14,11 +14,12 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
         new(ViewMapper)
         {
             [nameof(ImageView.Source)]           = (h, _) => h.LoadImage(),
-            [nameof(ImageView.IsUrl)]            = (h, _) => h.LoadImage(),
+            ["IsUrl"]                            = (h, _) => h.LoadImage(),
             [nameof(ImageView.Placeholder)]      = (h, _) => h.LoadImage(),
             [nameof(ImageView.AspectMode)]       = (h, _) => h.ApplyScaleType(),
+            [nameof(ImageView.DecodeMaxPx)]      = (h, _) => h.LoadImage(),
             [nameof(ImageView.MaxZoom)]          = (h, _) => { },
-            [nameof(ImageView.EnableFullscreen)] = (h, _) => { },
+            [nameof(ImageView.EnableFullscreen)] = (h, _) => h.ApplyInteraction(),
         };
 
     public ImageViewHandler() : base(Mapper) { }
@@ -28,38 +29,30 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
 
     protected override global::Android.Widget.ImageView CreatePlatformView()
     {
-        var imageView = new global::Android.Widget.ImageView(Context)
+        return new global::Android.Widget.ImageView(Context)
         {
-            Clickable = true,
-            Focusable  = true,
+            Clickable = false,
+            Focusable = false,
         };
-
-        // Ripple effect nativo ao tocar (Foreground requer API 23+)
-        if (OperatingSystem.IsAndroidVersionAtLeast(23))
-        {
-            using var ta = Context.ObtainStyledAttributes(
-                new[] { global::Android.Resource.Attribute.SelectableItemBackground });
-            imageView.Foreground = ta.GetDrawable(0);
-            ta.Recycle();
-        }
-
-        return imageView;
     }
 
     protected override void ConnectHandler(global::Android.Widget.ImageView platformView)
     {
         base.ConnectHandler(platformView);
+        _disposed = false;
         _glideListener = new ImgGlideRequestListener(
             onReady: () => { if (!_disposed) MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()); },
             onFail:  () => { if (!_disposed) MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()); });
         platformView.Click += OnImageClick;
         ApplyScaleType();
+        ApplyInteraction();
         LoadImage();
     }
 
     protected override void DisconnectHandler(global::Android.Widget.ImageView platformView)
     {
         _disposed = true;
+        VirtualView?.SetIsLoading(false);
         platformView.Click -= OnImageClick;
 
         try
@@ -87,6 +80,29 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
                 : global::Android.Widget.ImageView.ScaleType.FitCenter);
     }
 
+    private void ApplyInteraction()
+    {
+        if (PlatformView is null) return;
+
+        var enabled = VirtualView.EnableFullscreen;
+        PlatformView.Clickable = enabled;
+        PlatformView.Focusable = enabled;
+
+        if (!OperatingSystem.IsAndroidVersionAtLeast(23))
+            return;
+
+        if (!enabled)
+        {
+            PlatformView.Foreground = null;
+            return;
+        }
+
+        using var ta = Context.ObtainStyledAttributes(
+            new[] { global::Android.Resource.Attribute.SelectableItemBackground });
+        PlatformView.Foreground = ta.GetDrawable(0);
+        ta.Recycle();
+    }
+
     private void LoadImage()
     {
         if (_disposed || PlatformView is null) return;
@@ -96,36 +112,20 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
             // Cancela qualquer request pendente antes de limpar
             try { Glide.With(PlatformView).Clear(PlatformView); }
             catch { /* ignora */ }
-            PlatformView.SetImageDrawable(null);
+            ApplyPlaceholderFallback();
+            VirtualView.SetIsLoading(false);
             return;
         }
 
         var options = BuildRequestOptions();
+        VirtualView.SetIsLoading(true);
 
-        if (VirtualView.IsUrl)
-        {
-            Glide.With(PlatformView)
-                .Load(VirtualView.Source)
-                .Apply(options)
-                .Listener(_glideListener)
-                .Into(PlatformView);
-        }
-        else
-        {
-            var drawableId = ResolveDrawable(VirtualView.Source);
-            if (drawableId == 0)
-            {
-                ApplyPlaceholderFallback();
-                VirtualView?.RaiseImageFailed();
-                return;
-            }
-
-            Glide.With(PlatformView)
-                .Load(drawableId)
-                .Apply(options)
-                .Listener(_glideListener)
-                .Into(PlatformView);
-        }
+        AndroidImageLoader.LoadInto(
+            PlatformView,
+            VirtualView.Source,
+            options,
+            _glideListener,
+            VirtualView.LegacyIsUrl);
     }
 
     private RequestOptions BuildRequestOptions()
@@ -134,8 +134,13 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
             ? new RequestOptions().CenterCrop()
             : new RequestOptions().FitCenter();
 
+        var decodeMaxPx = Math.Max(64, VirtualView.DecodeMaxPx);
+        options = options
+            .Override(decodeMaxPx, decodeMaxPx)
+            .DontAnimate();
+        options.SetDiskCacheStrategy(DiskCacheStrategy.Automatic!);
 
-        var placeholderId = ResolveDrawable(VirtualView.Placeholder);
+        var placeholderId = AndroidImageLoader.ResolveDrawable(Context, VirtualView.Placeholder);
         if (placeholderId != 0)
             options = options.Clone().Placeholder(placeholderId).Error(placeholderId);
 
@@ -144,18 +149,11 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
 
     private void ApplyPlaceholderFallback()
     {
-        var placeholderId = ResolveDrawable(VirtualView.Placeholder);
+        var placeholderId = AndroidImageLoader.ResolveDrawable(Context, VirtualView.Placeholder);
         if (placeholderId != 0)
             PlatformView.SetImageResource(placeholderId);
         else
             PlatformView.SetImageDrawable(null);
-    }
-
-    private int ResolveDrawable(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return 0;
-        return Context.Resources?.GetIdentifier(
-            name, "drawable", Context.PackageName) ?? 0;
     }
 
     private void OnImageClick(object? sender, EventArgs e)
@@ -174,7 +172,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
         var fsSource = VirtualView.FullscreenSource ?? VirtualView.Source;
         var dialog = new FullscreenZoomDialogFragment(
             source:      fsSource,
-            isUrl:       VirtualView.IsUrl,
+            isUrl:       ImageSourceResolver.IsRemote(fsSource, VirtualView.LegacyIsUrl),
             placeholder: VirtualView.Placeholder,
             maxZoom:     VirtualView.MaxZoom);
 

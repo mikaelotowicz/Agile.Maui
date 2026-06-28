@@ -25,10 +25,10 @@ Não há testes automatizados neste projeto.
 Consumidores registram no `MauiProgram.cs`:
 
 ```csharp
-builder.UseZoomImageView();
+builder.UseAgileGalleryView();
 ```
 
-`MauiAppBuilderExtensions.cs` (namespace `Controls`) usa `#if ANDROID / #if IOS || MACCATALYST / #if WINDOWS` para registrar o handler correto em cada plataforma.
+`GalleryViewAppBuilderExtensions.cs` usa `#if ANDROID / #if IOS || MACCATALYST / #if WINDOWS` para registrar o handler correto em cada plataforma.
 
 ### Handler Pattern
 
@@ -37,6 +37,11 @@ builder.UseZoomImageView();
 - **`Platforms/iOS/ImageViewHandler.cs`** — Mapeia para `UIImageView` + `NSUrlSession` para URLs.
 - **`Platforms/Windows/ImageViewHandler.cs`** — Mapeia para `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage`. Sem fullscreen zoom.
 - **`Platforms/MacCatalyst/`** — Compilado a partir dos arquivos de `Platforms/iOS/` via ItemGroup no csproj.
+
+> Atualizacao: no pacote modular atual os arquivos ficam em `GalleryView/`.
+> `ImageView` possui `DecodeMaxPx` e `IsLoading` read-only. `IsUrl` existe
+> apenas por compatibilidade; HTTP/HTTPS e detectado automaticamente. Os
+> handlers dedicados ficam em `GalleryView/Platforms/{Android,iOS,MacCatalyst,Windows}/ImageView/`.
 
 ### MacCatalyst compartilha iOS
 

@@ -7,6 +7,7 @@ using AndroidX.Fragment.App;
 using AndroidX.RecyclerView.Widget;
 using AndroidX.ViewPager2.Widget;
 using Bumptech.Glide;
+using Bumptech.Glide.Load.Engine;
 using Bumptech.Glide.Request;
 using Color = Android.Graphics.Color;
 
@@ -91,6 +92,7 @@ public sealed class FullscreenGalleryFragment : DialogFragment
             _isUrl,
             _placeholder,
             _maxZoom,
+            RequireContext(),
             isZoomed => _viewPager.UserInputEnabled = !isZoomed);
         _viewPager.Adapter = adapter;
 
@@ -235,12 +237,14 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
     private readonly string?     _placeholder;
     private readonly float       _maxZoom;
     private readonly Action<bool> _onZoomStateChanged;
+    private readonly RequestOptions _requestOptions;
 
     public GalleryPagerAdapter(
         string[]     images,
         bool         isUrl,
         string?      placeholder,
         float        maxZoom,
+        global::Android.Content.Context context,
         Action<bool> onZoomStateChanged)
     {
         _images             = images;
@@ -248,6 +252,7 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
         _placeholder        = placeholder;
         _maxZoom            = maxZoom;
         _onZoomStateChanged = onZoomStateChanged;
+        _requestOptions     = BuildOptions(context);
     }
 
     public override int ItemCount => _images.Length;
@@ -350,25 +355,26 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
             });
         }
 
-        var opts = BuildOptions(context);
         var listener = new ZoomGlideRequestListener(onReady: OnReady, onFail: OnFail);
 
-        if (_isUrl)
-        {
-            Glide.With(vh.ImageView).Load(source).Apply(opts).Listener(listener).Into(vh.ImageView);
-        }
-        else
-        {
-            var id = ResolveDrawable(context, source);
-            if (id == 0) { OnFail(); return; }
-            Glide.With(vh.ImageView).Load(id).Apply(opts).Listener(listener).Into(vh.ImageView);
-        }
+        AndroidImageLoader.LoadInto(vh.ImageView, source, _requestOptions, listener, _isUrl);
     }
 
     private RequestOptions BuildOptions(global::Android.Content.Context context)
     {
-        var o = new RequestOptions().FitCenter();
-        var ph = ResolveDrawable(context, _placeholder);
+        var metrics = context.Resources?.DisplayMetrics;
+        var maxScreenPx = Math.Max(metrics?.WidthPixels ?? 0, metrics?.HeightPixels ?? 0);
+        var decodePx = Math.Clamp(
+            (int)(maxScreenPx * Math.Max(1f, Math.Min(_maxZoom, 3f))),
+            720,
+            4096);
+
+        var o = new RequestOptions()
+            .FitCenter()
+            .Override(decodePx, decodePx)
+            .DontAnimate();
+        o.SetDiskCacheStrategy(DiskCacheStrategy.Automatic!);
+        var ph = AndroidImageLoader.ResolveDrawable(context, _placeholder);
         if (ph != 0) o = o.Clone().Placeholder(ph).Error(ph);
         return o;
     }
@@ -376,7 +382,7 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
     private static int ResolveDrawable(global::Android.Content.Context context, string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return 0;
-        return context.Resources?.GetIdentifier(name, "drawable", context.PackageName) ?? 0;
+        return AndroidImageLoader.ResolveDrawable(context, name);
     }
 }
 

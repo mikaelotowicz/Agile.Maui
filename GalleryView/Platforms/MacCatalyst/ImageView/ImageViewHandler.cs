@@ -1,8 +1,6 @@
 // Platforms/MacCatalyst/ImageViewHandler.cs
 // MacCatalyst uses the same UIKit APIs as iOS — this file mirrors Platforms/iOS/ImageViewHandler.cs
-using CoreGraphics;
 using Foundation;
-using ImageIO;
 using Microsoft.Maui.Handlers;
 using UIKit;
 
@@ -14,11 +12,12 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
         new(ViewMapper)
         {
             [nameof(ImageView.Source)]           = (h, _) => h.LoadImage(),
-            [nameof(ImageView.IsUrl)]            = (h, _) => h.LoadImage(),
+            ["IsUrl"]                            = (h, _) => h.LoadImage(),
             [nameof(ImageView.Placeholder)]      = (h, _) => h.LoadImage(),
             [nameof(ImageView.AspectMode)]       = (h, _) => h.ApplyContentMode(),
+            [nameof(ImageView.DecodeMaxPx)]      = (h, _) => h.LoadImage(),
             [nameof(ImageView.MaxZoom)]          = (h, _) => { },
-            [nameof(ImageView.EnableFullscreen)] = (h, _) => { },
+            [nameof(ImageView.EnableFullscreen)] = (h, _) => h.ApplyInteraction(),
         };
 
     public ImageViewHandler() : base(Mapper) { }
@@ -37,7 +36,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
     {
         return new UIImageView
         {
-            UserInteractionEnabled = true,
+            UserInteractionEnabled = false,
             ClipsToBounds          = true,
             ContentMode            = UIViewContentMode.ScaleAspectFill,
         };
@@ -49,6 +48,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
         _tapGesture = new UITapGestureRecognizer(OnImageTapped);
         platformView.AddGestureRecognizer(_tapGesture);
         ApplyContentMode();
+        ApplyInteraction();
         LoadImage();
     }
 
@@ -66,6 +66,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
         _loadCts?.Dispose();
         _loadCts = null;
 
+        VirtualView?.SetIsLoading(false);
         platformView.Image = null;
         base.DisconnectHandler(platformView);
     }
@@ -78,31 +79,49 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
             : UIViewContentMode.ScaleAspectFit;
     }
 
+    private void ApplyInteraction()
+    {
+        if (PlatformView is null) return;
+        PlatformView.UserInteractionEnabled = VirtualView.EnableFullscreen;
+        if (_tapGesture is not null)
+            _tapGesture.Enabled = VirtualView.EnableFullscreen;
+    }
+
     private void LoadImage()
     {
         if (PlatformView is null) return;
 
         _loadCts?.Cancel();
         _loadCts?.Dispose();
-        _loadCts = new CancellationTokenSource();
+        _loadCts = null;
 
         if (string.IsNullOrWhiteSpace(VirtualView.Source))
         {
-            PlatformView.Image = null;
+            ApplyPlaceholder();
+            VirtualView.SetIsLoading(false);
             return;
         }
 
         ApplyPlaceholder();
+        VirtualView.SetIsLoading(true);
 
-        if (VirtualView.IsUrl)
+        if (ImageSourceResolver.IsRemote(VirtualView.Source, VirtualView.LegacyIsUrl))
+        {
+            _loadCts = new CancellationTokenSource();
             _ = LoadFromUrlAsync(VirtualView.Source, _loadCts.Token);
+        }
         else
-            LoadFromBundle(VirtualView.Source);
+            LoadFromLocal(VirtualView.Source);
     }
 
-    private void LoadFromBundle(string name)
+    private void LoadFromLocal(string name)
     {
-        var image = UIImage.FromBundle(name);
+        var maxPixelSize = AppleImageCache.ResolveMaxPixelSize(
+            PlatformView.Bounds.Width,
+            PlatformView.Bounds.Height,
+            UIScreen.MainScreen.Scale,
+            VirtualView.DecodeMaxPx);
+        var image = AppleImageCache.LoadLocal(name, maxPixelSize, UIScreen.MainScreen.Scale);
         if (image is not null)
         {
             PlatformView.Image = image;
@@ -121,6 +140,19 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
         var targetW     = VirtualView.WidthRequest;
         var targetH     = VirtualView.HeightRequest;
         var screenScale = UIScreen.MainScreen.Scale;
+        var maxPixelSize = AppleImageCache.ResolveMaxPixelSize(
+            targetW,
+            targetH,
+            screenScale,
+            VirtualView.DecodeMaxPx);
+        var cacheKey = AppleImageCache.Key(url, maxPixelSize);
+
+        if (AppleImageCache.Get(cacheKey) is { } cached)
+        {
+            PlatformView.Image = cached;
+            VirtualView?.RaiseImageLoaded();
+            return;
+        }
 
         NSUrlSessionDataTask? dataTask = null;
         var tcs = new TaskCompletionSource<(NSData?, NSUrlResponse?)>(
@@ -150,7 +182,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
 
             if (token.IsCancellationRequested) return;
 
-            if (response is null || ((NSHttpUrlResponse)response).StatusCode != 200 || data is null)
+            if (response is not NSHttpUrlResponse http || http.StatusCode != 200 || data is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
@@ -160,7 +192,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
                 return;
             }
 
-            var image = DecodeDownsampled(data, targetW, targetH, screenScale);
+            var image = AppleImageCache.Decode(data, maxPixelSize, screenScale);
             if (image is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
@@ -175,6 +207,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
             {
                 if (!token.IsCancellationRequested)
                 {
+                    AppleImageCache.Set(cacheKey, image);
                     PlatformView.Image = image;
                     VirtualView?.RaiseImageLoaded();
                 }
@@ -194,36 +227,10 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
         }
     }
 
-    private static UIImage? DecodeDownsampled(NSData data, double w, double h, nfloat scale)
-    {
-        if (w > 0 && h > 0 && scale > 0)
-        {
-            try
-            {
-                var maxPx = (int)(Math.Max(w, h) * (double)scale);
-                using var src = CGImageSource.FromData(data);
-                if (src is not null)
-                {
-                    using var cg = src.CreateThumbnail(0, new CGImageThumbnailOptions
-                    {
-                        CreateThumbnailFromImageAlways = true,
-                        CreateThumbnailWithTransform   = true,
-                        MaxPixelSize                   = maxPx,
-                    });
-                    if (cg is not null)
-                        return UIImage.FromImage(cg, scale, UIImageOrientation.Up);
-                }
-            }
-            catch { /* fallback abaixo */ }
-        }
-
-        return UIImage.LoadFromData(data);
-    }
-
     private void ApplyPlaceholder()
     {
         if (string.IsNullOrWhiteSpace(VirtualView.Placeholder)) return;
-        var ph = UIImage.FromBundle(VirtualView.Placeholder);
+        var ph = AppleImageCache.LoadLocal(VirtualView.Placeholder, VirtualView.DecodeMaxPx, UIScreen.MainScreen.Scale);
         if (ph is not null) PlatformView.Image = ph;
     }
 
@@ -238,7 +245,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
         var fsSource = VirtualView.FullscreenSource ?? VirtualView.Source;
         var fullscreen = new FullscreenZoomViewController(
             source:       fsSource,
-            isUrl:        VirtualView.IsUrl,
+            isUrl:        ImageSourceResolver.IsRemote(fsSource, VirtualView.LegacyIsUrl),
             placeholder:  VirtualView.Placeholder,
             maxZoom:      VirtualView.MaxZoom,
             currentImage: PlatformView.Image);

@@ -13,9 +13,10 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
         new(ViewMapper)
         {
             [nameof(ImageView.Source)]           = (h, _) => h.LoadImage(),
-            [nameof(ImageView.IsUrl)]            = (h, _) => h.LoadImage(),
+            ["IsUrl"]                            = (h, _) => h.LoadImage(),
             [nameof(ImageView.Placeholder)]      = (h, _) => h.LoadImage(),
             [nameof(ImageView.AspectMode)]       = (h, _) => h.ApplyStretch(),
+            [nameof(ImageView.DecodeMaxPx)]      = (h, _) => h.LoadImage(),
             [nameof(ImageView.MaxZoom)]          = (h, _) => { },
             [nameof(ImageView.EnableFullscreen)] = (h, _) => { },
         };
@@ -37,6 +38,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
     {
         platformView.ImageOpened -= OnImageOpened;
         platformView.ImageFailed -= OnImageFailed;
+        VirtualView?.SetIsLoading(false);
         platformView.Source = null;
         base.DisconnectHandler(platformView);
     }
@@ -47,14 +49,17 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
 
         if (string.IsNullOrWhiteSpace(VirtualView.Source))
         {
-            PlatformView.Source = null;
+            ApplyPlaceholder();
+            VirtualView.SetIsLoading(false);
             return;
         }
 
-        if (VirtualView.IsUrl)
+        VirtualView.SetIsLoading(true);
+
+        if (ImageSourceResolver.IsRemote(VirtualView.Source, VirtualView.LegacyIsUrl))
         {
             if (Uri.TryCreate(VirtualView.Source, UriKind.Absolute, out var uri))
-                PlatformView.Source = new BitmapImage(uri);
+                PlatformView.Source = CreateBitmap(uri);
             else
             {
                 ApplyPlaceholder();
@@ -65,11 +70,31 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
         {
             // Imagens locais em apps MAUI Windows ficam em ms-appx:///
             // Se Source não tiver extensão, assume .png (padrão MAUI)
-            var filename = System.IO.Path.HasExtension(VirtualView.Source)
-                ? VirtualView.Source
-                : VirtualView.Source + ".png";
-            PlatformView.Source = new BitmapImage(new Uri($"ms-appx:///{filename}"));
+            PlatformView.Source = CreateLocalBitmap(VirtualView.Source);
         }
+    }
+
+    private BitmapImage CreateLocalBitmap(string source)
+    {
+        if (ImageSourceResolver.TryGetLocalFilePath(source, out var path))
+            return CreateBitmap(new Uri(path, UriKind.Absolute));
+
+        if (ImageSourceResolver.TryGetAbsoluteLocalUri(source, out var uri))
+            return CreateBitmap(uri);
+
+        var filename = ImageSourceResolver.MauiResourcePath(source);
+        return CreateBitmap(new Uri($"ms-appx:///{filename}"));
+    }
+
+    private BitmapImage CreateBitmap(Uri uri)
+    {
+        var maxPx = Math.Max(64, VirtualView.DecodeMaxPx);
+        return new BitmapImage
+        {
+            DecodePixelWidth = maxPx,
+            DecodePixelHeight = maxPx,
+            UriSource = uri
+        };
     }
 
     private void ApplyStretch()
@@ -83,10 +108,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
     private void ApplyPlaceholder()
     {
         if (string.IsNullOrWhiteSpace(VirtualView.Placeholder)) return;
-        var filename = System.IO.Path.HasExtension(VirtualView.Placeholder)
-            ? VirtualView.Placeholder
-            : VirtualView.Placeholder + ".png";
-        PlatformView.Source = new BitmapImage(new Uri($"ms-appx:///{filename}"));
+        PlatformView.Source = CreateLocalBitmap(VirtualView.Placeholder);
     }
 
     private void OnImageOpened(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)

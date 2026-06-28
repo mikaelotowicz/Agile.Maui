@@ -5,6 +5,7 @@ using Android.Views;
 using AndroidX.RecyclerView.Widget;
 using AndroidX.ViewPager2.Widget;
 using Bumptech.Glide;
+using Bumptech.Glide.Load.Engine;
 using Bumptech.Glide.Request;
 using Microsoft.Maui.Handlers;
 
@@ -17,7 +18,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
         {
             [nameof(GalleryView.Images)]        = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.SelectedIndex)] = (h, _) => h.SyncPage(),
-            [nameof(GalleryView.IsUrl)]         = (h, _) => h.ReloadAdapter(),
+            ["IsUrl"]                           = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.MaxZoom)]                = (h, _) => { },
@@ -106,7 +107,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
         pager.Adapter = new ThumbPagerAdapter(
             images:        images.ToArray(),
-            isUrl:         VirtualView.IsUrl,
+            isUrl:         VirtualView.LegacyIsUrl,
             placeholder:   VirtualView.Placeholder,
             aspectMode:    VirtualView.AspectMode,
             thumbMaxPx:    VirtualView.ThumbMaxPx,
@@ -201,7 +202,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
         var dialog = new FullscreenGalleryFragment(
             images:        arr,
-            isUrl:         VirtualView.IsUrl,
+            isUrl:         VirtualView.LegacyIsUrl,
             placeholder:   VirtualView.Placeholder,
             maxZoom:       VirtualView.MaxZoom,
             startIndex:    idx,
@@ -480,17 +481,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         try { Glide.With(vh.ImageView).Clear(vh.ImageView); } catch { }
         vh.ImageView.SetImageDrawable(null);
 
-        if (_isUrl)
-        {
-            Glide.With(vh.ImageView).Load(source).Apply(_requestOptions).Listener(_glideListener).Into(vh.ImageView);
-        }
-        else
-        {
-            var id = ResolveDrawable(vh.ImageView.Context!, source);
-            if (id == 0) { _onImageFailed(); return; }
-            vh.ImageView.SetImageResource(id);
-            _onImageLoaded();
-        }
+        AndroidImageLoader.LoadInto(vh.ImageView, source, _requestOptions, _glideListener, _isUrl);
     }
 
     // Chamado uma única vez no construtor — context é o único input não-armazenado.
@@ -501,17 +492,14 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
             : new RequestOptions().FitCenter();
         int overrideW = _cellWidth  > 0 ? _cellWidth  : _thumbMaxPx;
         int overrideH = _cellHeight > 0 ? _cellHeight : _thumbMaxPx;
-        o = o.Override(overrideW, overrideH);
-        var ph = ResolveDrawable(context, _placeholder);
+        o = o.Override(overrideW, overrideH)
+            .DontAnimate();
+        o.SetDiskCacheStrategy(DiskCacheStrategy.Automatic!);
+        var ph = AndroidImageLoader.ResolveDrawable(context, _placeholder);
         if (ph != 0) o = o.Placeholder(ph).Error(ph);
         return o;
     }
 
-    private static int ResolveDrawable(global::Android.Content.Context context, string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return 0;
-        return context.Resources?.GetIdentifier(name, "drawable", context.PackageName) ?? 0;
-    }
 }
 
 internal sealed class ThumbPageViewHolder : RecyclerView.ViewHolder
