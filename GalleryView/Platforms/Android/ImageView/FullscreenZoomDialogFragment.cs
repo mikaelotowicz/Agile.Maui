@@ -82,6 +82,7 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
         _imageView = new global::Android.Widget.ImageView(RequireContext());
         _imageView.SetBackgroundColor(Color.Black);
         _imageView.SetScaleType(global::Android.Widget.ImageView.ScaleType.Matrix);
+        _imageView.Visibility = ViewStates.Invisible;
 
         _root.AddView(_imageView,
             new FrameLayout.LayoutParams(
@@ -205,6 +206,11 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
     private void LoadImage()
     {
         if (_imageView is null) return;
+        if (string.IsNullOrWhiteSpace(_source))
+        {
+            OnImageFailed();
+            return;
+        }
 
         var options = BuildRequestOptions();
         AndroidImageLoader.LoadInto(
@@ -213,17 +219,54 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
             options,
             new ZoomGlideRequestListener(
                 onReady: OnImageReady,
-                onFail:  HideProgress),
+                onFail:  OnImageFailed),
             _isUrl);
     }
 
-    // Post() garante que a view ja esta layoutada antes de calcular a matrix
+    // Post() garante que o Glide ja aplicou o drawable antes de calcular a matrix.
     private void OnImageReady()
+    {
+        RevealImageWhenMatrixIsReady();
+    }
+
+    private void OnImageFailed()
+    {
+        if (_imageView is null)
+        {
+            HideProgress();
+            return;
+        }
+
+        var placeholderId = ResolveDrawable(_placeholder);
+        if (placeholderId == 0)
+        {
+            HideProgress();
+            return;
+        }
+
+        _imageView.Post(() =>
+        {
+            _imageView?.SetImageResource(placeholderId);
+            RevealImageWhenMatrixIsReady();
+        });
+    }
+
+    private void RevealImageWhenMatrixIsReady(int attempt = 0)
     {
         _imageView?.Post(() =>
         {
-            _zoomHandler?.InitMatrix();
-            HideProgress();
+            if (_imageView is null) return;
+
+            if (_zoomHandler?.InitMatrix() == true || attempt >= 4)
+            {
+                _imageView.Visibility = ViewStates.Visible;
+                HideProgress();
+                return;
+            }
+
+            _imageView.PostDelayed(
+                () => RevealImageWhenMatrixIsReady(attempt + 1),
+                16);
         });
     }
 
@@ -241,10 +284,6 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
             .Override(decodePx, decodePx)
             .DontAnimate();
         options.SetDiskCacheStrategy(DiskCacheStrategy.Automatic!);
-
-        var placeholderId = AndroidImageLoader.ResolveDrawable(RequireContext(), _placeholder);
-        if (placeholderId != 0)
-            options = options.Clone().Placeholder(placeholderId).Error(placeholderId);
 
         return options;
     }
@@ -327,16 +366,16 @@ internal sealed class ZoomTouchHandler
     /// Calcula a matrix fit-center a partir das dimensoes reais.
     /// Deve ser chamado via Post() apos o layout estar completo.
     /// </summary>
-    public void InitMatrix()
+    public bool InitMatrix()
     {
-        if (_imageView.Drawable is null) return;
+        if (_imageView.Drawable is null) return false;
 
         var viewW = (float)_imageView.Width;
         var viewH = (float)_imageView.Height;
         var imgW  = (float)_imageView.Drawable.IntrinsicWidth;
         var imgH  = (float)_imageView.Drawable.IntrinsicHeight;
 
-        if (viewW <= 0 || viewH <= 0 || imgW <= 0 || imgH <= 0) return;
+        if (viewW <= 0 || viewH <= 0 || imgW <= 0 || imgH <= 0) return false;
 
         var scale     = Math.Min(viewW / imgW, viewH / imgH); // fit-center
         _minScale     = scale;
@@ -350,6 +389,7 @@ internal sealed class ZoomTouchHandler
 
         _imageView.ImageMatrix = _matrix;
         _onZoomStateChanged?.Invoke(false); // always at min scale after init
+        return true;
     }
 
     public void ResetZoom()
@@ -583,7 +623,7 @@ internal sealed class ZoomGlideRequestListener
         Java.Lang.Object? resource,
         Java.Lang.Object? model,
         Bumptech.Glide.Request.Target.ITarget? target,
-        Bumptech.Glide.Load.DataSource dataSource,
+        Bumptech.Glide.Load.DataSource? dataSource,
         bool isFirstResource)
     {
         _onReady();

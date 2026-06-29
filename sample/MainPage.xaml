@@ -39,7 +39,6 @@
                 HeightRequest="220"
                 ImageFailedCommand="{Binding ImageFailedCommand}"
                 ImageLoadedCommand="{Binding ImageLoadedCommand}"
-                IsUrl="True"
                 MaxZoom="6"
                 Placeholder="dotnet_bot"
                 Source="https://picsum.photos/seed/maui1/800/500" />
@@ -58,7 +57,6 @@
                 HeightRequest="220"
                 ImageFailedCommand="{Binding ImageFailedCommand}"
                 ImageLoadedCommand="{Binding ImageLoadedCommand}"
-                IsUrl="True"
                 MaxZoom="8"
                 Placeholder="dotnet_bot"
                 Source="https://picsum.photos/seed/maui2/400/700" />
@@ -87,7 +85,6 @@
                 ImageFailedCommand="{Binding GalleryImageFailedCommand}"
                 ImageLoadedCommand="{Binding GalleryImageLoadedCommand}"
                 Images="{Binding UrlImages}"
-                IsUrl="True"
                 MaxZoom="6"
                 Placeholder="dotnet_bot"
                 SelectedIndex="{Binding UrlSelectedIndex, Mode=TwoWay}"
