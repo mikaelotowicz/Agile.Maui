@@ -66,11 +66,10 @@ public sealed class FullscreenZoomViewController
     {
         base.ViewDidLayoutSubviews();
         _scrollView!.Frame = View!.Bounds;
-        _imageView!.Frame  = View.Bounds;
         _spinner!.Center   = View.Center;
         PositionCloseButton();
-        UpdateZoomScale();
-        CenterImage();
+        if (UpdateZoomScale())
+            _imageView!.Hidden = false;
     }
 
     public override void ViewWillDisappear(bool animated)
@@ -81,6 +80,8 @@ public sealed class FullscreenZoomViewController
 
     public override UIInterfaceOrientationMask GetSupportedInterfaceOrientations()
         => UIInterfaceOrientationMask.All;
+
+    public override bool PrefersStatusBarHidden() => true;
 
     protected override void Dispose(bool disposing)
     {
@@ -122,6 +123,7 @@ public sealed class FullscreenZoomViewController
             ContentMode            = UIViewContentMode.ScaleAspectFit,
             BackgroundColor        = UIColor.Black,
             UserInteractionEnabled = true,
+            Hidden                 = true,
         };
         _scrollView!.AddSubview(_imageView);
     }
@@ -256,8 +258,7 @@ public sealed class FullscreenZoomViewController
     {
         _imageView!.Image = image;
         _spinner!.StopAnimating();
-        UpdateZoomScale();
-        CenterImage();
+        _imageView.Hidden = !UpdateZoomScale();
     }
 
     private void ApplyPlaceholder()
@@ -268,8 +269,8 @@ public sealed class FullscreenZoomViewController
             var ph = AppleImageCache.LoadLocal(_placeholder, GetFullscreenMaxPixelSize(), UIScreen.MainScreen.Scale);
             if (ph is not null) _imageView!.Image = ph;
         }
-        UpdateZoomScale();
-        CenterImage();
+        if (_imageView?.Image is not null)
+            _imageView.Hidden = !UpdateZoomScale();
     }
 
     // ── UIScrollViewDelegate ──────────────────────────────────────────────
@@ -282,36 +283,44 @@ public sealed class FullscreenZoomViewController
         => CenterImage();
 
     // ── Zoom e centralizacao ──────────────────────────────────────────────
-    private void UpdateZoomScale()
+    private bool UpdateZoomScale()
     {
-        if (_imageView?.Image is null) return;
-        if (View?.Bounds.IsEmpty ?? true) return;
+        if (_imageView?.Image is null || _scrollView is null) return false;
+        if (_scrollView.Bounds.IsEmpty) return false;
 
         var imgSize = _imageView.Image.Size;
-        if (imgSize.Width <= 0 || imgSize.Height <= 0) return;
+        if (imgSize.Width <= 0 || imgSize.Height <= 0) return false;
 
-        var scaleW    = View!.Bounds.Width  / imgSize.Width;
-        var scaleH    = View.Bounds.Height / imgSize.Height;
-        var minScale  = (nfloat)Math.Min((double)scaleW, (double)scaleH);
+        _scrollView.MinimumZoomScale = 1f;
+        _scrollView.MaximumZoomScale = (nfloat)Math.Max(1f, _maxZoom);
+        _scrollView.ZoomScale = 1f;
+        _imageView.Frame        = new CGRect(CGPoint.Empty, imgSize);
+        _scrollView.ContentSize = imgSize;
 
-        _scrollView!.MinimumZoomScale = minScale;
-        _scrollView.MaximumZoomScale  = (nfloat)_maxZoom;
-        _scrollView.ZoomScale         = minScale;
+        var viewport = _scrollView.Bounds.Size;
+        var scaleW   = viewport.Width / imgSize.Width;
+        var scaleH   = viewport.Height / imgSize.Height;
+        var minScale = (nfloat)Math.Min((double)scaleW, (double)scaleH);
+        if (minScale <= 0) return false;
 
-        _imageView.Frame              = new CGRect(CGPoint.Empty, imgSize);
-        _scrollView.ContentSize       = imgSize;
+        _scrollView.MinimumZoomScale = minScale;
+        _scrollView.MaximumZoomScale = (nfloat)Math.Max((double)_maxZoom, (double)minScale);
+        _scrollView.SetZoomScale(minScale, false);
+        CenterImage();
+        return true;
     }
 
     private void CenterImage()
     {
-        var offsetX = (nfloat)Math.Max(
-            (_scrollView!.Bounds.Width  - _scrollView.ContentSize.Width)  / 2, 0);
-        var offsetY = (nfloat)Math.Max(
-            (_scrollView.Bounds.Height - _scrollView.ContentSize.Height) / 2, 0);
+        if (_imageView is null || _scrollView is null) return;
 
-        _imageView!.Center = new CGPoint(
-            _scrollView.ContentSize.Width  / 2 + offsetX,
-            _scrollView.ContentSize.Height / 2 + offsetY);
+        var imageFrame = _imageView.Frame;
+        var offsetX = (nfloat)Math.Max((_scrollView.Bounds.Width  - imageFrame.Width)  / 2, 0);
+        var offsetY = (nfloat)Math.Max((_scrollView.Bounds.Height - imageFrame.Height) / 2, 0);
+
+        _imageView.Center = new CGPoint(
+            imageFrame.Width  / 2 + offsetX,
+            imageFrame.Height / 2 + offsetY);
     }
 
     // ── Gestos ────────────────────────────────────────────────────────────

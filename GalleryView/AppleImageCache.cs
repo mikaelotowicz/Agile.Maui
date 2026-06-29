@@ -17,7 +17,7 @@ internal static class AppleImageCache
 
     public static void Set(string key, UIImage image)
     {
-        s_cache.SetObjectforKey(image, (NSString)key);
+        s_cache.SetObjectForKey(image, (NSString)key);
     }
 
     public static string Key(string source, int maxPixelSize) => $"{maxPixelSize}:{source}";

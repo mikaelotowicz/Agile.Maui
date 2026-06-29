@@ -47,6 +47,46 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 	</PropertyGroup>
 
+	<PropertyGroup>
+		<_DisableIOSSimulatorDebugReadyToRun Condition="'$(TargetFramework)' == 'net11.0-ios' and '$(Configuration)' == 'Debug'">true</_DisableIOSSimulatorDebugReadyToRun>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(_DisableIOSSimulatorDebugReadyToRun)' == 'true'">
+		<!-- Avoid iOS Simulator/CoreCLR startup crash while opening sample.r2r.framework. -->
+		<PublishReadyToRun>false</PublishReadyToRun>
+		<PublishReadyToRunComposite>false</PublishReadyToRunComposite>
+		<CreateR2RFramework>false</CreateR2RFramework>
+		<CreateR2RDylib>false</CreateR2RDylib>
+	</PropertyGroup>
+
+	<Target Name="_DisableIOSDebugReadyToRun"
+		BeforeTargets="ResolveReadyToRunCompilers;_PrepareForReadyToRunCompilation;CreateReadyToRunImages"
+		Condition="'$(_DisableIOSSimulatorDebugReadyToRun)' == 'true'">
+		<PropertyGroup>
+			<PublishReadyToRun>false</PublishReadyToRun>
+			<PublishReadyToRunComposite>false</PublishReadyToRunComposite>
+			<CreateR2RFramework>false</CreateR2RFramework>
+			<CreateR2RDylib>false</CreateR2RDylib>
+		</PropertyGroup>
+	</Target>
+
+	<Target Name="_RemoveIOSDebugReadyToRunArtifacts"
+		BeforeTargets="_ComputePublishLocation;_CollectR2RFrameworksForPostProcessing"
+		DependsOnTargets="_ComputeVariables"
+		Condition="'$(_DisableIOSSimulatorDebugReadyToRun)' == 'true'">
+		<ItemGroup>
+			<_IOSDebugR2RDirectory Include="$(IntermediateOutputPath)R2R" />
+			<_IOSDebugR2RDirectory Include="$(IntermediateOutputPath)r2rframework" />
+			<_IOSDebugR2RDirectory Include="$(AppBundleDir)$(_AppFrameworksRelativePath)$(AssemblyName).r2r.framework" Condition="'$(AppBundleDir)' != ''" />
+			<_IOSDebugR2RDirectory Include="$(OutputPath)$(AssemblyName).app\$(_AppFrameworksRelativePath)$(AssemblyName).r2r.framework" />
+			<_IOSDebugR2RDirectory Include="$(OutputPath)$(AssemblyName).app\Frameworks\$(AssemblyName).r2r.framework" />
+			<_IOSDebugR2RFile Include="$(IntermediateOutputPath)r2r-input.hash" />
+			<_IOSDebugR2RFile Include="$(IntermediateOutputPath)r2r-input.hash.trigger" />
+		</ItemGroup>
+		<RemoveDir Directories="@(_IOSDebugR2RDirectory)" Condition="Exists('%(_IOSDebugR2RDirectory.Identity)')" />
+		<Delete Files="@(_IOSDebugR2RFile)" Condition="Exists('%(_IOSDebugR2RFile.Identity)')" />
+	</Target>
+
 	<ItemGroup>
 		<!-- App Icon -->
 		<MauiIcon Include="Resources\AppIcon\appicon.png" BaseSize="1024,1024" />

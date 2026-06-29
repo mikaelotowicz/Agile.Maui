@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.Gallery</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.0.5</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.0.5-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.0.6</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.0.6-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.Gallery</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
