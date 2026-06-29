@@ -247,7 +247,7 @@ internal sealed class ThumbGalleryView : UIView
                 UserInteractionEnabled = true,
             };
             _scrollView.AddSubview(iv);
-            _pages.Add(new PageEntry(iv, null));
+            _pages.Add(new PageEntry(iv, null, PageLoadState.Empty, null));
         }
 
         for (int i = 0; i < _pages.Count; i++)
@@ -318,6 +318,7 @@ internal sealed class ThumbGalleryView : UIView
         _ignoreScroll = true;
         _scrollView.SetContentOffset(new CGPoint(index * w, 0), animated);
         _ignoreScroll = false;
+        LoadWindow(index);
     }
 
     internal void NotifyScrollEnded()
@@ -339,16 +340,16 @@ internal sealed class ThumbGalleryView : UIView
             if (i < center - 1 || i > center + 1)
             {
                 var iv = _pages[i].ImageView;
-                if (iv.Image is not null || _pages[i].Cts is not null)
+                if (iv.Image is not null || _pages[i].State != PageLoadState.Empty)
                 {
                     _pages[i].Cts?.Cancel();
                     _pages[i].Cts?.Dispose();
-                    _pages[i] = new PageEntry(iv, null);
+                    _pages[i] = new PageEntry(iv, null, PageLoadState.Empty, null);
                     iv.Image   = null;
                 }
                 continue;
             }
-            if (_pages[i].ImageView.Image is null && _pages[i].Cts is null)
+            if (_pages[i].State == PageLoadState.Empty)
                 LoadPage(i);
         }
     }
@@ -361,9 +362,24 @@ internal sealed class ThumbGalleryView : UIView
 
         if (ImageSourceResolver.IsRemote(source, _isUrl))
         {
+            var maxPixelSize = AppleImageCache.ResolveMaxPixelSize(
+                entry.ImageView.Bounds.Width,
+                entry.ImageView.Bounds.Height,
+                UIScreen.MainScreen.Scale,
+                _thumbMaxPx);
+            var cacheKey = AppleImageCache.Key(source, maxPixelSize);
+            if (AppleImageCache.Get(cacheKey) is { } cached)
+            {
+                entry.ImageView.Image = cached;
+                _pages[index] = new PageEntry(entry.ImageView, null, PageLoadState.Loaded, source);
+                OnImageLoaded?.Invoke();
+                return;
+            }
+
+            ApplyPlaceholder(entry.ImageView);
             var cts = new CancellationTokenSource();
-            _pages[index] = new PageEntry(entry.ImageView, cts);
-            _ = LoadFromUrlAsync(entry.ImageView, source, cts.Token);
+            _pages[index] = new PageEntry(entry.ImageView, cts, PageLoadState.Loading, source);
+            _ = LoadFromUrlAsync(index, source, maxPixelSize, UIScreen.MainScreen.Scale, cts);
         }
         else
         {
@@ -376,80 +392,117 @@ internal sealed class ThumbGalleryView : UIView
             if (image is not null)
             {
                 entry.ImageView.Image = image;
+                _pages[index] = new PageEntry(entry.ImageView, null, PageLoadState.Loaded, source);
                 OnImageLoaded?.Invoke();
             }
             else
             {
                 ApplyPlaceholder(entry.ImageView);
+                _pages[index] = new PageEntry(entry.ImageView, null, PageLoadState.Failed, source);
                 OnImageFailed?.Invoke();
             }
         }
     }
 
-    private async Task LoadFromUrlAsync(UIImageView iv, string url, CancellationToken token)
+    private async Task LoadFromUrlAsync(
+        int index,
+        string url,
+        int maxPixelSize,
+        nfloat screenScale,
+        CancellationTokenSource cts)
     {
+        var token = cts.Token;
+        NSUrlSessionDataTask? dataTask = null;
+        var tcs = new TaskCompletionSource<(NSData? Data, NSUrlResponse? Response)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
         try
         {
-            ApplyPlaceholder(iv);
-            var maxPixelSize = AppleImageCache.ResolveMaxPixelSize(
-                iv.Bounds.Width,
-                iv.Bounds.Height,
-                UIScreen.MainScreen.Scale,
-                _thumbMaxPx);
-            var cacheKey = AppleImageCache.Key(url, maxPixelSize);
-            if (AppleImageCache.Get(cacheKey) is { } cached)
+            var request = new NSUrlRequest(new NSUrl(url));
+            dataTask = _urlSession.CreateDataTask(request, (data, response, error) =>
             {
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                {
-                    if (!token.IsCancellationRequested)
-                    {
-                        iv.Image = cached;
-                        OnImageLoaded?.Invoke();
-                    }
-                });
-                return;
-            }
+                if (error is not null) tcs.TrySetException(new NSErrorException(error));
+                else                   tcs.TrySetResult((data, response));
+            });
 
-            var result = await _urlSession.CreateDataTaskAsync(new NSUrl(url)).ConfigureAwait(false);
+            using var reg = token.Register(() =>
+            {
+                dataTask?.Cancel();
+                tcs.TrySetCanceled(token);
+            });
+
+            dataTask.Resume();
+
+            var (data, response) = await tcs.Task.ConfigureAwait(false);
             if (token.IsCancellationRequested) return;
 
-            if (result.Data is null)
+            if (data is null ||
+                response is not NSHttpUrlResponse http ||
+                http.StatusCode < 200 ||
+                http.StatusCode >= 300)
             {
-                await FailAsync(iv, token);
+                await FailAsync(index, url, cts);
                 return;
             }
 
-            var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
+            var image = AppleImageCache.Decode(data, maxPixelSize, screenScale);
             if (image is null)
             {
-                await FailAsync(iv, token);
+                await FailAsync(index, url, cts);
                 return;
             }
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (!token.IsCancellationRequested)
+                if (IsCurrentLoad(index, url, cts))
                 {
-                    AppleImageCache.Set(cacheKey, image);
+                    AppleImageCache.Set(AppleImageCache.Key(url, maxPixelSize), image);
+                    var iv = _pages[index].ImageView;
                     iv.Image = image;
+                    _pages[index] = new PageEntry(iv, null, PageLoadState.Loaded, url);
+                    cts.Dispose();
                     OnImageLoaded?.Invoke();
                 }
+                else
+                    cts.Dispose();
             });
         }
         catch (OperationCanceledException) { }
-        catch { await FailAsync(iv, token); }
+        catch (NSErrorException ex) when (ex.Error.Code == -999) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GalleryView MacCatalyst] Thumb load error: {ex.Message}");
+            await FailAsync(index, url, cts);
+        }
+        finally
+        {
+            dataTask?.Dispose();
+        }
     }
 
-    private async Task FailAsync(UIImageView iv, CancellationToken token)
+    private async Task FailAsync(int index, string source, CancellationTokenSource cts)
     {
         await MainThread.InvokeOnMainThreadAsync(() =>
         {
-            if (!token.IsCancellationRequested)
+            if (IsCurrentLoad(index, source, cts))
             {
+                var iv = _pages[index].ImageView;
                 ApplyPlaceholder(iv);
+                _pages[index] = new PageEntry(iv, null, PageLoadState.Failed, source);
+                cts.Dispose();
                 OnImageFailed?.Invoke();
             }
+            else
+                cts.Dispose();
         });
+    }
+
+    private bool IsCurrentLoad(int index, string source, CancellationTokenSource cts)
+    {
+        return index >= 0 &&
+            index < _pages.Count &&
+            ReferenceEquals(_pages[index].Cts, cts) &&
+            string.Equals(_pages[index].Source, source, StringComparison.Ordinal);
     }
 
     private void ApplyPlaceholder(UIImageView iv)
@@ -472,7 +525,19 @@ internal sealed class ThumbGalleryView : UIView
         base.Dispose(disposing);
     }
 
-    private readonly record struct PageEntry(UIImageView ImageView, CancellationTokenSource? Cts);
+    private readonly record struct PageEntry(
+        UIImageView ImageView,
+        CancellationTokenSource? Cts,
+        PageLoadState State,
+        string? Source);
+
+    private enum PageLoadState
+    {
+        Empty,
+        Loading,
+        Loaded,
+        Failed
+    }
 }
 
 internal sealed class ThumbScrollDelegate : UIScrollViewDelegate

@@ -81,7 +81,8 @@ public sealed class FullscreenGalleryViewController : UIViewController
         {
             _zoomScrollViews![i].Frame = new CGRect(i * bounds.Width, 0, bounds.Width, bounds.Height);
             _spinners![i].Center       = new CGPoint(bounds.Width / 2, bounds.Height / 2);
-            UpdateZoomScaleForPage(i);
+            if (UpdateZoomScaleForPage(i))
+                _imageViews![i].Hidden = false;
         }
 
         // Restore correct page after bounds change (e.g. rotation)
@@ -98,6 +99,8 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
     public override UIInterfaceOrientationMask GetSupportedInterfaceOrientations()
         => UIInterfaceOrientationMask.All;
+
+    public override bool PrefersStatusBarHidden() => true;
 
     protected override void Dispose(bool disposing)
     {
@@ -151,6 +154,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
                 ContentMode            = UIViewContentMode.ScaleAspectFit,
                 BackgroundColor        = UIColor.Black,
                 UserInteractionEnabled = true,
+                Hidden                 = true,
             };
 
             var zoomSv = new UIScrollView
@@ -218,7 +222,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
         {
             TextColor       = UIColor.White,
             BackgroundColor = UIColor.FromWhiteAlpha(0f, 0.0f),
-            Font            = UIFont.SystemFontOfSize(14f),
+            Font            = UIFont.SystemFontOfSize(14f)!,
             TextAlignment   = UITextAlignment.Left,
         };
         View!.AddSubview(_indicator);
@@ -266,6 +270,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
             _pageCts[i]?.Dispose();
             _pageCts[i] = null;
             _imageViews[i].Image = null;
+            _imageViews[i].Hidden = true;
             _spinners[i].StopAnimating();
             _zoomScrollViews[i].ZoomScale = _zoomScrollViews[i].MinimumZoomScale;
         }
@@ -277,14 +282,15 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
         _pageCts![index]?.Cancel();
         _pageCts[index]?.Dispose();
-        _pageCts[index] = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
+        _pageCts[index] = cts;
 
         _spinners![index].StartAnimating();
 
         var source = _images[index];
 
         if (ImageSourceResolver.IsRemote(source, _isUrl))
-            _ = LoadFromUrlAsync(index, source, _pageCts[index].Token);
+            _ = LoadFromUrlAsync(index, source, cts.Token);
         else
             LoadFromLocal(index, source);
     }
@@ -360,8 +366,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
     {
         _imageViews![index].Image = image;
         _spinners![index].StopAnimating();
-        UpdateZoomScaleForPage(index);
-        CenterImageForPage(index);
+        _imageViews[index].Hidden = !UpdateZoomScaleForPage(index);
     }
 
     private void ApplyPagePlaceholder(int index)
@@ -373,36 +378,41 @@ public sealed class FullscreenGalleryViewController : UIViewController
             if (ph is not null)
             {
                 _imageViews![index].Image = ph;
-                UpdateZoomScaleForPage(index);
-                CenterImageForPage(index);
+                _imageViews[index].Hidden = !UpdateZoomScaleForPage(index);
             }
         }
     }
 
     // ── Zoom ──────────────────────────────────────────────────────────────
 
-    private void UpdateZoomScaleForPage(int index)
+    private bool UpdateZoomScaleForPage(int index)
     {
         var iv = _imageViews![index];
         var sv = _zoomScrollViews![index];
 
-        if (iv.Image is null) return;
-        if (View?.Bounds.IsEmpty ?? true) return;
+        if (iv.Image is null) return false;
+        if (sv.Bounds.IsEmpty) return false;
 
         var imgSize = iv.Image.Size;
-        if (imgSize.Width <= 0 || imgSize.Height <= 0) return;
+        if (imgSize.Width <= 0 || imgSize.Height <= 0) return false;
 
-        var bounds   = View!.Bounds;
-        var scaleW   = bounds.Width  / imgSize.Width;
-        var scaleH   = bounds.Height / imgSize.Height;
+        sv.MinimumZoomScale = 1f;
+        sv.MaximumZoomScale = (nfloat)Math.Max(1f, _maxZoom);
+        sv.ZoomScale = 1f;
+        iv.Frame = new CGRect(CGPoint.Empty, imgSize);
+        sv.ContentSize = imgSize;
+
+        var viewport = sv.Bounds.Size;
+        var scaleW   = viewport.Width  / imgSize.Width;
+        var scaleH   = viewport.Height / imgSize.Height;
         var minScale = (nfloat)Math.Min((double)scaleW, (double)scaleH);
+        if (minScale <= 0) return false;
 
         sv.MinimumZoomScale = minScale;
-        sv.MaximumZoomScale = (nfloat)_maxZoom;
-        sv.ZoomScale        = minScale;
-
-        iv.Frame            = new CGRect(CGPoint.Empty, imgSize);
-        sv.ContentSize      = imgSize;
+        sv.MaximumZoomScale = (nfloat)Math.Max((double)_maxZoom, (double)minScale);
+        sv.SetZoomScale(minScale, false);
+        CenterImageForPage(index);
+        return true;
     }
 
     private void CenterImageForPage(int index)
@@ -410,14 +420,13 @@ public sealed class FullscreenGalleryViewController : UIViewController
         var iv = _imageViews![index];
         var sv = _zoomScrollViews![index];
 
-        var offsetX = (nfloat)Math.Max(
-            (sv.Bounds.Width  - sv.ContentSize.Width)  / 2, 0);
-        var offsetY = (nfloat)Math.Max(
-            (sv.Bounds.Height - sv.ContentSize.Height) / 2, 0);
+        var imageFrame = iv.Frame;
+        var offsetX = (nfloat)Math.Max((sv.Bounds.Width  - imageFrame.Width)  / 2, 0);
+        var offsetY = (nfloat)Math.Max((sv.Bounds.Height - imageFrame.Height) / 2, 0);
 
         iv.Center = new CGPoint(
-            sv.ContentSize.Width  / 2 + offsetX,
-            sv.ContentSize.Height / 2 + offsetY);
+            imageFrame.Width  / 2 + offsetX,
+            imageFrame.Height / 2 + offsetY);
     }
 
     // ── Gestures ──────────────────────────────────────────────────────────
@@ -497,14 +506,13 @@ internal sealed class GalleryZoomScrollDelegate : NSObject, IUIScrollViewDelegat
     {
         _pageScrollView.ScrollEnabled = scrollView.ZoomScale <= scrollView.MinimumZoomScale * 1.01f;
 
-        var offsetX = (nfloat)Math.Max(
-            (scrollView.Bounds.Width  - scrollView.ContentSize.Width)  / 2, 0);
-        var offsetY = (nfloat)Math.Max(
-            (scrollView.Bounds.Height - scrollView.ContentSize.Height) / 2, 0);
+        var imageFrame = _imageView.Frame;
+        var offsetX = (nfloat)Math.Max((scrollView.Bounds.Width  - imageFrame.Width)  / 2, 0);
+        var offsetY = (nfloat)Math.Max((scrollView.Bounds.Height - imageFrame.Height) / 2, 0);
 
         _imageView.Center = new CGPoint(
-            scrollView.ContentSize.Width  / 2 + offsetX,
-            scrollView.ContentSize.Height / 2 + offsetY);
+            imageFrame.Width  / 2 + offsetX,
+            imageFrame.Height / 2 + offsetY);
     }
 }
 
