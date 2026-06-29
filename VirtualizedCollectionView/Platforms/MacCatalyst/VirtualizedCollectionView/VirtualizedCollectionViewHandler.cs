@@ -68,6 +68,7 @@ public sealed class VirtualizedCollectionViewHandler
     private readonly List<NotifyCollectionChangedEventArgs> _pendingChanges = [];
     private bool _flushScheduled;
     private bool _remainingThresholdInsideZone;
+    private bool _remainingThresholdPending;
     private bool _hasLastScrollOffset;
     private bool _lastScrollWasTowardEnd;
     private double _lastScrollX;
@@ -467,15 +468,14 @@ public sealed class VirtualizedCollectionViewHandler
             view.RaiseScrolled(x, y);
 
         if (view.RemainingItemsThreshold >= 0 &&
+            view.CanRaiseRemainingItemsThresholdReached &&
             (_lastScrollWasTowardEnd || _remainingThresholdInsideZone))
-        {
-            CheckRemainingThreshold();
-        }
+            _remainingThresholdPending = true;
     }
 
     private void OnScrollEnded()
     {
-        if (_lastScrollWasTowardEnd || _remainingThresholdInsideZone)
+        if (_remainingThresholdPending || _lastScrollWasTowardEnd || _remainingThresholdInsideZone)
             CheckRemainingThreshold();
     }
 
@@ -486,11 +486,18 @@ public sealed class VirtualizedCollectionViewHandler
     {
         var view = VirtualView;
         var threshold = view?.RemainingItemsThreshold ?? -1;
-        if (threshold < 0 || _dataSource is null || PlatformView is null) return;
+        if (threshold < 0 ||
+            _dataSource is null ||
+            PlatformView is null ||
+            view?.CanRaiseRemainingItemsThresholdReached != true)
+            return;
+
+        _remainingThresholdPending = false;
         var total = _dataSource.Items.Count;
         if (total <= 0)
         {
             _remainingThresholdInsideZone = false;
+            _lastScrollWasTowardEnd = false;
             return;
         }
 
@@ -512,6 +519,7 @@ public sealed class VirtualizedCollectionViewHandler
         if (!insideZone)
         {
             _remainingThresholdInsideZone = false;
+            _lastScrollWasTowardEnd = false;
             return;
         }
 
@@ -519,12 +527,14 @@ public sealed class VirtualizedCollectionViewHandler
             return;
 
         _remainingThresholdInsideZone = true;
+        _lastScrollWasTowardEnd = false;
         view.RaiseRemainingItemsThresholdReached();
     }
 
     private void ResetRemainingThresholdGate()
     {
         _remainingThresholdInsideZone = false;
+        _remainingThresholdPending = false;
         _hasLastScrollOffset = false;
         _lastScrollWasTowardEnd = false;
     }
@@ -645,6 +655,8 @@ internal sealed class VrMauiCell : UICollectionViewCell
             if (_mauiView is not null)
             {
                 _mauiView.MeasureInvalidated -= OnMauiMeasureInvalidated;
+                if (_directView is null)
+                    _mauiView.BindingContext = null;
                 _mauiView.Handler?.DisconnectHandler();
                 _nativeView?.RemoveFromSuperview();
                 _nativeView       = null;
@@ -726,8 +738,6 @@ internal sealed class VrMauiCell : UICollectionViewCell
         base.PrepareForReuse();
         _measureInvalidated = false;
         _layoutStabilized   = false;
-        if (_mauiView is not null && _directView is null)
-            _mauiView.BindingContext = null;
     }
 
     // Self-sizing via CompositionalLayout (CreateEstimated): o UIKit chama este método
@@ -770,7 +780,11 @@ internal sealed class VrMauiCell : UICollectionViewCell
         if (disposing)
         {
             if (_mauiView is not null)
+            {
                 _mauiView.MeasureInvalidated -= OnMauiMeasureInvalidated;
+                if (_directView is null)
+                    _mauiView.BindingContext = null;
+            }
             _mauiView?.Handler?.DisconnectHandler();
             _nativeView?.RemoveFromSuperview();
             _collectionView = null;

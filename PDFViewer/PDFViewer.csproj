@@ -4,7 +4,9 @@
 		<AssemblyName>Agile.Maui.Pdf</AssemblyName>
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.Pdf</PackageId>
-		<Version>1.0.2</Version>
+		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.0.4</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.0.4-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.Pdf</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -18,9 +20,12 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.Pdf</Title>
-		<TargetFrameworks>net11.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net11.0-ios;net11.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net11.0-windows10.0.26100.0</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
@@ -35,10 +40,15 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<PackageIcon>agile.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
 
-	<ItemGroup>
+	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))">
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.71" />
+	</ItemGroup>
+
+	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-preview.5.26304.4" />
 	</ItemGroup>
 
 	<!-- Fonte de ícones do PdfReaderView (Material Design Icons), empacotada e registrada por UseAgilePdfViewer(). -->
@@ -66,6 +76,10 @@
 
 	<ItemGroup>
 	  <None Include="..\agile.png">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	  <None Include="..\README.md">
 	    <Pack>True</Pack>
 	    <PackagePath>\</PackagePath>
 	  </None>

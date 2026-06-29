@@ -33,7 +33,8 @@ Windows without requiring a full custom handler per platform.
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0.
+- .NET MAUI / .NET 10.0 with package `Agile.Maui.SignaturePad` `1.0.4`.
+- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.SignaturePad` `1.0.4-preview.1`.
 - Android API 21+.
 - iOS 15.0+.
 - macOS Catalyst 15.0+.
@@ -42,7 +43,13 @@ Windows without requiring a full custom handler per platform.
 ## Installation
 
 ```powershell
-dotnet add package Agile.Maui.SignaturePad
+dotnet add package Agile.Maui.SignaturePad --version 1.0.4
+```
+
+For .NET 11 preview projects:
+
+```powershell
+dotnet add package Agile.Maui.SignaturePad --version 1.0.4-preview.1
 ```
 
 Register the component in `MauiProgram.cs`:

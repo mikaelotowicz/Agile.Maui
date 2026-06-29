@@ -1,0 +1,31 @@
+<Project>
+
+	<PropertyGroup>
+		<Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+		<PackageOutputPath Condition="'$(PackageOutputPath)' == ''">$(MSBuildThisFileDirectory)nupkgs</PackageOutputPath>
+		<StablePackageVersion>1.0.4</StablePackageVersion>
+		<PreviewPackageVersion>1.0.4-preview.1</PreviewPackageVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackProject Include="ChipGroup\ChipGroup.csproj" />
+		<PackProject Include="GalleryView\GalleryView.csproj" />
+		<PackProject Include="PDFViewer\PDFViewer.csproj" />
+		<PackProject Include="SignaturePad\SignaturePad.csproj" />
+		<PackProject Include="VirtualizedCollectionView\VirtualizedCollectionView.csproj" />
+	</ItemGroup>
+
+	<Target Name="PackStable">
+		<MakeDir Directories="$(PackageOutputPath)" />
+		<Exec Command='dotnet pack "%(PackProject.FullPath)" -c "$(Configuration)" -o "$(PackageOutputPath)" /p:AgilePackageChannel=Stable /p:Version=$(StablePackageVersion) /p:PackageVersion=$(StablePackageVersion)' />
+	</Target>
+
+	<Target Name="PackPreview">
+		<MakeDir Directories="$(PackageOutputPath)" />
+		<Exec Command='dotnet pack "%(PackProject.FullPath)" -c "$(Configuration)" -o "$(PackageOutputPath)" /p:AgilePackageChannel=Preview /p:Version=$(PreviewPackageVersion) /p:PackageVersion=$(PreviewPackageVersion)' />
+	</Target>
+
+	<Target Name="Pack" DependsOnTargets="PackStable;PackPreview">
+	</Target>
+
+</Project>

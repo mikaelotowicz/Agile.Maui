@@ -12,7 +12,7 @@
 [![ChipGroup NuGet](https://img.shields.io/nuget/v/Agile.Maui.ChipGroup?label=Agile.Maui.ChipGroup)](https://www.nuget.org/packages/Agile.Maui.ChipGroup)
 [![SignaturePad NuGet](https://img.shields.io/nuget/v/Agile.Maui.SignaturePad?label=Agile.Maui.SignaturePad)](https://www.nuget.org/packages/Agile.Maui.SignaturePad)
 
-![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
+![.NET](https://img.shields.io/badge/.NET-10.0%20%7C%2011.0--preview-512BD4)
 ![MAUI](https://img.shields.io/badge/MAUI-supported-512BD4)
 ![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20Catalyst%20%7C%20Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -54,7 +54,8 @@ Each module can be installed separately, so the app consumes only what it uses.
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0.
+- .NET MAUI / .NET 10.0 for the stable packages (`1.0.4`).
+- .NET MAUI / .NET 11.0 preview for the preview packages (`1.0.4-preview.1`).
 - Android, iOS, macOS Catalyst, or Windows.
 - Registration of the package used in `MauiProgram.cs`.
 
@@ -77,11 +78,21 @@ active solution.
 Install only the packages your application actually uses:
 
 ```powershell
-dotnet add package Agile.Maui.Gallery
-dotnet add package Agile.Maui.Pdf
-dotnet add package Agile.Maui.VirtualizedCollection
-dotnet add package Agile.Maui.ChipGroup
-dotnet add package Agile.Maui.SignaturePad
+dotnet add package Agile.Maui.Gallery --version 1.0.4
+dotnet add package Agile.Maui.Pdf --version 1.0.4
+dotnet add package Agile.Maui.VirtualizedCollection --version 1.0.4
+dotnet add package Agile.Maui.ChipGroup --version 1.0.4
+dotnet add package Agile.Maui.SignaturePad --version 1.0.4
+```
+
+For .NET 11 preview projects, use the preview package channel:
+
+```powershell
+dotnet add package Agile.Maui.Gallery --version 1.0.4-preview.1
+dotnet add package Agile.Maui.Pdf --version 1.0.4-preview.1
+dotnet add package Agile.Maui.VirtualizedCollection --version 1.0.4-preview.1
+dotnet add package Agile.Maui.ChipGroup --version 1.0.4-preview.1
+dotnet add package Agile.Maui.SignaturePad --version 1.0.4-preview.1
 ```
 
 Then register the handlers in `MauiProgram.cs`:
@@ -172,9 +183,24 @@ PROFILING.md
 dotnet build
 dotnet build -f net10.0-android
 dotnet build -f net10.0-ios
+dotnet build -f net10.0-maccatalyst
 dotnet build -f net11.0-maccatalyst
 dotnet build -f net10.0-windows10.0.19041.0
+dotnet build -f net11.0-windows10.0.26100.0
 ```
+
+## Package generation
+
+Generate the stable .NET 10 packages and the .NET 11 preview packages with one command:
+
+```powershell
+dotnet pack Agile.Maui.PackAll.proj -c Release
+```
+
+Packages are written to `nupkgs/` at the repository root. The command produces:
+
+- `1.0.4`: stable packages for .NET 10 projects.
+- `1.0.4-preview.1`: preview packages for .NET 10 and .NET 11 preview projects.
 
 ## Additional documentation
 

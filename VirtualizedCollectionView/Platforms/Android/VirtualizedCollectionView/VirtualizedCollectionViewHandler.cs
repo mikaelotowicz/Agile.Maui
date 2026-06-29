@@ -64,6 +64,8 @@ public sealed class VirtualizedCollectionViewHandler
     private CachingLinearLayoutManager? _cachingLm;
     private VrRecyclerListener?         _recyclerListener;
     private bool                        _remainingThresholdInsideZone;
+    private bool                        _remainingThresholdPending;
+    private bool                        _lastScrollWasTowardEnd;
     private readonly List<PendingCollectionChange> _pendingChanges = [];
     private bool                        _flushScheduled;
     // Coalescing de ItemsSource + ItemTemplate + ItemHeight: todos disparam no connect
@@ -102,7 +104,7 @@ public sealed class VirtualizedCollectionViewHandler
         // imediatamente após ConnectHandler, cobrindo a carga inicial sem duplicação.
         ApplyCacheSizes();
 
-        _scrollListener = new VrScrollListener(OnScrolled);
+        _scrollListener = new VrScrollListener(OnScrolled, OnScrollStateChanged);
         platformView.Rv.AddOnScrollListener(_scrollListener);
 
         _recyclerListener = new VrRecyclerListener(Context!);
@@ -602,11 +604,23 @@ public sealed class VirtualizedCollectionViewHandler
                 Context.FromPixels(rv.ComputeVerticalScrollOffset()));
         }
 
-        if (VirtualView.RemainingItemsThreshold >= 0 &&
-            (IsScrollingTowardEnd(dx, dy) || _remainingThresholdInsideZone))
-        {
+        if (VirtualView.RemainingItemsThreshold < 0 ||
+            !VirtualView.CanRaiseRemainingItemsThresholdReached)
+            return;
+
+        var towardEnd = IsScrollingTowardEnd(dx, dy);
+        if (towardEnd)
+            _lastScrollWasTowardEnd = true;
+
+        if (towardEnd || _remainingThresholdInsideZone)
+            _remainingThresholdPending = true;
+    }
+
+    private void OnScrollStateChanged(int newState)
+    {
+        if (newState == RecyclerView.ScrollStateIdle &&
+            (_remainingThresholdPending || _lastScrollWasTowardEnd || _remainingThresholdInsideZone))
             CheckRemainingThreshold();
-        }
     }
 
     private bool IsScrollingTowardEnd(int dx, int dy) =>
@@ -615,11 +629,18 @@ public sealed class VirtualizedCollectionViewHandler
     private void CheckRemainingThreshold()
     {
         var threshold = VirtualView.RemainingItemsThreshold;
-        if (threshold < 0 || _adapter is null || PlatformView is null) return;
+        if (threshold < 0 ||
+            _adapter is null ||
+            PlatformView is null ||
+            !VirtualView.CanRaiseRemainingItemsThresholdReached)
+            return;
+
+        _remainingThresholdPending = false;
         var total = _adapter.DataItemCount;
         if (total <= 0)
         {
             _remainingThresholdInsideZone = false;
+            _lastScrollWasTowardEnd = false;
             return;
         }
 
@@ -630,6 +651,7 @@ public sealed class VirtualizedCollectionViewHandler
         if (!insideZone)
         {
             _remainingThresholdInsideZone = false;
+            _lastScrollWasTowardEnd = false;
             return;
         }
 
@@ -637,10 +659,16 @@ public sealed class VirtualizedCollectionViewHandler
             return;
 
         _remainingThresholdInsideZone = true;
+        _lastScrollWasTowardEnd = false;
         VirtualView.RaiseRemainingItemsThresholdReached();
     }
 
-    private void ResetRemainingThresholdGate() => _remainingThresholdInsideZone = false;
+    private void ResetRemainingThresholdGate()
+    {
+        _remainingThresholdInsideZone = false;
+        _remainingThresholdPending = false;
+        _lastScrollWasTowardEnd = false;
+    }
 
     private static void MapScrollTo(
         VirtualizedCollectionViewHandler handler,
@@ -1327,6 +1355,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
                 foreach (var h in _allHolders)
                 {
                     h.CancelHeavyBind();
+                    h.MauiView.BindingContext = null;
                     h.MauiView.Handler?.DisconnectHandler();
                 }
                 _allHolders.Clear();
@@ -1527,10 +1556,23 @@ internal sealed class VrViewHolder : RecyclerView.ViewHolder
 internal sealed class VrScrollListener : RecyclerView.OnScrollListener
 {
     private readonly Action<int, int> _onScrolled;
-    public VrScrollListener(Action<int, int> onScrolled) => _onScrolled = onScrolled;
+    private readonly Action<int>      _onScrollStateChanged;
+
+    public VrScrollListener(Action<int, int> onScrolled, Action<int> onScrollStateChanged)
+    {
+        _onScrolled = onScrolled;
+        _onScrollStateChanged = onScrollStateChanged;
+    }
+
     public VrScrollListener(IntPtr handle, JniHandleOwnership transfer)
-        : base(handle, transfer) => _onScrolled = static (_, _) => { };
+        : base(handle, transfer)
+    {
+        _onScrolled = static (_, _) => { };
+        _onScrollStateChanged = static _ => { };
+    }
+
     public override void OnScrolled(RecyclerView recyclerView, int dx, int dy) => _onScrolled(dx, dy);
+    public override void OnScrollStateChanged(RecyclerView recyclerView, int newState) => _onScrollStateChanged(newState);
 }
 
 // RecyclerView que força clipping ao canvas em DispatchDraw. Backup à prova de falhas:
@@ -1583,7 +1625,6 @@ internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyc
 
             if (_context is not null && vh.ItemView is global::Android.Widget.ImageView)
                 Glide.With(_context).Clear(vh.ItemView);
-            vh.MauiView.BindingContext = null;
         }
     }
 }

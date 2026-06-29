@@ -7,10 +7,22 @@ Assembly: `Agile.Maui.ChipGroup`
 C# namespace: `Agile.Maui`  
 Registration: `builder.UseAgileChipGroup()`
 
+## Requirements
+
+- .NET MAUI / .NET 10.0 with package `Agile.Maui.ChipGroup` `1.0.4`.
+- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.ChipGroup` `1.0.4-preview.1`.
+- Android, iOS, macOS Catalyst, or Windows.
+
 ## Installation
 
 ```powershell
-dotnet add package Agile.Maui.ChipGroup
+dotnet add package Agile.Maui.ChipGroup --version 1.0.4
+```
+
+For .NET 11 preview projects:
+
+```powershell
+dotnet add package Agile.Maui.ChipGroup --version 1.0.4-preview.1
 ```
 
 ```csharp
