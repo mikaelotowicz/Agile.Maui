@@ -125,5 +125,7 @@ The page calls `GetSignatureData()` for stroke/point/duration metrics and
 ```powershell
 dotnet build sample/sample.csproj
 dotnet build sample/sample.csproj -f net10.0-windows10.0.19041.0
+dotnet build sample/sample.csproj -f net11.0-windows10.0.26100.0
 dotnet build sample/sample.csproj -f net10.0-android
+dotnet build sample/sample.csproj -f net11.0-android
 ```

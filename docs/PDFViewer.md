@@ -49,7 +49,8 @@ thumbnails and navigation.
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0.
+- .NET MAUI / .NET 10.0 with package `Agile.Maui.Pdf` `1.0.4`.
+- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.Pdf` `1.0.4-preview.1`.
 - Android API 21+.
 - iOS 15.0+.
 - macOS Catalyst 15.0+.
@@ -60,7 +61,13 @@ thumbnails and navigation.
 ### 1. Install the package
 
 ```powershell
-dotnet add package Agile.Maui.Pdf
+dotnet add package Agile.Maui.Pdf --version 1.0.4
+```
+
+For .NET 11 preview projects:
+
+```powershell
+dotnet add package Agile.Maui.Pdf --version 1.0.4-preview.1
 ```
 
 ### 2. Register the handler
@@ -505,8 +512,10 @@ Viewer.LinkTapped += async (sender, e) =>
 dotnet build PDFViewer\PDFViewer.csproj
 dotnet build PDFViewer\PDFViewer.csproj -f net10.0-android
 dotnet build PDFViewer\PDFViewer.csproj -f net10.0-ios
+dotnet build PDFViewer\PDFViewer.csproj -f net10.0-maccatalyst
 dotnet build PDFViewer\PDFViewer.csproj -f net11.0-maccatalyst
 dotnet build PDFViewer\PDFViewer.csproj -f net10.0-windows10.0.19041.0
+dotnet build PDFViewer\PDFViewer.csproj -f net11.0-windows10.0.26100.0
 ```
 
 ## When to use each control
