@@ -3,8 +3,8 @@
 	<PropertyGroup>
 		<Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
 		<PackageOutputPath Condition="'$(PackageOutputPath)' == ''">$(MSBuildThisFileDirectory)nupkgs</PackageOutputPath>
-		<StablePackageVersion>1.0.4</StablePackageVersion>
-		<PreviewPackageVersion>1.0.4-preview.1</PreviewPackageVersion>
+		<StablePackageVersion>1.0.5</StablePackageVersion>
+		<PreviewPackageVersion>1.0.5-preview.1</PreviewPackageVersion>
 	</PropertyGroup>
 
 	<ItemGroup>

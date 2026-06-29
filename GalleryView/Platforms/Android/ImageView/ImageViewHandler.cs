@@ -1,4 +1,5 @@
 // Platforms/Android/ZoomImageViewHandler.cs
+using Android.Views;
 using Android.Widget;
 using Bumptech.Glide;
 using Bumptech.Glide.Load.Engine;
@@ -8,7 +9,7 @@ using Agile.Maui;
 
 namespace Agile.Maui.Platforms.Android;
 
-public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Widget.ImageView>
+public sealed class ImageViewHandler : ViewHandler<ImageView, ImageViewContainer>
 {
     public static readonly PropertyMapper<ImageView, ImageViewHandler> Mapper =
         new(ViewMapper)
@@ -27,16 +28,10 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
     private bool _disposed;
     private ImgGlideRequestListener? _glideListener;
 
-    protected override global::Android.Widget.ImageView CreatePlatformView()
-    {
-        return new global::Android.Widget.ImageView(Context)
-        {
-            Clickable = false,
-            Focusable = false,
-        };
-    }
+    protected override ImageViewContainer CreatePlatformView()
+        => new(Context);
 
-    protected override void ConnectHandler(global::Android.Widget.ImageView platformView)
+    protected override void ConnectHandler(ImageViewContainer platformView)
     {
         base.ConnectHandler(platformView);
         _disposed = false;
@@ -49,7 +44,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
         LoadImage();
     }
 
-    protected override void DisconnectHandler(global::Android.Widget.ImageView platformView)
+    protected override void DisconnectHandler(ImageViewContainer platformView)
     {
         _disposed = true;
         VirtualView?.SetIsLoading(false);
@@ -57,7 +52,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
 
         try
         {
-            Glide.With(platformView).Clear(platformView);
+            Glide.With(platformView.Image).Clear(platformView.Image);
         }
         catch (Exception ex)
         {
@@ -65,7 +60,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
                 $"[ZoomImageViewHandler] Glide.Clear error: {ex.Message}");
         }
 
-        platformView.SetImageDrawable(null);
+        platformView.Foreground = null;
+        platformView.Image.SetImageDrawable(null);
         _glideListener?.Dispose();
         _glideListener = null;
         base.DisconnectHandler(platformView);
@@ -74,7 +70,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
     private void ApplyScaleType()
     {
         if (PlatformView is null) return;
-        PlatformView.SetScaleType(
+        PlatformView.Image.SetScaleType(
             VirtualView.AspectMode == ZoomImageAspect.CenterCrop
                 ? global::Android.Widget.ImageView.ScaleType.CenterCrop
                 : global::Android.Widget.ImageView.ScaleType.FitCenter);
@@ -87,6 +83,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
         var enabled = VirtualView.EnableFullscreen;
         PlatformView.Clickable = enabled;
         PlatformView.Focusable = enabled;
+        PlatformView.Image.Clickable = false;
+        PlatformView.Image.Focusable = false;
 
         if (!OperatingSystem.IsAndroidVersionAtLeast(23))
             return;
@@ -106,11 +104,12 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
     private void LoadImage()
     {
         if (_disposed || PlatformView is null) return;
+        var imageView = PlatformView.Image;
 
         if (string.IsNullOrWhiteSpace(VirtualView.Source))
         {
             // Cancela qualquer request pendente antes de limpar
-            try { Glide.With(PlatformView).Clear(PlatformView); }
+            try { Glide.With(imageView).Clear(imageView); }
             catch { /* ignora */ }
             ApplyPlaceholderFallback();
             VirtualView.SetIsLoading(false);
@@ -121,7 +120,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
         VirtualView.SetIsLoading(true);
 
         AndroidImageLoader.LoadInto(
-            PlatformView,
+            imageView,
             VirtualView.Source,
             options,
             _glideListener,
@@ -149,11 +148,13 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
 
     private void ApplyPlaceholderFallback()
     {
+        if (PlatformView is null) return;
+
         var placeholderId = AndroidImageLoader.ResolveDrawable(Context, VirtualView.Placeholder);
         if (placeholderId != 0)
-            PlatformView.SetImageResource(placeholderId);
+            PlatformView.Image.SetImageResource(placeholderId);
         else
-            PlatformView.SetImageDrawable(null);
+            PlatformView.Image.SetImageDrawable(null);
     }
 
     private void OnImageClick(object? sender, EventArgs e)
@@ -182,6 +183,74 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, global::Android.Wi
     }
 }
 
+public sealed class ImageViewContainer : FrameLayout
+{
+    public global::Android.Widget.ImageView Image { get; }
+
+    public ImageViewContainer(global::Android.Content.Context context) : base(context)
+    {
+        SetClipChildren(true);
+        SetClipToPadding(true);
+
+        Image = new global::Android.Widget.ImageView(context)
+        {
+            LayoutParameters = new LayoutParams(
+                ViewGroup.LayoutParams.MatchParent,
+                ViewGroup.LayoutParams.MatchParent),
+            Clickable = false,
+            Focusable = false,
+        };
+
+        Image.SetAdjustViewBounds(false);
+        Image.SetPadding(0, 0, 0, 0);
+
+        AddView(Image);
+    }
+
+    protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
+    {
+        var widthMode = MeasureSpec.GetMode(widthMeasureSpec);
+        var heightMode = MeasureSpec.GetMode(heightMeasureSpec);
+
+        if (widthMode == MeasureSpecMode.Exactly && heightMode == MeasureSpecMode.Exactly)
+        {
+            SetMeasuredDimension(
+                MeasureSpec.GetSize(widthMeasureSpec),
+                MeasureSpec.GetSize(heightMeasureSpec));
+        }
+        else
+        {
+            base.OnMeasure(widthMeasureSpec, heightMeasureSpec);
+        }
+
+        var width = MeasuredWidth;
+        var height = MeasuredHeight;
+        if (width <= 0 || height <= 0) return;
+
+        MeasureImageExactly(width, height);
+    }
+
+    protected override void OnLayout(bool changed, int left, int top, int right, int bottom)
+    {
+        var width = Math.Max(0, right - left);
+        var height = Math.Max(0, bottom - top);
+
+        if (Image.MeasuredWidth != width || Image.MeasuredHeight != height)
+        {
+            MeasureImageExactly(width, height);
+        }
+
+        Image.Layout(0, 0, width, height);
+    }
+
+    private void MeasureImageExactly(int width, int height)
+    {
+        Image.Measure(
+            MeasureSpec.MakeMeasureSpec(width, MeasureSpecMode.Exactly),
+            MeasureSpec.MakeMeasureSpec(height, MeasureSpecMode.Exactly));
+    }
+}
+
 // ── Helper interno ────────────────────────────────────────────────────────
 
 internal sealed class ImgGlideRequestListener
@@ -200,7 +269,7 @@ internal sealed class ImgGlideRequestListener
         Java.Lang.Object? resource,
         Java.Lang.Object? model,
         Bumptech.Glide.Request.Target.ITarget? target,
-        Bumptech.Glide.Load.DataSource dataSource,
+        Bumptech.Glide.Load.DataSource? dataSource,
         bool isFirstResource)
     {
         _onReady();

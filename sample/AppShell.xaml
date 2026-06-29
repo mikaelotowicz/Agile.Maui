@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:sample"
+    Title="Agile"
     BackgroundColor="{StaticResource SurfaceLight}"
     FlyoutBackgroundColor="{StaticResource SurfaceLight}"
     FlyoutBehavior="Flyout"
@@ -13,8 +14,7 @@
     Shell.FlyoutBackgroundColor="{StaticResource SurfaceLight}"
     Shell.ForegroundColor="{StaticResource White}"
     Shell.TitleColor="{StaticResource White}"
-    Shell.UnselectedColor="{StaticResource OnSurfaceVariantLight}"
-    Title="Agile">
+    Shell.UnselectedColor="{StaticResource OnSurfaceVariantLight}">
 
     <Shell.FlyoutHeader>
         <Grid
@@ -23,19 +23,17 @@
             RowDefinitions="Auto,Auto,Auto">
 
             <Border
-                WidthRequest="96"
-                HeightRequest="96"
                 Padding="12"
                 BackgroundColor="{StaticResource SurfaceLight}"
+                HeightRequest="96"
                 HorizontalOptions="Start"
-                StrokeThickness="0">
+                StrokeThickness="0"
+                WidthRequest="96">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="24" />
                 </Border.StrokeShape>
 
-                <Image
-                    Aspect="AspectFit"
-                    Source="agile.png" />
+                <Image Aspect="AspectFit" Source="agile.png" />
             </Border>
 
             <Label
@@ -79,44 +77,74 @@
         </DataTemplate>
     </Shell.ItemTemplate>
 
-    <ShellContent Title="Gallery View" Route="MainPage" ContentTemplate="{DataTemplate local:MainPage}">
+    <ShellContent
+        Title="Gallery View"
+        ContentTemplate="{DataTemplate local:MainPage}"
+        Route="MainPage">
         <ShellContent.Icon>
-            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuHome}"
+            <FontImageSource
+                FontFamily="{x:Static local:Icons.FontFamily}"
+                Glyph="{x:Static local:Icons.MenuHome}"
                 Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 
-    <ShellContent Title="PDF Viewer" Route="ReaderDemoPage" ContentTemplate="{DataTemplate local:ReaderDemoPage}">
+    <ShellContent
+        Title="PDF Viewer"
+        ContentTemplate="{DataTemplate local:ReaderDemoPage}"
+        Route="ReaderDemoPage">
         <ShellContent.Icon>
-            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuPdf}"
+            <FontImageSource
+                FontFamily="{x:Static local:Icons.FontFamily}"
+                Glyph="{x:Static local:Icons.MenuPdf}"
                 Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 
-    <ShellContent Title="Virtualized Collection" Route="VirtualizedListPage" ContentTemplate="{DataTemplate local:VirtualizedListPage}">
+    <ShellContent
+        Title="Virtualized Collection"
+        ContentTemplate="{DataTemplate local:VirtualizedListPage}"
+        Route="VirtualizedListPage">
         <ShellContent.Icon>
-            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuList}"
+            <FontImageSource
+                FontFamily="{x:Static local:Icons.FontFamily}"
+                Glyph="{x:Static local:Icons.MenuList}"
                 Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 
-    <ShellContent Title="Collection Benchmark" Route="CollectionBenchmarkPage" ContentTemplate="{DataTemplate local:CollectionBenchmarkPage}">
+    <ShellContent
+        Title="Collection Benchmark"
+        ContentTemplate="{DataTemplate local:CollectionBenchmarkPage}"
+        Route="CollectionBenchmarkPage">
         <ShellContent.Icon>
-            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuList}"
+            <FontImageSource
+                FontFamily="{x:Static local:Icons.FontFamily}"
+                Glyph="{x:Static local:Icons.MenuList}"
                 Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 
-    <ShellContent Title="ChipGroup" Route="ChipGroupPage" ContentTemplate="{DataTemplate local:ChipGroupPage}">
+    <ShellContent
+        Title="ChipGroup"
+        ContentTemplate="{DataTemplate local:ChipGroupPage}"
+        Route="ChipGroupPage">
         <ShellContent.Icon>
-            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuChips}"
+            <FontImageSource
+                FontFamily="{x:Static local:Icons.FontFamily}"
+                Glyph="{x:Static local:Icons.MenuChips}"
                 Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>
 
-    <ShellContent Title="SignaturePad" Route="SignaturePadPage" ContentTemplate="{DataTemplate local:SignaturePadPage}">
+    <ShellContent
+        Title="SignaturePad"
+        ContentTemplate="{DataTemplate local:SignaturePadPage}"
+        Route="SignaturePadPage">
         <ShellContent.Icon>
-            <FontImageSource FontFamily="{x:Static local:Icons.FontFamily}" Glyph="{x:Static local:Icons.MenuSignature}"
+            <FontImageSource
+                FontFamily="{x:Static local:Icons.FontFamily}"
+                Glyph="{x:Static local:Icons.MenuSignature}"
                 Color="{StaticResource OnSurfaceLight}" />
         </ShellContent.Icon>
     </ShellContent>

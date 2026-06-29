@@ -10,9 +10,7 @@
 
     <ContentPage.Resources>
         <DataTemplate x:Key="BenchmarkItemTemplate" x:DataType="local:ProductItem">
-            <Grid
-                Padding="8,5"
-                HeightRequest="136">
+            <Grid Padding="8,5" HeightRequest="136">
                 <Border
                     Padding="10,8"
                     BackgroundColor="{StaticResource SurfaceLight}"
@@ -28,8 +26,8 @@
                         RowDefinitions="Auto,Auto,Auto,Auto"
                         RowSpacing="4">
                         <Border
-                            Grid.Column="0"
                             Grid.RowSpan="4"
+                            Grid.Column="0"
                             BackgroundColor="{StaticResource Secondary}"
                             HeightRequest="44"
                             StrokeThickness="0"
@@ -48,8 +46,8 @@
                         </Border>
 
                         <HorizontalStackLayout
-                            Grid.Column="1"
                             Grid.Row="0"
+                            Grid.Column="1"
                             Spacing="6">
                             <Border
                                 Padding="7,2"
@@ -84,8 +82,8 @@
                         </HorizontalStackLayout>
 
                         <Label
-                            Grid.Column="1"
                             Grid.Row="1"
+                            Grid.Column="1"
                             FontAttributes="Bold"
                             FontSize="15"
                             LineBreakMode="TailTruncation"
@@ -93,8 +91,8 @@
                             Text="{Binding Name}" />
 
                         <Label
-                            Grid.Column="1"
                             Grid.Row="2"
+                            Grid.Column="1"
                             FontSize="12"
                             LineBreakMode="TailTruncation"
                             MaxLines="2"
@@ -102,8 +100,8 @@
                             TextColor="{StaticResource OnSurfaceVariantLight}" />
 
                         <HorizontalStackLayout
-                            Grid.Column="1"
                             Grid.Row="3"
+                            Grid.Column="1"
                             Spacing="10">
                             <Label
                                 FontSize="11"
@@ -120,8 +118,8 @@
                         </HorizontalStackLayout>
 
                         <VerticalStackLayout
-                            Grid.Column="2"
                             Grid.RowSpan="4"
+                            Grid.Column="2"
                             Spacing="2"
                             VerticalOptions="Center">
                             <Label
@@ -135,9 +133,7 @@
                                 HorizontalTextAlignment="End"
                                 Text="{Binding RatingText}"
                                 TextColor="{StaticResource Warning}" />
-                            <BoxView
-                                Margin="0,3"
-                                HeightRequest="1" />
+                            <BoxView Margin="0,3" HeightRequest="1" />
                             <Label
                                 FontSize="10"
                                 HorizontalTextAlignment="End"
@@ -161,7 +157,7 @@
             Padding="12,10"
             BackgroundColor="{StaticResource SurfaceLight}"
             Stroke="{StaticResource OutlineLight}"
-            StrokeThickness="0,0,0,1">
+            StrokeThickness="1">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                 <VerticalStackLayout Spacing="1">
                     <Label
@@ -195,37 +191,37 @@
                         x:Name="RunButton"
                         Grid.Row="0"
                         Grid.Column="0"
+                        Padding="10,0"
                         Clicked="OnRunClicked"
                         HeightRequest="36"
-                        Padding="10,0"
                         Text="Jump" />
 
                     <Button
                         x:Name="ManualCollectionButton"
                         Grid.Row="0"
                         Grid.Column="1"
+                        Padding="10,0"
                         Clicked="OnManualCollectionClicked"
                         HeightRequest="36"
-                        Padding="10,0"
                         Text="CV 10s" />
 
                     <Button
                         x:Name="ManualVirtualizedButton"
                         Grid.Row="1"
                         Grid.Column="0"
+                        Padding="10,0"
                         Clicked="OnManualVirtualizedClicked"
                         HeightRequest="36"
-                        Padding="10,0"
                         Text="VCV 10s" />
 
                     <Button
                         x:Name="ResetButton"
                         Grid.Row="1"
                         Grid.Column="1"
+                        Padding="10,0"
                         BackgroundColor="{StaticResource Gray200}"
                         Clicked="OnResetClicked"
                         HeightRequest="36"
-                        Padding="10,0"
                         Text="Reset"
                         TextColor="{StaticResource OnSurfaceLight}" />
                 </Grid>
