@@ -484,7 +484,10 @@ public sealed class VirtualizedCollectionViewHandler
         if (view.RemainingItemsThreshold >= 0 &&
             view.CanRaiseRemainingItemsThresholdReached &&
             (_lastScrollWasTowardEnd || _remainingThresholdInsideZone))
+        {
             _remainingThresholdPending = true;
+            CheckRemainingThreshold();
+        }
     }
 
     private void OnScrollEnded()

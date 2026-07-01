@@ -121,10 +121,10 @@
                                     WidthRequest="76">
                                     <gallery:ImageView
                                         AspectMode="CenterCrop"
+                                        DecodeMaxPx="128"
                                         EnableFullscreen="True"
                                         FullscreenSource="{Binding FullImageUrl}"
                                         HeightRequest="76"
-                                        IsUrl="True"
                                         Source="{Binding ImageUrl}"
                                         WidthRequest="76" />
                                 </Border>

@@ -613,7 +613,10 @@ public sealed class VirtualizedCollectionViewHandler
             _lastScrollWasTowardEnd = true;
 
         if (towardEnd || _remainingThresholdInsideZone)
+        {
             _remainingThresholdPending = true;
+            CheckRemainingThreshold();
+        }
     }
 
     private void OnScrollStateChanged(int newState)
