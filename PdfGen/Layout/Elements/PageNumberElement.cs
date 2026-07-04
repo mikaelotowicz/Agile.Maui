@@ -27,14 +27,14 @@ public sealed class PageNumberElement : Element
 
     public override PdfSize Measure(PdfSize available)
     {
-        float width = _style.Font.MeasureWidth(CurrentText(), _style.FontSize);
+        float width = _style.MeasureWidth(CurrentText());
         return new PdfSize(available.IsWidthConstrained ? available.Width : width, _style.LineSpacing);
     }
 
     public override void Render(IRenderContext context)
     {
         string text = CurrentText();
-        float w = _style.Font.MeasureWidth(text, _style.FontSize);
+        float w = _style.MeasureWidth(text);
         var line = new TextLine(text, w);
         SingleLineElement.DrawLine(context, line, _style, _align, Bounds.Left, Bounds.Top, Bounds.Width);
     }

@@ -8,11 +8,13 @@ public readonly struct TextLine
 {
     public readonly string Text;
     public readonly float Width;
+    public readonly bool CanJustify;
 
-    public TextLine(string text, float width)
+    public TextLine(string text, float width, bool canJustify = false)
     {
         Text = text;
         Width = width;
+        CanJustify = canJustify;
     }
 }
 
@@ -85,7 +87,7 @@ internal static class TextLayout
             }
             else
             {
-                result.Add(new TextLine(current.ToString(), currentWidth));
+                result.Add(new TextLine(current.ToString(), currentWidth, canJustify: true));
                 current.Clear();
 
                 if (wordWidth > maxWidth && maxWidth > 0f)
@@ -116,16 +118,29 @@ internal static class TextLayout
         var chunk = new System.Text.StringBuilder();
         float chunkWidth = 0f;
 
-        foreach (char c in word)
+        for (int i = 0; i < word.Length; i++)
         {
-            float cw = style.GlyphWidth(c) / 1000f * style.FontSize;
+            int codepoint = word[i];
+            string glyphText;
+            if (char.IsHighSurrogate(word[i]) && i + 1 < word.Length && char.IsLowSurrogate(word[i + 1]))
+            {
+                codepoint = char.ConvertToUtf32(word[i], word[i + 1]);
+                glyphText = word.Substring(i, 2);
+                i++;
+            }
+            else
+            {
+                glyphText = word[i].ToString();
+            }
+
+            float cw = style.GlyphWidth(codepoint) / 1000f * style.FontSize;
             if (chunk.Length > 0 && chunkWidth + cw > maxWidth)
             {
                 result.Add(new TextLine(chunk.ToString(), chunkWidth));
                 chunk.Clear();
                 chunkWidth = 0f;
             }
-            chunk.Append(c);
+            chunk.Append(glyphText);
             chunkWidth += cw;
         }
 

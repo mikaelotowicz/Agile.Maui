@@ -1,115 +1,215 @@
-using System.IO.Compression;
 using Agile.Maui.PdfGen.Api;
 using Agile.Maui.PdfGen.Layout.Elements;
 using Agile.Maui.PdfGen.Primitives;
 using Agile.Maui.PdfGen.Text;
+using System.Globalization;
 
-// Exemplo executável: gera um pedido de venda em PDF (e o mesmo documento em SVG),
-// demonstrando fonte embutida + Unicode, gradientes e imagem PNG com transparência.
+// Exemplo executavel: gera uma proposta comercial premium em PDF e SVG.
+// Demonstra fonte embutida, Unicode, gradientes, tabela, paginacao e agile.png.
 // Uso: dotnet run --project PdfGen.Sample [caminho-de-saida.pdf]
 
 string outPath = args.Length > 0
     ? args[0]
     : Path.Combine(Directory.GetCurrentDirectory(), "pedido.pdf");
 
-var blue = PdfColor.FromHex("#0D6EFD");
-var deepBlue = PdfColor.FromHex("#0A3D91");
-var zebra = PdfColor.FromHex("#F8F9FA");
+var midnight = PdfColor.FromHex("#0B1020");
+var royal = PdfColor.FromHex("#2563EB");
+var cyan = PdfColor.FromHex("#18C5F4");
+var violet = PdfColor.FromHex("#7C3AED");
+var ink = PdfColor.FromHex("#111827");
+var muted = PdfColor.FromHex("#6B7280");
+var line = PdfColor.FromHex("#D7DEE8");
+var soft = PdfColor.FromHex("#F5F7FB");
+var softBlue = PdfColor.FromHex("#EAF4FF");
+var success = PdfColor.FromHex("#10B981");
+var brasil = CultureInfo.GetCultureInfo("pt-BR");
 
-// Fonte embutida (opcional): se não achar uma fonte do sistema, usa as base-14.
 EmbeddedFont? fonte = TentarCarregarFonteSistema();
-byte[] logo = GerarLogoPng(56);
+byte[] logo = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "agile.png"));
+
+var itens = new[]
+{
+    new Item("Licenca Agile.Maui.PdfGen Enterprise", "Geracao de PDFs, SVG, fontes embutidas e layout fluente", 1, 2450m),
+    new Item("Suite de templates comerciais", "Pedido, proposta, demonstrativo e recibo com identidade visual", 1, 3150m),
+    new Item("Implantacao assistida premium", "Integracao, treinamento tecnico e suporte prioritario por 90 dias", 1, 1590m),
+};
+
+decimal subtotal = itens.Sum(i => i.Total);
+decimal desconto = 640m;
+decimal total = subtotal - desconto;
 
 PdfDocument documento = PdfDocument.Create(doc =>
 {
     doc.Page(page =>
     {
         page.Size(PageSizes.A4);
-        page.Margin(36);
-        page.DefaultTextStyle(new TextStyle(fontSize: 11));
+        page.Margin(32);
+        page.DefaultTextStyle(new TextStyle(fontSize: 10.5f));
+        page.BackgroundColor(PdfColor.FromHex("#FBFCFE"));
 
-        // Cabeçalho com fundo em gradiente e logo PNG (com transparência).
         page.Header()
-            .Background(GradientBrush.Linear(deepBlue, blue, 0f), cornerRadius: 8f)
+            .Background(GradientBrush.Linear(midnight, royal, 0f), cornerRadius: 10f)
             .Padding(14)
-            .Row(row =>
+            .Column(header =>
             {
-                row.ConstantItem(56).AlignMiddle().Image(logo, ImageFit.Contain, HorizontalAlignment.Left);
-                row.RelativeItem().Column(col =>
+                header.Spacing(10);
+
+                header.Item().Row(row =>
                 {
-                    AplicarFonte(col.Item().Text("Pedido de Venda").Bold().FontSize(22).FontColor(Colors.White));
-                    AplicarFonte(col.Item().Text("Sistema Versátil — Agile.Maui.PdfGen").FontColor(Colors.White).FontSize(9));
+                    row.Spacing(14);
+                    row.ConstantItem(68).Image(logo, ImageFit.Contain, HorizontalAlignment.Left);
+                    row.RelativeItem().Column(col =>
+                    {
+                        col.Spacing(3);
+                        Txt(col.Item().Text("PROPOSTA COMERCIAL").FontSize(9).FontColor(PdfColor.FromHex("#B9E6FF")));
+                        Txt(col.Item().Text("Agile.Maui.PdfGen Enterprise").Bold().FontSize(22).FontColor(Colors.White));
+                        Txt(col.Item().Text("Documento executivo para implantacao de geracao de PDF premium").FontSize(9.2f).FontColor(PdfColor.FromHex("#D9E8FF")));
+                    });
+                    row.ConstantItem(112)
+                        .Background(new PdfColor(255, 255, 255, 26), cornerRadius: 8f)
+                        .Border(0.7f, new PdfColor(255, 255, 255, 80), cornerRadius: 8f)
+                        .Padding(8)
+                        .Column(col =>
+                        {
+                            col.Spacing(2);
+                            Txt(col.Item().Text("VALIDADE").FontSize(8).FontColor(PdfColor.FromHex("#D9E8FF")));
+                            Txt(col.Item().Text("15 dias").Bold().FontSize(14).FontColor(Colors.White));
+                            Txt(col.Item().Text("#AG-2026-0001").FontSize(8).FontColor(PdfColor.FromHex("#B9E6FF")));
+                        });
+                });
+
+                header.Item().Row(row =>
+                {
+                    row.Spacing(8);
+                    Pill(row.RelativeItem(), "Backend gerenciado", "PDF + SVG");
+                    Pill(row.RelativeItem(), "Sem WebView", "C# puro");
+                    Pill(row.RelativeItem(), "Multi-plataforma", ".NET 10 / 11");
                 });
             });
 
-        page.Content().Padding(0, 14).Column(col =>
+        page.Content().Padding(0, 10).Column(body =>
         {
-            col.Spacing(10);
+            body.Spacing(9);
 
-            col.Item().Row(row =>
+            body.Item().Row(row =>
             {
                 row.Spacing(12);
-                row.RelativeItem().Background(PdfColor.FromHex("#F1F3F5"), 6).Padding(10).Column(c =>
-                {
-                    c.Item().Text("Cliente").Bold();
-                    c.Item().Text("Micael Otowicz");
-                    c.Item().Text("Rua das Flores, 123 — Curitiba/PR");
-                });
-
-                // Caixa de total com borda em gradiente.
-                row.ConstantItem(180)
-                   .Border(2f, GradientBrush.Linear(blue, deepBlue, 90f), cornerRadius: 6f)
-                   .Padding(10).Column(c =>
-                {
-                    c.Item().Text("Pedido nº").Bold();
-                    c.Item().Text("#2026-0001");
-                    c.Item().Text("Data: 02/07/2026");
-                    // Símbolos Unicode só aparecem com fonte embutida.
-                    if (fonte is not null)
-                        c.Item().Text("Total: € 1.250,00  ✓ conferido").Font(fonte).FontColor(deepBlue);
-                });
-            });
-
-            col.Item().Text("Itens").Bold().FontSize(14);
-
-            col.Item().Table(t =>
-            {
-                t.Columns(c =>
-                {
-                    c.ConstantColumn(40);
-                    c.RelativeColumn(3);
-                    c.RelativeColumn();
-                    c.RelativeColumn();
-                });
-                t.CellPadding(6);
-                t.Border(0.5f, Colors.LightGray);
-                t.Header(h =>
-                {
-                    h.Cell(blue).Text("#").Bold().FontColor(Colors.White);
-                    h.Cell(blue).Text("Produto").Bold().FontColor(Colors.White);
-                    h.Cell(blue).Text("Qtd").Bold().FontColor(Colors.White).AlignRight();
-                    h.Cell(blue).Text("Total").Bold().FontColor(Colors.White).AlignRight();
-                });
-
-                for (int i = 1; i <= 60; i++)
-                {
-                    PdfColor? bg = i % 2 == 0 ? zebra : null;
-                    t.Row(r =>
+                InfoPanel(row.RelativeItem(), "Cliente", "Rafael Silva", "Curitiba, PR", "contato@versatil.dev");
+                InfoPanel(row.RelativeItem(), "Fornecedor", "Agile.Maui", "Bibliotecas nativas .NET MAUI", "github.com/mikaelotowicz/agile.maui");
+                row.ConstantItem(150)
+                    .Background(GradientBrush.Linear(royal, violet, 90f), cornerRadius: 8f)
+                    .Padding(11)
+                    .Column(col =>
                     {
-                        (bg is null ? r.Cell() : r.Cell(bg.Value)).Text(i.ToString());
-                        (bg is null ? r.Cell() : r.Cell(bg.Value)).Text($"Produto de exemplo {i} — descrição");
-                        (bg is null ? r.Cell() : r.Cell(bg.Value)).Text((i % 5 + 1).ToString()).AlignRight();
-                        (bg is null ? r.Cell() : r.Cell(bg.Value)).Text($"R$ {(i * 12.5m):0.00}").AlignRight();
+                        col.Spacing(4);
+                        Txt(col.Item().Text("TOTAL DA PROPOSTA").FontSize(8).FontColor(PdfColor.FromHex("#E6F3FF")));
+                        Txt(col.Item().Text(Money(total)).Bold().FontSize(21).FontColor(Colors.White)).AlignRight();
+                        Txt(col.Item().Text("Pagamento flexivel").FontSize(8.5f).FontColor(PdfColor.FromHex("#D9E8FF"))).AlignRight();
                     });
-                }
+            });
+
+            body.Item().Row(row =>
+            {
+                row.Spacing(10);
+                Metric(row.RelativeItem(), "Entrega", "10 dias", "primeira versao operacional");
+                Metric(row.RelativeItem(), "Cobertura", "4 plataformas", "Android, iOS, Mac e Windows");
+                Metric(row.RelativeItem(), "SLA", "90 dias", "suporte premium incluso");
+            });
+
+            body.Item().Row(row =>
+            {
+                SectionTitle(row.RelativeItem(), "Escopo executivo", "O pacote entregue acelera a criacao de PDFs comerciais com layout consistente, fonte embutida, imagem real e alta compatibilidade.");
+            });
+
+            body.Item().Row(row =>
+            {
+                row.Spacing(10);
+                Benefit(row.RelativeItem(), "Templates comerciais", "Pedido, proposta, demonstrativo e recibo em uma base fluente.");
+                Benefit(row.RelativeItem(), "Performance real", "Streams comprimidos, imagens otimizadas e layout testavel no host.");
+                Benefit(row.RelativeItem(), "Qualidade visual", "Gradientes, bordas, alpha solido, tabelas e SVG com a mesma arvore de layout.");
+            });
+
+            body.Item()
+                .Background(Colors.White, cornerRadius: 8f)
+                .Border(0.8f, line, cornerRadius: 8f)
+                .Padding(0)
+                .Table(t =>
+                {
+                    t.Columns(c =>
+                    {
+                        c.ConstantColumn(34);
+                        c.RelativeColumn(3.4f);
+                        c.RelativeColumn(1.2f);
+                        c.RelativeColumn(1.3f);
+                    });
+                    t.CellPadding(8);
+                    t.Border(0.45f, PdfColor.FromHex("#E5EAF2"));
+                    t.Header(h =>
+                    {
+                        HeaderCell(h.Cell(royal), "#");
+                        HeaderCell(h.Cell(royal), "Item / descricao");
+                        HeaderCell(h.Cell(royal), "Qtd", alignRight: true);
+                        HeaderCell(h.Cell(royal), "Total", alignRight: true);
+                    });
+
+                    for (int i = 0; i < itens.Length; i++)
+                    {
+                        Item item = itens[i];
+                        PdfColor? bg = i % 2 == 0 ? PdfColor.FromHex("#FAFBFE") : null;
+                        t.Row(r =>
+                        {
+                            Txt(Cell(r, bg).Text((i + 1).ToString()).FontColor(muted));
+                            Cell(r, bg).Column(c =>
+                            {
+                                Txt(c.Item().Text(item.Nome).Bold().FontColor(ink));
+                                Txt(c.Item().Text(item.Descricao).FontSize(8.5f).FontColor(muted));
+                            });
+                            Txt(Cell(r, bg).Text(item.Quantidade.ToString()).FontColor(ink)).AlignRight();
+                            Txt(Cell(r, bg).Text(Money(item.Total)).Bold().FontColor(ink)).AlignRight();
+                        });
+                    }
+                });
+
+            body.Item().Row(row =>
+            {
+                row.Spacing(12);
+                row.RelativeItem()
+                    .Background(softBlue, cornerRadius: 8f)
+                    .Border(0.8f, PdfColor.FromHex("#CFE8FF"), cornerRadius: 8f)
+                    .Padding(11)
+                    .Column(col =>
+                    {
+                        col.Spacing(5);
+                        Txt(col.Item().Text("Plano de implantacao").Bold().FontSize(12).FontColor(ink));
+                        Txt(col.Item().Text("1. Kickoff e parametrizacao do template premium").FontSize(9).FontColor(muted));
+                        Txt(col.Item().Text("2. Integracao com dados comerciais e validacao visual").FontSize(9).FontColor(muted));
+                        Txt(col.Item().Text("3. Publicacao do pacote e handoff tecnico").FontSize(9).FontColor(muted));
+                        Txt(col.Item().Text("Condicoes: 50% no aceite e 50% na entrega homologada.").FontSize(8.4f).FontColor(royal));
+                    });
+
+                row.ConstantItem(190)
+                    .Background(Colors.White, cornerRadius: 8f)
+                    .Border(0.8f, line, cornerRadius: 8f)
+                    .Padding(12)
+                    .Column(col =>
+                    {
+                        col.Spacing(5);
+                        SummaryLine(col.Item(), "Subtotal", Money(subtotal), muted);
+                        SummaryLine(col.Item(), "Desconto", "-" + Money(desconto), success);
+                        col.Item().Background(line).Height(0.7f);
+                        SummaryLine(col.Item(), "Total", Money(total), ink, bold: true);
+                    });
             });
         });
 
-        page.Footer().Row(row =>
-        {
-            row.RelativeItem().Text("Agile.Maui.PdfGen").FontColor(Colors.Gray).FontSize(9);
-            row.RelativeItem().AlignRight().PageNumber("Página {0} de {1}").FontColor(Colors.Gray).FontSize(9);
-        });
+        page.Footer()
+            .Border(0.6f, PdfColor.FromHex("#DCE3EE"))
+            .Padding(8, 6)
+            .Row(row =>
+            {
+                row.RelativeItem().Text("Agile.Maui.PdfGen - proposta gerada automaticamente").FontColor(muted).FontSize(8.5f);
+                row.RelativeItem().AlignRight().PageNumber("Pagina {0} de {1}").FontColor(muted).FontSize(8.5f);
+            });
     });
 });
 
@@ -117,21 +217,113 @@ documento.Save(outPath);
 Console.WriteLine($"PDF gerado em: {outPath}");
 Console.WriteLine(fonte is not null
     ? "  (fonte embutida + Unicode ativados)"
-    : "  (fonte do sistema não encontrada; usando base-14)");
+    : "  (fonte do sistema nao encontrada; usando base-14)");
 
-// Mesmo documento exportado como SVG.
 string svgPath = Path.ChangeExtension(outPath, ".svg");
 File.WriteAllBytes(svgPath, documento.GenerateSvg());
 Console.WriteLine($"SVG gerado em: {svgPath}");
 
-// Aplica a fonte embutida ao descritor de texto, se houver.
-void AplicarFonte(ITextStyleDescriptor texto)
+ITextStyleDescriptor Txt(ITextStyleDescriptor texto)
 {
     if (fonte is not null)
         texto.Font(fonte);
+    return texto;
 }
 
-// Procura uma fonte TrueType comum nas plataformas de desktop.
+void Pill(IContainer c, string title, string detail)
+{
+    c.Background(new PdfColor(255, 255, 255, 22), cornerRadius: 7f)
+        .Border(0.6f, new PdfColor(255, 255, 255, 65), cornerRadius: 7f)
+        .Padding(8)
+        .Column(col =>
+        {
+            Txt(col.Item().Text(title).Bold().FontSize(8.8f).FontColor(Colors.White));
+            Txt(col.Item().Text(detail).FontSize(7.8f).FontColor(PdfColor.FromHex("#CDEBFF")));
+        });
+}
+
+void InfoPanel(IContainer c, string title, string line1, string line2, string line3)
+{
+    c.Background(Colors.White, cornerRadius: 8f)
+        .Border(0.8f, line, cornerRadius: 8f)
+        .Padding(11)
+        .Column(col =>
+        {
+            col.Spacing(3);
+            Txt(col.Item().Text(title.ToUpperInvariant()).FontSize(8).FontColor(royal));
+            Txt(col.Item().Text(line1).Bold().FontSize(12.5f).FontColor(ink));
+            Txt(col.Item().Text(line2).FontSize(9).FontColor(muted));
+            Txt(col.Item().Text(line3).FontSize(8.5f).FontColor(muted));
+        });
+}
+
+void Metric(IContainer c, string label, string value, string hint)
+{
+    c.Background(Colors.White, cornerRadius: 8f)
+        .Border(0.8f, line, cornerRadius: 8f)
+        .Padding(11)
+        .Column(col =>
+        {
+            col.Spacing(2);
+            Txt(col.Item().Text(label.ToUpperInvariant()).FontSize(8).FontColor(muted));
+            Txt(col.Item().Text(value).Bold().FontSize(16).FontColor(royal));
+            Txt(col.Item().Text(hint).FontSize(8.2f).FontColor(muted));
+        });
+}
+
+void SectionTitle(IContainer c, string title, string subtitle)
+{
+    c.Background(Colors.White, cornerRadius: 8f)
+        .Border(0.8f, line, cornerRadius: 8f)
+        .Padding(10)
+        .Row(row =>
+        {
+            row.Spacing(10);
+            row.ConstantItem(4).Background(GradientBrush.Linear(cyan, violet, 90f), cornerRadius: 2f).Height(32);
+            row.RelativeItem().Column(col =>
+            {
+                Txt(col.Item().Text(title).Bold().FontSize(13).FontColor(ink));
+                Txt(col.Item().Text(subtitle).FontSize(9).FontColor(muted));
+            });
+        });
+}
+
+void Benefit(IContainer c, string title, string description)
+{
+    c.Background(soft, cornerRadius: 7f)
+        .Border(0.6f, PdfColor.FromHex("#E6ECF4"), cornerRadius: 7f)
+        .Padding(9)
+        .Column(col =>
+        {
+            col.Spacing(3);
+            Txt(col.Item().Text(title).Bold().FontSize(9.5f).FontColor(ink));
+            Txt(col.Item().Text(description).FontSize(8.3f).FontColor(muted));
+        });
+}
+
+void HeaderCell(IContainer c, string text, bool alignRight = false)
+{
+    ITextStyleDescriptor header = Txt(c.Text(text).Bold().FontColor(Colors.White).FontSize(8.5f));
+    if (alignRight)
+        header.AlignRight();
+}
+
+IContainer Cell(ITableRowBuilder row, PdfColor? background) =>
+    background is null ? row.Cell() : row.Cell(background.Value);
+
+void SummaryLine(IContainer c, string label, string value, PdfColor color, bool bold = false)
+{
+    c.Row(row =>
+    {
+        Txt(row.RelativeItem().Text(label).FontColor(muted).FontSize(9));
+        ITextStyleDescriptor amount = Txt(row.RelativeItem().AlignRight().Text(value).FontColor(color).FontSize(bold ? 13 : 9.5f));
+        if (bold)
+            amount.Bold();
+    });
+}
+
+string Money(decimal value) => value.ToString("C", brasil);
+
 static EmbeddedFont? TentarCarregarFonteSistema()
 {
     string[] candidatos =
@@ -151,56 +343,13 @@ static EmbeddedFont? TentarCarregarFonteSistema()
         }
         catch
         {
-            // fonte inválida/sem glyf — tenta a próxima
+            // Tenta a proxima fonte candidata.
         }
     }
     return null;
 }
 
-// Gera um logo PNG: círculo azul sobre fundo transparente (demonstra o canal alfa / SMask).
-static byte[] GerarLogoPng(int size)
+readonly record struct Item(string Nome, string Descricao, int Quantidade, decimal ValorUnitario)
 {
-    var rgba = new byte[size * size * 4];
-    float cx = size / 2f, cy = size / 2f, r = size / 2f - 1f;
-    for (int y = 0; y < size; y++)
-    {
-        for (int x = 0; x < size; x++)
-        {
-            int p = (y * size + x) * 4;
-            float dist = MathF.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-            bool dentro = dist <= r;
-            rgba[p] = 13;      // R
-            rgba[p + 1] = 110; // G
-            rgba[p + 2] = 253; // B
-            rgba[p + 3] = dentro ? (byte)255 : (byte)0; // alfa: transparente fora do círculo
-        }
-    }
-    return MontarPng(size, size, rgba);
-}
-
-static byte[] MontarPng(int width, int height, byte[] rgba)
-{
-    using var ms = new MemoryStream();
-    ms.Write(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A });
-
-    void BE(byte[] b, int o, int v) { b[o] = (byte)(v >> 24); b[o + 1] = (byte)(v >> 16); b[o + 2] = (byte)(v >> 8); b[o + 3] = (byte)v; }
-    uint UpCrc(uint crc, byte[] d) { foreach (byte x in d) { crc ^= x; for (int i = 0; i < 8; i++) crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320 : crc >> 1; } return crc; }
-    void Chunk(string t, byte[] d)
-    {
-        var l = new byte[4]; BE(l, 0, d.Length); ms.Write(l);
-        var tb = System.Text.Encoding.ASCII.GetBytes(t); ms.Write(tb); ms.Write(d);
-        uint c = 0xFFFFFFFF; c = UpCrc(c, tb); c = UpCrc(c, d);
-        var cb = new byte[4]; BE(cb, 0, (int)(c ^ 0xFFFFFFFF)); ms.Write(cb);
-    }
-
-    var ihdr = new byte[13]; BE(ihdr, 0, width); BE(ihdr, 4, height); ihdr[8] = 8; ihdr[9] = 6; Chunk("IHDR", ihdr);
-
-    using var rawMs = new MemoryStream();
-    for (int y = 0; y < height; y++) { rawMs.WriteByte(0); rawMs.Write(rgba, y * width * 4, width * 4); }
-    var raw = rawMs.ToArray();
-    using var comp = new MemoryStream();
-    using (var z = new ZLibStream(comp, CompressionLevel.Optimal, true)) z.Write(raw, 0, raw.Length);
-    Chunk("IDAT", comp.ToArray());
-    Chunk("IEND", System.Array.Empty<byte>());
-    return ms.ToArray();
+    public decimal Total => Quantidade * ValorUnitario;
 }

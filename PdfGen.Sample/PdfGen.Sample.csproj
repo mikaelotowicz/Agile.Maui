@@ -14,4 +14,10 @@
 		<ProjectReference Include="..\PdfGen\PdfGen.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<Content Include="..\agile.png" Link="agile.png">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
 </Project>

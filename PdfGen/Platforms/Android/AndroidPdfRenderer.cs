@@ -16,6 +16,7 @@ public sealed class AndroidPdfRenderer : IPdfRenderer
 {
     PdfDocument? _doc;
     PdfDocument.Page? _page;
+    System.IDisposable? _current;
 
     public void BeginDocument() => _doc = new PdfDocument();
 
@@ -24,13 +25,17 @@ public sealed class AndroidPdfRenderer : IPdfRenderer
         var info = new PdfDocument.PageInfo.Builder(
             (int)MathF.Round(size.Width), (int)MathF.Round(size.Height), 1).Create();
         _page = _doc!.StartPage(info);
-        return new AndroidRenderContext(_page!.Canvas!);
+        var context = new AndroidRenderContext(_page!.Canvas!);
+        _current = context;
+        return context;
     }
 
     public void EndPage()
     {
         if (_page is not null)
         {
+            _current?.Dispose();
+            _current = null;
             _doc!.FinishPage(_page);
             _page = null;
         }
@@ -46,7 +51,7 @@ public sealed class AndroidPdfRenderer : IPdfRenderer
     }
 }
 
-file sealed class AndroidRenderContext : IRenderContext
+file sealed class AndroidRenderContext : IRenderContext, System.IDisposable
 {
     readonly Canvas _canvas;
     readonly Dictionary<Rendering.PdfImage, Bitmap> _bitmaps = new();
@@ -146,5 +151,16 @@ file sealed class AndroidRenderContext : IRenderContext
 
     public void ClipRectangle(PdfRect rect) =>
         _canvas.ClipRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
+
+    public void Dispose()
+    {
+        foreach (Bitmap bitmap in _bitmaps.Values)
+        {
+            if (!bitmap.IsRecycled)
+                bitmap.Recycle();
+            bitmap.Dispose();
+        }
+        _bitmaps.Clear();
+    }
 }
 #endif

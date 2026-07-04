@@ -51,6 +51,10 @@ public sealed class TextStyle
     public int GlyphWidth(char c) =>
         Embedded is not null ? Embedded.GlyphWidth(c) : Font.GlyphWidth(c);
 
+    /// <summary>Largura de um codepoint Unicode em unidades/1000, respeitando a fonte embutida se houver.</summary>
+    public int GlyphWidth(int codepoint) =>
+        Embedded is not null ? Embedded.GlyphWidth(codepoint) : Font.GlyphWidth(codepoint);
+
     /// <summary>Altura de uma linha em pontos.</summary>
     public float LineSpacing => FontSize * LineHeight;
 

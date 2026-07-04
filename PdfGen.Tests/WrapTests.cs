@@ -42,4 +42,27 @@ public class WrapTests
         List<TextLine> lines = TextLayout.Wrap("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", style, 40f);
         Assert.True(lines.Count > 1);
     }
+
+    [Fact]
+    public void Wrap_marks_only_wrapped_lines_as_justifiable()
+    {
+        var style = new TextStyle(fontSize: 12f);
+        List<TextLine> lines = TextLayout.Wrap("um dois tres quatro cinco", style, 55f);
+
+        Assert.True(lines.Count > 1);
+        Assert.Contains(lines.Take(lines.Count - 1), line => line.CanJustify);
+        Assert.False(lines[^1].CanJustify);
+    }
+
+    [Fact]
+    public void Wrap_does_not_split_surrogate_pairs()
+    {
+        var style = new TextStyle(fontSize: 12f);
+        string emoji = char.ConvertFromUtf32(0x1F600);
+        List<TextLine> lines = TextLayout.Wrap(string.Concat(System.Linq.Enumerable.Repeat(emoji, 4)), style, 7f);
+
+        Assert.Equal(4, lines.Count);
+        foreach (TextLine line in lines)
+            Assert.Equal(emoji, line.Text);
+    }
 }

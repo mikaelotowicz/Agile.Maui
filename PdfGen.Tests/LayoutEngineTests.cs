@@ -109,4 +109,52 @@ public class LayoutEngineTests
 
         Assert.True(pagesWithTableRows == pages.Count);
     }
+
+    [Fact]
+    public void Background_wrapper_allows_inner_flow_to_paginate()
+    {
+        PdfDocument doc = PdfDocument.Create(d =>
+        {
+            d.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(30f);
+                page.Content()
+                    .Background(Colors.LightGray, 4f)
+                    .Padding(8f)
+                    .Column(col =>
+                    {
+                        for (int i = 0; i < 300; i++)
+                            col.Item().Text($"linha decorada {i}");
+                    });
+            });
+        });
+
+        List<PlannedPage> pages = LayoutEngine.Plan(doc.Model);
+        Assert.True(pages.Count > 1);
+    }
+
+    [Fact]
+    public void Border_wrapper_allows_inner_flow_to_paginate()
+    {
+        PdfDocument doc = PdfDocument.Create(d =>
+        {
+            d.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(30f);
+                page.Content()
+                    .Border(1f, Colors.Gray, 4f)
+                    .Padding(8f)
+                    .Column(col =>
+                    {
+                        for (int i = 0; i < 300; i++)
+                            col.Item().Text($"linha com borda {i}");
+                    });
+            });
+        });
+
+        List<PlannedPage> pages = LayoutEngine.Plan(doc.Model);
+        Assert.True(pages.Count > 1);
+    }
 }

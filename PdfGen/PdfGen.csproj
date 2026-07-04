@@ -42,7 +42,7 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<PackageIcon>agile.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<PackageReleaseNotes>1.1.0: fontes TrueType/OTF embutidas com Unicode e subsetting automático; gradientes linear/radial em Background e Border; PNG com transparência (SMask) no escritor gerenciado; exportação para SVG; correção da medição de texto acentuado (base-14). Veja CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.1.x: fontes TrueType/OTF embutidas com Unicode e subsetting automático; gradientes linear/radial; alpha em texto, linhas, bordas e fundos sólidos no escritor gerenciado; content streams comprimidos; paginação de wrappers decorativos; PNG com transparência (SMask); exportação para SVG; alinhamento justificado; correções de medição Unicode. Veja CHANGELOG.md.</PackageReleaseNotes>
 	</PropertyGroup>
 
 	<ItemGroup>

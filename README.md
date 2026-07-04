@@ -17,7 +17,7 @@
 ![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20Catalyst%20%7C%20Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-`ImageView` / `GalleryView` | `PdfViewer` / `PdfReaderView` | `VirtualizedCollectionView` | `ChipGroup` | `SignaturePad`
+`ImageView` / `GalleryView` | `PdfViewer` / `PdfReaderView` | `PdfGen` | `VirtualizedCollectionView` | `ChipGroup` | `SignaturePad`
 
 [Overview](#overview) | [Features](#features) | [Projects](#projects) | [Platforms](#platforms) | [Documentation](#additional-documentation)
 
@@ -29,9 +29,9 @@ own project/package, but they all share the C# namespace `Agile.Maui`.
 
 ## Overview
 
-Agile.Maui is a collection of native MAUI controls for common mobile and desktop app
-scenarios: zoomable images, galleries, PDF reading, virtualized lists, chip-based selections,
-and signature capture.
+Agile.Maui is a collection of native MAUI controls and companion document tooling for common
+mobile and desktop app scenarios: zoomable images, galleries, PDF reading, PDF generation,
+virtualized lists, chip-based selections, and signature capture.
 Each module can be installed separately, so the app consumes only what it uses.
 
 ### Why use it
@@ -48,6 +48,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 |---|---|
 | `Agile.Maui.Gallery` | `ImageView` with native loading, bounded decode, load state, zoom/fullscreen, and `GalleryView` with image navigation. |
 | `Agile.Maui.Pdf` | Base `PdfViewer` and a ready-to-use `PdfReaderView` with search, print/share, zoom, thumbnails, and navigation. |
+| `Agile.Maui.PdfGen` | Fluent PDF generation with a managed backend for MAUI, WinForms, Blazor, services, and native MAUI renderers where useful. |
 | `Agile.Maui.VirtualizedCollection` | High-performance virtualized list for large volumes of items. |
 | `Agile.Maui.ChipGroup` | Chip selection control with single/multiple selection and wrap, horizontal, or vertical layout modes. |
 | `Agile.Maui.SignaturePad` | Freehand signature capture with vector strokes, pressure metadata, undo/redo, and PNG/JPEG export. |
@@ -57,7 +58,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 - .NET MAUI / .NET 10.0 for the stable packages (`1.0.4`).
 - .NET MAUI / .NET 11.0 preview for the preview packages (`1.0.4-preview.1`).
 - Android, iOS, macOS Catalyst, or Windows.
-- Registration of the package used in `MauiProgram.cs`.
+- Registration of the visual MAUI control packages used in `MauiProgram.cs`. `Agile.Maui.PdfGen` is a generator library and does not require handler registration.
 
 ## Projects
 
@@ -65,6 +66,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 |---|---|---|---|
 | `GalleryView` | `Agile.Maui.Gallery` | `ImageView`, `GalleryView` | [docs/GalleryView.md](docs/GalleryView.md) |
 | `PDFViewer` | `Agile.Maui.Pdf` | `PdfViewer`, `PdfReaderView` | [docs/PDFViewer.md](docs/PDFViewer.md) |
+| `PdfGen` | `Agile.Maui.PdfGen` | `PdfDocument` fluent PDF generator | [docs/PdfGen.md](docs/PdfGen.md) |
 | `VirtualizedCollectionView` | `Agile.Maui.VirtualizedCollection` | `VirtualizedCollectionView` | [docs/VirtualizedCollectionView.md](docs/VirtualizedCollectionView.md) |
 | `ChipGroup` | `Agile.Maui.ChipGroup` | `ChipGroup` | [docs/ChipGroup.md](docs/ChipGroup.md) |
 | `SignaturePad` | `Agile.Maui.SignaturePad` | `SignaturePad` | [docs/SignaturePad.md](docs/SignaturePad.md) |
@@ -80,6 +82,7 @@ Install only the packages your application actually uses:
 ```powershell
 dotnet add package Agile.Maui.Gallery --version 1.0.4
 dotnet add package Agile.Maui.Pdf --version 1.0.4
+dotnet add package Agile.Maui.PdfGen --version 1.1.0
 dotnet add package Agile.Maui.VirtualizedCollection --version 1.0.4
 dotnet add package Agile.Maui.ChipGroup --version 1.0.4
 dotnet add package Agile.Maui.SignaturePad --version 1.0.4
@@ -90,6 +93,7 @@ For .NET 11 preview projects, use the preview package channel:
 ```powershell
 dotnet add package Agile.Maui.Gallery --version 1.0.4-preview.1
 dotnet add package Agile.Maui.Pdf --version 1.0.4-preview.1
+dotnet add package Agile.Maui.PdfGen --version 1.1.0-preview.1
 dotnet add package Agile.Maui.VirtualizedCollection --version 1.0.4-preview.1
 dotnet add package Agile.Maui.ChipGroup --version 1.0.4-preview.1
 dotnet add package Agile.Maui.SignaturePad --version 1.0.4-preview.1
@@ -168,6 +172,7 @@ Example:
 Agile.Maui.slnx
 GalleryView/
 PDFViewer/
+PdfGen/
 VirtualizedCollectionView/
 ChipGroup/
 SignaturePad/
@@ -206,6 +211,7 @@ Packages are written to `nupkgs/` at the repository root. The command produces:
 
 - [GalleryView and ImageView](docs/GalleryView.md)
 - [PDFViewer and PdfReaderView](docs/PDFViewer.md)
+- [PdfGen PDF generation](docs/PdfGen.md)
 - [VirtualizedCollectionView](docs/VirtualizedCollectionView.md)
 - [ChipGroup](docs/ChipGroup.md)
 - [SignaturePad](docs/SignaturePad.md)

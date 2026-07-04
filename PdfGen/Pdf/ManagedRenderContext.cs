@@ -29,6 +29,25 @@ internal sealed class ManagedRenderContext : IRenderContext
 
     float FlipY(float y) => _pageHeight - y;
 
+    bool BeginAlpha(byte alpha)
+    {
+        if (alpha >= 255)
+            return false;
+
+        string res = _renderer.GetAlphaResource(alpha, _page);
+        _sb.Append("q\n/");
+        _sb.Append(res).Append(" gs\n");
+        return true;
+    }
+
+    bool BeginAlpha(PdfColor color) => BeginAlpha(color.A);
+
+    void EndAlpha(bool active)
+    {
+        if (active)
+            _sb.Append("Q\n");
+    }
+
     public void DrawText(string text, PdfPoint baselineOrigin, TextStyle style)
     {
         if (string.IsNullOrEmpty(text))
@@ -43,6 +62,7 @@ internal sealed class ManagedRenderContext : IRenderContext
         string fontRes = _renderer.GetFontResource(style.Font, _page);
         PdfColor c = style.Color;
 
+        bool alpha = BeginAlpha(c);
         _sb.Append("BT\n");
         _sb.Append('/').Append(fontRes).Append(' ').Append(PdfNum.F(style.FontSize)).Append(" Tf\n");
         _sb.Append(PdfNum.F(c.RedF)).Append(' ').Append(PdfNum.F(c.GreenF)).Append(' ')
@@ -50,6 +70,7 @@ internal sealed class ManagedRenderContext : IRenderContext
         _sb.Append(PdfNum.F(baselineOrigin.X)).Append(' ').Append(PdfNum.F(FlipY(baselineOrigin.Y))).Append(" Td\n");
         _sb.Append('(').Append(PdfNum.EscapeLiteral(text)).Append(") Tj\n");
         _sb.Append("ET\n");
+        EndAlpha(alpha);
     }
 
     /// <summary>Desenha texto com fonte embutida (Type0/Identity-H): a string carrega IDs de glifo em hex.</summary>
@@ -72,6 +93,7 @@ internal sealed class ManagedRenderContext : IRenderContext
             hex.Append(gid.ToString("X4"));
         }
 
+        bool alpha = BeginAlpha(c);
         _sb.Append("BT\n");
         _sb.Append('/').Append(entry.ResourceName).Append(' ').Append(PdfNum.F(style.FontSize)).Append(" Tf\n");
         _sb.Append(PdfNum.F(c.RedF)).Append(' ').Append(PdfNum.F(c.GreenF)).Append(' ')
@@ -79,6 +101,7 @@ internal sealed class ManagedRenderContext : IRenderContext
         _sb.Append(PdfNum.F(baselineOrigin.X)).Append(' ').Append(PdfNum.F(FlipY(baselineOrigin.Y))).Append(" Td\n");
         _sb.Append('<').Append(hex).Append("> Tj\n");
         _sb.Append("ET\n");
+        EndAlpha(alpha);
     }
 
     public void DrawImage(PdfImage image, PdfRect destination)
@@ -99,12 +122,14 @@ internal sealed class ManagedRenderContext : IRenderContext
         if (thickness <= 0f || color.IsTransparent)
             return;
 
+        bool alpha = BeginAlpha(color);
         _sb.Append(PdfNum.F(color.RedF)).Append(' ').Append(PdfNum.F(color.GreenF)).Append(' ')
            .Append(PdfNum.F(color.BlueF)).Append(" RG\n");
         _sb.Append(PdfNum.F(thickness)).Append(" w\n");
         _sb.Append(PdfNum.F(from.X)).Append(' ').Append(PdfNum.F(FlipY(from.Y))).Append(" m\n");
         _sb.Append(PdfNum.F(to.X)).Append(' ').Append(PdfNum.F(FlipY(to.Y))).Append(" l\n");
         _sb.Append("S\n");
+        EndAlpha(alpha);
     }
 
     public void DrawRectangle(PdfRect rect, PdfColor color, float thickness, float cornerRadius = 0f)
@@ -112,11 +137,13 @@ internal sealed class ManagedRenderContext : IRenderContext
         if (thickness <= 0f || color.IsTransparent)
             return;
 
+        bool alpha = BeginAlpha(color);
         _sb.Append(PdfNum.F(color.RedF)).Append(' ').Append(PdfNum.F(color.GreenF)).Append(' ')
            .Append(PdfNum.F(color.BlueF)).Append(" RG\n");
         _sb.Append(PdfNum.F(thickness)).Append(" w\n");
         AppendRectPath(rect, cornerRadius);
         _sb.Append("S\n");
+        EndAlpha(alpha);
     }
 
     public void FillRectangle(PdfRect rect, PdfColor color, float cornerRadius = 0f)
@@ -124,21 +151,25 @@ internal sealed class ManagedRenderContext : IRenderContext
         if (color.IsTransparent)
             return;
 
+        bool alpha = BeginAlpha(color);
         _sb.Append(PdfNum.F(color.RedF)).Append(' ').Append(PdfNum.F(color.GreenF)).Append(' ')
            .Append(PdfNum.F(color.BlueF)).Append(" rg\n");
         AppendRectPath(rect, cornerRadius);
         _sb.Append("f\n");
+        EndAlpha(alpha);
     }
 
     public void FillGradient(PdfRect rect, GradientBrush brush, float cornerRadius = 0f)
     {
         string name = _renderer.AddPattern(BuildPatternDict(brush, rect), _page);
+        bool alpha = BeginAlpha(CommonAlpha(brush));
         _sb.Append("q\n");
         _sb.Append("/Pattern cs\n");
         _sb.Append('/').Append(name).Append(" scn\n");
         AppendRectPath(rect, cornerRadius);
         _sb.Append("f\n");
         _sb.Append("Q\n");
+        EndAlpha(alpha);
     }
 
     public void StrokeGradient(PdfRect rect, GradientBrush brush, float thickness, float cornerRadius = 0f)
@@ -147,6 +178,7 @@ internal sealed class ManagedRenderContext : IRenderContext
             return;
 
         string name = _renderer.AddPattern(BuildPatternDict(brush, rect), _page);
+        bool alpha = BeginAlpha(CommonAlpha(brush));
         _sb.Append("q\n");
         _sb.Append("/Pattern CS\n");
         _sb.Append('/').Append(name).Append(" SCN\n");
@@ -154,6 +186,18 @@ internal sealed class ManagedRenderContext : IRenderContext
         AppendRectPath(rect, cornerRadius);
         _sb.Append("S\n");
         _sb.Append("Q\n");
+        EndAlpha(alpha);
+    }
+
+    static byte CommonAlpha(GradientBrush brush)
+    {
+        byte alpha = brush.Stops[0].Color.A;
+        for (int i = 1; i < brush.Stops.Count; i++)
+        {
+            if (brush.Stops[i].Color.A != alpha)
+                return 255;
+        }
+        return alpha;
     }
 
     /// <summary>Monta o dicionário completo de um shading pattern (coordenadas em espaço PDF, y-para-cima).</summary>

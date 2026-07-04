@@ -4,7 +4,7 @@ using Agile.Maui.PdfGen.Rendering;
 namespace Agile.Maui.PdfGen.Layout.Elements;
 
 /// <summary>Preenche o fundo da área do filho com um gradiente, com cantos arredondados opcionais.</summary>
-public sealed class GradientBackgroundElement : SingleChildElement
+public sealed class GradientBackgroundElement : SingleChildElement, IFlowContainer
 {
     readonly GradientBrush _brush;
     readonly float _cornerRadius;
@@ -20,10 +20,24 @@ public sealed class GradientBackgroundElement : SingleChildElement
         context.FillGradient(Bounds, _brush, _cornerRadius);
         base.Render(context);
     }
+
+    public IEnumerable<FlowItem> Flatten(float width)
+    {
+        if (Child is IFlowContainer flow)
+        {
+            foreach (FlowItem item in flow.Flatten(width))
+                yield return FlowDecorators.Decorate(item, width, child => new GradientBackgroundElement(child, _brush, _cornerRadius));
+        }
+        else if (Child is not null)
+        {
+            float h = Child.Measure(new PdfSize(width, PdfSize.Infinity)).Height;
+            yield return new FlowItem(this, h, width: width);
+        }
+    }
 }
 
 /// <summary>Desenha uma borda em gradiente ao redor do filho, com cantos arredondados opcionais.</summary>
-public sealed class GradientBorderElement : SingleChildElement
+public sealed class GradientBorderElement : SingleChildElement, IFlowContainer
 {
     readonly float _thickness;
     readonly GradientBrush _brush;
@@ -46,6 +60,20 @@ public sealed class GradientBorderElement : SingleChildElement
                 Bounds.Left + half, Bounds.Top + half,
                 MathF.Max(0f, Bounds.Width - _thickness), MathF.Max(0f, Bounds.Height - _thickness));
             context.StrokeGradient(inset, _brush, _thickness, _cornerRadius);
+        }
+    }
+
+    public IEnumerable<FlowItem> Flatten(float width)
+    {
+        if (Child is IFlowContainer flow)
+        {
+            foreach (FlowItem item in flow.Flatten(width))
+                yield return FlowDecorators.Decorate(item, width, child => new GradientBorderElement(child, _thickness, _brush, _cornerRadius));
+        }
+        else if (Child is not null)
+        {
+            float h = Child.Measure(new PdfSize(width, PdfSize.Infinity)).Height;
+            yield return new FlowItem(this, h, width: width);
         }
     }
 }
