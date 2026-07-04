@@ -480,6 +480,10 @@ public sealed class PdfNativeView : UIView
     // Ponte zoom absoluto (PdfView) ↔ relativo (PdfViewer). _fitScale = escala que ajusta a
     // página à viewport; ZoomFactor = ScaleFactor / _fitScale. Recalculado a cada layout.
     private nfloat _fitScale = 1f;
+    // "Está em 100% (fit-à-largura)?" — NÃO dá para inferir de _pdfView.AutoScales, porque setar
+    // ScaleFactor programaticamente desliga o AutoScales no PDFKit. Rastreamos aqui: true ao abrir
+    // e ao voltar ao fit; false quando o usuário amplia (gesto ou SetZoomFactor≠1).
+    private bool   _atFitZoom = true;
     private double _minZoom  = 0.5;
     private double _maxZoom  = 8.0;
     private bool   _pinchEnabled = true;
@@ -548,7 +552,10 @@ public sealed class PdfNativeView : UIView
         {
             if (!ReferenceEquals(e.Notification.Object, _pdfView)) return;
             nfloat fit = _fitScale > 0.0001f ? _fitScale : 1f;
-            OnZoomChanged?.Invoke((double)(_pdfView.ScaleFactor / fit));
+            double ratio = (double)(_pdfView.ScaleFactor / fit);
+            // Gesto de pinch muda a escala sem passar por SetZoomFactor → mantém _atFitZoom coerente.
+            _atFitZoom = Math.Abs(ratio - 1.0) < 0.02;
+            OnZoomChanged?.Invoke(ratio);
         });
     }
 
@@ -706,13 +713,15 @@ public sealed class PdfNativeView : UIView
     {
         RecomputeFitScale();
         nfloat target = (nfloat)(Math.Clamp(zoomFactor, _minZoom, _maxZoom)) * _fitScale;
+        _atFitZoom = Math.Abs(zoomFactor - 1.0) < 0.001;
         // Em 100% reativa o auto-fit (reajusta em rotação/resize); ampliado, fixa a escala.
-        _pdfView.AutoScales = Math.Abs(zoomFactor - 1.0) < 0.001;
+        _pdfView.AutoScales = _atFitZoom;
         _pdfView.ScaleFactor = target;
     }
 
     internal void ResetZoom()
     {
+        _atFitZoom = true;
         _pdfView.AutoScales = true;
         RecomputeFitScale();
         _pdfView.ScaleFactor = _fitScale;
@@ -720,6 +729,23 @@ public sealed class PdfNativeView : UIView
 
     private void RecomputeFitScale()
     {
+        // Fit-to-largura DETERMINÍSTICO: escala em que a LARGURA da página cabe na viewport.
+        // O ScaleFactorForSizeToFit do PDFKit retorna valor grande demais para documentos de
+        // 1 página; como MinScaleFactor = _fitScale × MinZoom (MinZoom=1), o piso ficava acima
+        // do fit real e a página abria "estourada" (mais larga que a viewport). Calcular direto
+        // de (largura da view / largura da página em pontos) é estável e é exatamente o
+        // "100% = ajustado à largura" que a ponte de zoom assume. Multipágina não muda (o valor
+        // coincide com o fit-à-largura que o PDFKit já usava).
+        var page = _pdfView.CurrentPage ?? _pdfView.Document?.GetPage((nint)0);
+        nfloat viewW = _pdfView.Bounds.Width;
+        if (page is not null && viewW > 1f)
+        {
+            var box = page.GetBoundsForBox(PdfDisplayBox.Crop);
+            // Página girada 90/270 troca largura/altura exibidas.
+            nfloat pageW = (page.Rotation % 180) != 0 ? box.Height : box.Width;
+            if (pageW > 0.5f) { _fitScale = viewW / pageW; return; }
+        }
+        // Fallback (bounds ainda inválidos, ex.: antes do 1º layout): métrica do PDFKit.
         nfloat fit = _pdfView.ScaleFactorForSizeToFit;
         if (fit > 0.0001f) _fitScale = fit;
     }
@@ -892,10 +918,18 @@ public sealed class PdfNativeView : UIView
         if (_drawerPanel is not null && !_drawerPanel.Hidden)
             LayoutDrawer(_drawerOpen);
 
-        // O tamanho da viewport mudou → o fit muda. Recalcula a ponte de zoom e reaplica
-        // os limites, mantendo ZoomFactor coerente após rotação/resize.
-        if (_pdfView.Document is not null)
+        // O tamanho da viewport mudou → o fit muda. Recalcula a ponte de zoom e reaplica os
+        // limites. Se estamos em 100% (fit), REANCORA a escala ao fit recém-medido para o tamanho
+        // REAL da viewport. O gate é _atFitZoom (flag própria), NÃO _pdfView.AutoScales — este
+        // último é desligado pelo PDFKit assim que setamos ScaleFactor, então nunca dispararia.
+        // Isto corrige o caso em que a escala foi fixada cedo (fit ainda 1, pré-layout) e ficava
+        // presa maior que o fit real → página "estourada".
+        if (_pdfView.Document is not null && _pdfView.Bounds.Width > 1f)
+        {
             ApplyZoomLimitsToView();
+            if (_atFitZoom && Math.Abs((double)(_pdfView.ScaleFactor - _fitScale)) > 0.001)
+                _pdfView.ScaleFactor = _fitScale;
+        }
     }
 
     // Delegate do PdfView: intercepta toque em links de URL externa (pdfViewWillClickOnLink).

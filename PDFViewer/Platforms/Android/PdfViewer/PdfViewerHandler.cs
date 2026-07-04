@@ -408,6 +408,12 @@ public sealed class PdfViewerHandler
                     ResetZoomTo100();   // todo documento abre em 100% (paridade entre plataformas)
                     vv.RaiseDocumentLoaded(count);
                     TrimAndPrefetch(0);
+
+                    // Recalcula os offsets de decoração APÓS o primeiro layout (quando a altura da
+                    // viewport já é definitiva). Sem isto, o offset de centralização de 1 página é
+                    // computado com Height=0 e fica cacheado — por isso só centralizava depois de
+                    // alternar a orientação (que reconstrói o adapter e reaplica a decoração).
+                    PlatformView.Rv.Post(() => PlatformView?.Rv.InvalidateItemDecorations());
                 });
             }
             catch (OperationCanceledException) { doc?.Dispose(); CleanupTemp(newTemp); }
@@ -956,8 +962,13 @@ public sealed class PdfViewerHandler
     // das alças. As páginas não visíveis são cobertas pelo provider do adapter no rebind.
     private void RefreshSelectionHighlight()
     {
-        var pv = PlatformView; var ad = _adapter;
-        if (pv is null || ad is null) return;
+        // Um callback tardio (commit de zoom, post do RecyclerView, auto-scroll de seleção) pode
+        // reentrar aqui DEPOIS do Pop, com o handler já desconectado. Nesse estado, ler a
+        // PlatformView TIPADA lança "PlatformView cannot be null here"; a interface IElementHandler
+        // devolve null sem lançar. Lê por ela e sai cedo se o platform view já foi solto.
+        if (((Microsoft.Maui.IElementHandler)this).PlatformView is not PdfContainerView pv) return;
+        var ad = _adapter;
+        if (ad is null) return;
         ad.SelContentScale = pv.CurrentZoom;
         if (pv.Rv.GetLayoutManager() is not LinearLayoutManager lm) return;
         int first = lm.FindFirstVisibleItemPosition();
@@ -1315,8 +1326,9 @@ public sealed class PdfViewerHandler
             PlatformView.Rv.RemoveItemDecoration(_spacingDecoration);
             _spacingDecoration = null;
         }
-        int spacePx = (int)Context.ToPixels(VirtualView.PageSpacing);
-        if (spacePx <= 0) return;
+        int spacePx = Math.Max(0, (int)Context.ToPixels(VirtualView.PageSpacing));
+        // Sempre anexada (mesmo com espaçamento 0): a decoração também centraliza o conteúdo no
+        // eixo de scroll quando ele cabe na viewport (ex.: uma única página).
         _spacingDecoration = new PdfSpacingDecoration(spacePx, PlatformView.Horizontal);
         PlatformView.Rv.AddItemDecoration(_spacingDecoration);
     }
@@ -2056,6 +2068,20 @@ internal sealed class PdfAdapter : RecyclerView.Adapter
         return (int)((long)_viewportW * sz.Height / sz.Width);   // altura = largura × (h/w)
     }
 
+    /// <summary>
+    /// Tamanho total do conteúdo no eixo de scroll (px): soma das páginas + o espaçamento entre
+    /// elas. Usado pela decoração para centralizar quando o conteúdo cabe na viewport.
+    /// </summary>
+    internal int ContentMainSizePx(int spacePx)
+    {
+        if (_pageCount <= 0) return 0;
+        long total = 0;
+        for (int i = 0; i < _pageCount; i++)
+            total += PageMainSizePx(i);
+        total += (long)spacePx * (_pageCount - 1);
+        return total > int.MaxValue ? int.MaxValue : (int)total;
+    }
+
     public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType)
     {
         // O eixo principal NUNCA pode ser 0 (o LinearLayoutManager criaria ViewHolders em excesso).
@@ -2541,6 +2567,22 @@ internal sealed class PdfSpacingDecoration : RecyclerView.ItemDecoration
             if (_horizontal) outRect.Right  = _spacePx;   // gap entre páginas lado a lado
             else             outRect.Bottom = _spacePx;
         }
+
+        // Centraliza no eixo de scroll quando o conteúdo total cabe na viewport (ex.: uma única
+        // página A4 num visor mais alto que largo). Sem isto o LinearLayoutManager encosta o
+        // conteúdo no topo/esquerda. Se o conteúdo excede a viewport, leftover <= 0 → sem offset.
+        if (pos == 0 && parent.GetAdapter() is PdfAdapter ad)
+        {
+            int viewport = _horizontal ? parent.Width : parent.Height;
+            int content  = ad.ContentMainSizePx(_spacePx);
+            int leftover = viewport - content;
+            if (leftover > 0)
+            {
+                int lead = leftover / 2;
+                if (_horizontal) outRect.Left = lead;
+                else             outRect.Top  = lead;
+            }
+        }
     }
 }
 
@@ -2565,6 +2607,17 @@ internal sealed class ClippedRecyclerView : RecyclerView
         canvas.ClipRect(0, 0, Width, Height);
         base.DispatchDraw(canvas);
         canvas.RestoreToCount(save);
+    }
+
+    // Os offsets da ItemDecoration (usados para centralizar 1 página) dependem da ALTURA da
+    // viewport, mas o RecyclerView os cacheia por célula e não os recalcula quando o tamanho
+    // muda. No primeiro layout a altura ainda é 0 → offset fica zerado e cacheado. Ao ganhar/
+    // trocar de tamanho (inclusive rotação), invalidamos as decorações para recalcular.
+    protected override void OnSizeChanged(int w, int h, int oldw, int oldh)
+    {
+        base.OnSizeChanged(w, h, oldw, oldh);
+        if (h != oldh)
+            InvalidateItemDecorations();
     }
 }
 

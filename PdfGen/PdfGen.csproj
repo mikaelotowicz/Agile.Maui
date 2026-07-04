@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<AssemblyName>Agile.Maui.PdfGen</AssemblyName>
+		<RootNamespace>Agile.Maui.PdfGen</RootNamespace>
+		<PackageId>Agile.Maui.PdfGen</PackageId>
+		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
+		<Authors>Micael Otowicz</Authors>
+		<Product>Agile.Maui.PdfGen</Product>
+		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
+		<RepositoryUrl>https://github.com/mikaelotowicz/agile.maui</RepositoryUrl>
+		<PackageProjectUrl>https://github.com/mikaelotowicz/agile.maui</PackageProjectUrl>
+		<Description>Biblioteca open source de geração de PDF para .NET MAUI com API fluente inspirada no QuestPDF. Motor de layout independente de plataforma; renderização via APIs nativas (Android PdfDocument, iOS/Mac UIGraphicsPDFRenderer) e escritor PDF gerenciado. Fontes TrueType/OTF embutidas com Unicode e subsetting, gradientes, imagens PNG/JPEG e exportação SVG. Sem SkiaSharp, sem WebView, sem HTML.</Description>
+		<PackageTags>maui;pdf;pdf-generation;document;questpdf;android;ios;maccatalyst;windows;report;svg;font-embedding;unicode;truetype;gradient</PackageTags>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<NeutralLanguage>pt-BR</NeutralLanguage>
+		<Title>Agile.Maui.PdfGen</Title>
+
+		<!-- Alvos base (net10.0/net11.0): motor de layout + escritor PDF gerenciado + testes de host.
+		     Alvos de plataforma: renderers nativos isolados por #if. Não usa Microsoft.Maui.Controls. -->
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
+
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<LangVersion>latest</LangVersion>
+		<AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+		<PackageIcon>agile.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageReleaseNotes>1.1.0: fontes TrueType/OTF embutidas com Unicode e subsetting automático; gradientes linear/radial em Background e Border; PNG com transparência (SMask) no escritor gerenciado; exportação para SVG; correção da medição de texto acentuado (base-14). Veja CHANGELOG.md.</PackageReleaseNotes>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Agile.Maui.PdfGen.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="..\agile.png">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+		<None Include="README.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+		<None Include="CHANGELOG.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
+
+</Project>

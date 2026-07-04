@@ -1,0 +1,691 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="595" height="2558" viewBox="0 0 595 2558">
+<defs>
+<linearGradient id="g0" gradientUnits="userSpaceOnUse" x1="36" y1="78" x2="559" y2="78">
+<stop offset="0" stop-color="#0A3D91"/>
+<stop offset="1" stop-color="#0D6EFD"/>
+</linearGradient>
+<linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="469" y1="135" x2="469" y2="205.8">
+<stop offset="0" stop-color="#0D6EFD"/>
+<stop offset="1" stop-color="#0A3D91"/>
+</linearGradient>
+<linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="36" y1="78" x2="559" y2="78">
+<stop offset="0" stop-color="#0A3D91"/>
+<stop offset="1" stop-color="#0D6EFD"/>
+</linearGradient>
+<linearGradient id="g3" gradientUnits="userSpaceOnUse" x1="36" y1="78" x2="559" y2="78">
+<stop offset="0" stop-color="#0A3D91"/>
+<stop offset="1" stop-color="#0D6EFD"/>
+</linearGradient>
+</defs>
+<g transform="translate(0,0)">
+<rect x="36" y="36" width="523" height="84" rx="8" fill="url(#g0)"/>
+<image x="50" y="50" width="56" height="56" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAA3UlEQVR4nO3ZwQ0EIQwDwDRwrV7/nxXXwEksxJDE8YM3HjlitWCf72PMK2LTwQAcjpUW6EEdw2aFwaDZYW5oJdwWshpuGVkNtgytjHuFrI6bItsDo5txt1h9NKdIJtxfZEtgdEAosh0wOhgcKSBTg9GBjiAFTNCCGtSI6pAhOEUH69JngmVEWcdUwOgG1KBGVH/0hU/QllcWLMi+14YMSF3dV25x+QG0NE4vvF3e6LMjDQHMijQkMBP0dd4dYDTSbgCjkHYTeBO6nQ8BPAl150ICUVhoFjsEnOGv7fcDtYDnlj7imn0AAAAASUVORK5CYII="/>
+<text x="106" y="72.116" font-family="ArialMT" font-size="22" fill="#FFFFFF" font-weight="bold">Pedido de Venda</text>
+<text x="106" y="85.447" font-family="ArialMT" font-size="9" fill="#FFFFFF">Sistema Versátil — Agile.Maui.PdfGen</text>
+<text x="36" y="802.562" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6C757D">Agile.Maui.PdfGen</text>
+<text x="297.5" y="802.562" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6C757D">Página 1 de 3</text>
+<rect x="36" y="134" width="331" height="72.8" rx="6" fill="#F1F3F5"/>
+<text x="46" y="152.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" font-weight="bold">Cliente</text>
+<text x="46" y="166.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Micael Otowicz</text>
+<text x="46" y="179.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Rua das Flores, 123 — Curitiba/PR</text>
+<text x="389" y="152.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" font-weight="bold">Pedido nº</text>
+<text x="389" y="166.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">#2026-0001</text>
+<text x="389" y="179.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Data: 02/07/2026</text>
+<text x="389" y="194.658" font-family="ArialMT" font-size="11" fill="#0A3D91">Total: € 1.250,00  ✓ conferido</text>
+<rect x="380" y="135" width="178" height="70.8" rx="6" fill="none" stroke="url(#g1)" stroke-width="2"/>
+<text x="36" y="228.252" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#000000" font-weight="bold">Itens</text>
+<rect x="36" y="243.6" width="40" height="25.2" fill="#0D6EFD"/>
+<rect x="36" y="243.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="258.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">#</text>
+<rect x="76" y="243.6" width="289.8" height="25.2" fill="#0D6EFD"/>
+<rect x="76" y="243.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="258.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Produto</text>
+<rect x="365.8" y="243.6" width="96.6" height="25.2" fill="#0D6EFD"/>
+<rect x="365.8" y="243.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="437.458" y="258.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Qtd</text>
+<rect x="462.4" y="243.6" width="96.6" height="25.2" fill="#0D6EFD"/>
+<rect x="462.4" y="243.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="526.721" y="258.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Total</text>
+<rect x="36" y="268.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="283.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="76" y="268.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="283.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 1 — descrição</text>
+<rect x="365.8" y="268.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="283.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="268.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="508.362" y="283.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 12,50</text>
+<rect x="36" y="294" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="294" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="308.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="76" y="294" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="294" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="308.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 2 — descrição</text>
+<rect x="365.8" y="294" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="294" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="308.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="294" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="294" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="508.362" y="308.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 25,00</text>
+<rect x="36" y="319.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="334.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="76" y="319.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="334.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 3 — descrição</text>
+<rect x="365.8" y="319.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="334.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="319.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="508.362" y="334.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 37,50</text>
+<rect x="36" y="344.4" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="344.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="359.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="76" y="344.4" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="344.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="359.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 4 — descrição</text>
+<rect x="365.8" y="344.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="344.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="359.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="344.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="344.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="508.362" y="359.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 50,00</text>
+<rect x="36" y="369.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="384.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="76" y="369.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="384.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 5 — descrição</text>
+<rect x="365.8" y="369.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="384.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="369.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="508.362" y="384.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 62,50</text>
+<rect x="36" y="394.8" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="394.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="409.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">6</text>
+<rect x="76" y="394.8" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="394.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="409.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 6 — descrição</text>
+<rect x="365.8" y="394.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="394.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="409.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="394.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="394.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="508.362" y="409.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 75,00</text>
+<rect x="36" y="420" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="434.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">7</text>
+<rect x="76" y="420" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="434.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 7 — descrição</text>
+<rect x="365.8" y="420" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="434.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="420" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="508.362" y="434.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 87,50</text>
+<rect x="36" y="445.2" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="445.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="460.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">8</text>
+<rect x="76" y="445.2" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="445.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="460.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 8 — descrição</text>
+<rect x="365.8" y="445.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="445.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="460.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="445.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="445.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="460.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 100,00</text>
+<rect x="36" y="470.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="485.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">9</text>
+<rect x="76" y="470.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="485.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 9 — descrição</text>
+<rect x="365.8" y="470.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="485.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="470.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="485.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 112,50</text>
+<rect x="36" y="495.6" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="495.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="510.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">10</text>
+<rect x="76" y="495.6" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="495.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="510.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 10 — descrição</text>
+<rect x="365.8" y="495.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="495.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="510.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="495.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="495.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="510.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 125,00</text>
+<rect x="36" y="520.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="535.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">11</text>
+<rect x="76" y="520.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="535.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 11 — descrição</text>
+<rect x="365.8" y="520.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="535.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="520.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="535.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 137,50</text>
+<rect x="36" y="546" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="546" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="560.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">12</text>
+<rect x="76" y="546" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="546" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="560.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 12 — descrição</text>
+<rect x="365.8" y="546" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="546" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="560.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="546" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="546" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="560.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 150,00</text>
+<rect x="36" y="571.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="586.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">13</text>
+<rect x="76" y="571.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="586.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 13 — descrição</text>
+<rect x="365.8" y="571.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="586.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="571.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="586.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 162,50</text>
+<rect x="36" y="596.4" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="596.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="611.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">14</text>
+<rect x="76" y="596.4" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="596.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="611.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 14 — descrição</text>
+<rect x="365.8" y="596.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="596.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="611.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="596.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="596.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="611.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 175,00</text>
+<rect x="36" y="621.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="636.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">15</text>
+<rect x="76" y="621.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="636.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 15 — descrição</text>
+<rect x="365.8" y="621.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="636.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="621.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="636.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 187,50</text>
+<rect x="36" y="646.8" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="646.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="661.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">16</text>
+<rect x="76" y="646.8" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="646.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="661.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 16 — descrição</text>
+<rect x="365.8" y="646.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="646.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="661.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="646.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="646.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="661.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 200,00</text>
+<rect x="36" y="672" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="686.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">17</text>
+<rect x="76" y="672" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="686.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 17 — descrição</text>
+<rect x="365.8" y="672" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="686.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="672" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="686.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 212,50</text>
+<rect x="36" y="697.2" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="697.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="712.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">18</text>
+<rect x="76" y="697.2" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="697.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="712.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 18 — descrição</text>
+<rect x="365.8" y="697.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="697.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="712.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="697.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="697.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="712.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 225,00</text>
+<rect x="36" y="722.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="737.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">19</text>
+<rect x="76" y="722.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="737.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 19 — descrição</text>
+<rect x="365.8" y="722.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="737.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="722.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="737.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 237,50</text>
+<rect x="36" y="747.6" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="747.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="762.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">20</text>
+<rect x="76" y="747.6" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="747.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="762.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 20 — descrição</text>
+<rect x="365.8" y="747.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="747.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="762.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="747.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="747.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="762.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 250,00</text>
+</g>
+<g transform="translate(0,858)">
+<rect x="36" y="36" width="523" height="84" rx="8" fill="url(#g2)"/>
+<image x="50" y="50" width="56" height="56" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAA3UlEQVR4nO3ZwQ0EIQwDwDRwrV7/nxXXwEksxJDE8YM3HjlitWCf72PMK2LTwQAcjpUW6EEdw2aFwaDZYW5oJdwWshpuGVkNtgytjHuFrI6bItsDo5txt1h9NKdIJtxfZEtgdEAosh0wOhgcKSBTg9GBjiAFTNCCGtSI6pAhOEUH69JngmVEWcdUwOgG1KBGVH/0hU/QllcWLMi+14YMSF3dV25x+QG0NE4vvF3e6LMjDQHMijQkMBP0dd4dYDTSbgCjkHYTeBO6nQ8BPAl150ICUVhoFjsEnOGv7fcDtYDnlj7imn0AAAAASUVORK5CYII="/>
+<text x="106" y="72.116" font-family="ArialMT" font-size="22" fill="#FFFFFF" font-weight="bold">Pedido de Venda</text>
+<text x="106" y="85.447" font-family="ArialMT" font-size="9" fill="#FFFFFF">Sistema Versátil — Agile.Maui.PdfGen</text>
+<text x="36" y="802.562" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6C757D">Agile.Maui.PdfGen</text>
+<text x="297.5" y="802.562" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6C757D">Página 2 de 3</text>
+<rect x="36" y="120" width="40" height="25.2" fill="#0D6EFD"/>
+<rect x="36" y="120" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="134.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">#</text>
+<rect x="76" y="120" width="289.8" height="25.2" fill="#0D6EFD"/>
+<rect x="76" y="120" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="134.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Produto</text>
+<rect x="365.8" y="120" width="96.6" height="25.2" fill="#0D6EFD"/>
+<rect x="365.8" y="120" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="437.458" y="134.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Qtd</text>
+<rect x="462.4" y="120" width="96.6" height="25.2" fill="#0D6EFD"/>
+<rect x="462.4" y="120" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="526.721" y="134.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Total</text>
+<rect x="36" y="145.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="160.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">21</text>
+<rect x="76" y="145.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="160.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 21 — descrição</text>
+<rect x="365.8" y="145.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="160.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="145.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="160.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 262,50</text>
+<rect x="36" y="170.4" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="170.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="185.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">22</text>
+<rect x="76" y="170.4" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="170.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="185.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 22 — descrição</text>
+<rect x="365.8" y="170.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="170.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="185.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="170.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="170.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="185.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 275,00</text>
+<rect x="36" y="195.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="210.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">23</text>
+<rect x="76" y="195.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="210.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 23 — descrição</text>
+<rect x="365.8" y="195.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="210.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="195.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="210.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 287,50</text>
+<rect x="36" y="220.8" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="220.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="235.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">24</text>
+<rect x="76" y="220.8" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="220.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="235.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 24 — descrição</text>
+<rect x="365.8" y="220.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="220.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="235.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="220.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="220.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="235.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 300,00</text>
+<rect x="36" y="246" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="260.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">25</text>
+<rect x="76" y="246" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="260.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 25 — descrição</text>
+<rect x="365.8" y="246" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="260.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="246" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="260.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 312,50</text>
+<rect x="36" y="271.2" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="271.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="286.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">26</text>
+<rect x="76" y="271.2" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="271.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="286.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 26 — descrição</text>
+<rect x="365.8" y="271.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="271.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="286.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="271.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="271.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="286.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 325,00</text>
+<rect x="36" y="296.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="311.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">27</text>
+<rect x="76" y="296.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="311.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 27 — descrição</text>
+<rect x="365.8" y="296.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="311.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="296.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="311.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 337,50</text>
+<rect x="36" y="321.6" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="321.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="336.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">28</text>
+<rect x="76" y="321.6" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="321.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="336.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 28 — descrição</text>
+<rect x="365.8" y="321.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="321.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="336.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="321.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="321.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="336.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 350,00</text>
+<rect x="36" y="346.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="361.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">29</text>
+<rect x="76" y="346.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="361.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 29 — descrição</text>
+<rect x="365.8" y="346.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="361.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="346.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="361.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 362,50</text>
+<rect x="36" y="372" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="372" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="386.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">30</text>
+<rect x="76" y="372" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="372" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="386.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 30 — descrição</text>
+<rect x="365.8" y="372" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="372" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="386.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="372" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="372" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="386.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 375,00</text>
+<rect x="36" y="397.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="412.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">31</text>
+<rect x="76" y="397.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="412.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 31 — descrição</text>
+<rect x="365.8" y="397.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="412.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="397.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="412.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 387,50</text>
+<rect x="36" y="422.4" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="422.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="437.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">32</text>
+<rect x="76" y="422.4" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="422.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="437.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 32 — descrição</text>
+<rect x="365.8" y="422.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="422.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="437.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="422.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="422.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="437.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 400,00</text>
+<rect x="36" y="447.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="462.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">33</text>
+<rect x="76" y="447.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="462.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 33 — descrição</text>
+<rect x="365.8" y="447.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="462.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="447.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="462.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 412,50</text>
+<rect x="36" y="472.8" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="472.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="487.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">34</text>
+<rect x="76" y="472.8" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="472.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="487.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 34 — descrição</text>
+<rect x="365.8" y="472.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="472.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="487.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="472.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="472.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="487.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 425,00</text>
+<rect x="36" y="498" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="512.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">35</text>
+<rect x="76" y="498" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="512.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 35 — descrição</text>
+<rect x="365.8" y="498" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="512.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="498" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="512.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 437,50</text>
+<rect x="36" y="523.2" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="523.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="538.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">36</text>
+<rect x="76" y="523.2" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="523.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="538.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 36 — descrição</text>
+<rect x="365.8" y="523.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="523.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="538.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="523.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="523.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="538.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 450,00</text>
+<rect x="36" y="548.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="563.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">37</text>
+<rect x="76" y="548.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="563.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 37 — descrição</text>
+<rect x="365.8" y="548.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="563.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="548.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="563.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 462,50</text>
+<rect x="36" y="573.6" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="573.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="588.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">38</text>
+<rect x="76" y="573.6" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="573.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="588.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 38 — descrição</text>
+<rect x="365.8" y="573.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="573.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="588.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="573.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="573.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="588.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 475,00</text>
+<rect x="36" y="598.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="613.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">39</text>
+<rect x="76" y="598.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="613.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 39 — descrição</text>
+<rect x="365.8" y="598.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="613.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="598.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="613.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 487,50</text>
+<rect x="36" y="624" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="624" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="638.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">40</text>
+<rect x="76" y="624" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="624" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="638.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 40 — descrição</text>
+<rect x="365.8" y="624" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="624" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="638.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="624" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="624" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="638.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 500,00</text>
+<rect x="36" y="649.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="664.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">41</text>
+<rect x="76" y="649.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="664.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 41 — descrição</text>
+<rect x="365.8" y="649.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="664.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="649.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="664.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 512,50</text>
+<rect x="36" y="674.4" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="674.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="689.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">42</text>
+<rect x="76" y="674.4" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="674.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="689.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 42 — descrição</text>
+<rect x="365.8" y="674.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="674.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="689.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="674.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="674.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="689.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 525,00</text>
+<rect x="36" y="699.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="714.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">43</text>
+<rect x="76" y="699.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="714.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 43 — descrição</text>
+<rect x="365.8" y="699.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="714.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="699.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="714.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 537,50</text>
+<rect x="36" y="724.8" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="724.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="739.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">44</text>
+<rect x="76" y="724.8" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="724.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="739.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 44 — descrição</text>
+<rect x="365.8" y="724.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="724.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="739.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="724.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="724.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="739.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 550,00</text>
+<rect x="36" y="750" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="764.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">45</text>
+<rect x="76" y="750" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="764.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 45 — descrição</text>
+<rect x="365.8" y="750" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="764.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="750" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="764.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 562,50</text>
+</g>
+<g transform="translate(0,1716)">
+<rect x="36" y="36" width="523" height="84" rx="8" fill="url(#g3)"/>
+<image x="50" y="50" width="56" height="56" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAA3UlEQVR4nO3ZwQ0EIQwDwDRwrV7/nxXXwEksxJDE8YM3HjlitWCf72PMK2LTwQAcjpUW6EEdw2aFwaDZYW5oJdwWshpuGVkNtgytjHuFrI6bItsDo5txt1h9NKdIJtxfZEtgdEAosh0wOhgcKSBTg9GBjiAFTNCCGtSI6pAhOEUH69JngmVEWcdUwOgG1KBGVH/0hU/QllcWLMi+14YMSF3dV25x+QG0NE4vvF3e6LMjDQHMijQkMBP0dd4dYDTSbgCjkHYTeBO6nQ8BPAl150ICUVhoFjsEnOGv7fcDtYDnlj7imn0AAAAASUVORK5CYII="/>
+<text x="106" y="72.116" font-family="ArialMT" font-size="22" fill="#FFFFFF" font-weight="bold">Pedido de Venda</text>
+<text x="106" y="85.447" font-family="ArialMT" font-size="9" fill="#FFFFFF">Sistema Versátil — Agile.Maui.PdfGen</text>
+<text x="36" y="802.562" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6C757D">Agile.Maui.PdfGen</text>
+<text x="297.5" y="802.562" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6C757D">Página 3 de 3</text>
+<rect x="36" y="120" width="40" height="25.2" fill="#0D6EFD"/>
+<rect x="36" y="120" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="134.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">#</text>
+<rect x="76" y="120" width="289.8" height="25.2" fill="#0D6EFD"/>
+<rect x="76" y="120" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="134.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Produto</text>
+<rect x="365.8" y="120" width="96.6" height="25.2" fill="#0D6EFD"/>
+<rect x="365.8" y="120" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="437.458" y="134.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Qtd</text>
+<rect x="462.4" y="120" width="96.6" height="25.2" fill="#0D6EFD"/>
+<rect x="462.4" y="120" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="526.721" y="134.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold">Total</text>
+<rect x="36" y="145.2" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="145.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="160.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">46</text>
+<rect x="76" y="145.2" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="145.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="160.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 46 — descrição</text>
+<rect x="365.8" y="145.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="145.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="160.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="145.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="145.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="160.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 575,00</text>
+<rect x="36" y="170.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="185.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">47</text>
+<rect x="76" y="170.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="185.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 47 — descrição</text>
+<rect x="365.8" y="170.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="185.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="170.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="185.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 587,50</text>
+<rect x="36" y="195.6" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="195.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="210.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">48</text>
+<rect x="76" y="195.6" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="195.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="210.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 48 — descrição</text>
+<rect x="365.8" y="195.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="195.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="210.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="195.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="195.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="210.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 600,00</text>
+<rect x="36" y="220.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="235.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">49</text>
+<rect x="76" y="220.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="235.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 49 — descrição</text>
+<rect x="365.8" y="220.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="235.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="220.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="235.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 612,50</text>
+<rect x="36" y="246" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="246" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="260.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">50</text>
+<rect x="76" y="246" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="246" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="260.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 50 — descrição</text>
+<rect x="365.8" y="246" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="246" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="260.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="246" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="246" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="260.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 625,00</text>
+<rect x="36" y="271.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="286.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">51</text>
+<rect x="76" y="271.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="286.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 51 — descrição</text>
+<rect x="365.8" y="271.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="286.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="271.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="286.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 637,50</text>
+<rect x="36" y="296.4" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="296.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="311.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">52</text>
+<rect x="76" y="296.4" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="296.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="311.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 52 — descrição</text>
+<rect x="365.8" y="296.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="296.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="311.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="296.4" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="296.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="311.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 650,00</text>
+<rect x="36" y="321.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="336.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">53</text>
+<rect x="76" y="321.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="336.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 53 — descrição</text>
+<rect x="365.8" y="321.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="336.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="321.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="336.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 662,50</text>
+<rect x="36" y="346.8" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="346.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="361.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">54</text>
+<rect x="76" y="346.8" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="346.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="361.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 54 — descrição</text>
+<rect x="365.8" y="346.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="346.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="361.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="346.8" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="346.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="361.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 675,00</text>
+<rect x="36" y="372" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="386.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">55</text>
+<rect x="76" y="372" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="386.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 55 — descrição</text>
+<rect x="365.8" y="372" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="386.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="372" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="386.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 687,50</text>
+<rect x="36" y="397.2" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="397.2" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="412.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">56</text>
+<rect x="76" y="397.2" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="397.2" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="412.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 56 — descrição</text>
+<rect x="365.8" y="397.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="397.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="412.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">2</text>
+<rect x="462.4" y="397.2" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="397.2" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="412.198" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 700,00</text>
+<rect x="36" y="422.4" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="437.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">57</text>
+<rect x="76" y="422.4" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="437.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 57 — descrição</text>
+<rect x="365.8" y="422.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="437.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">3</text>
+<rect x="462.4" y="422.4" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="437.398" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 712,50</text>
+<rect x="36" y="447.6" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="447.6" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="462.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">58</text>
+<rect x="76" y="447.6" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="447.6" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="462.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 58 — descrição</text>
+<rect x="365.8" y="447.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="447.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="462.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">4</text>
+<rect x="462.4" y="447.6" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="447.6" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="462.598" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 725,00</text>
+<rect x="36" y="472.8" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="487.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">59</text>
+<rect x="76" y="472.8" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="487.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 59 — descrição</text>
+<rect x="365.8" y="472.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="487.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">5</text>
+<rect x="462.4" y="472.8" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="487.798" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 737,50</text>
+<rect x="36" y="498" width="40" height="25.2" fill="#F8F9FA"/>
+<rect x="36" y="498" width="40" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="42" y="512.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">60</text>
+<rect x="76" y="498" width="289.8" height="25.2" fill="#F8F9FA"/>
+<rect x="76" y="498" width="289.8" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="82" y="512.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">Produto de exemplo 60 — descrição</text>
+<rect x="365.8" y="498" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="365.8" y="498" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="450.284" y="512.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">1</text>
+<rect x="462.4" y="498" width="96.6" height="25.2" fill="#F8F9FA"/>
+<rect x="462.4" y="498" width="96.6" height="25.2" fill="none" stroke="#DEE2E6" stroke-width="0.5"/>
+<text x="502.246" y="512.998" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">R$ 750,00</text>
+</g>
+</svg>
