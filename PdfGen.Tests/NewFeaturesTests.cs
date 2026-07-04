@@ -11,8 +11,27 @@ namespace Agile.Maui.PdfGen.Tests;
 
 public class NewFeaturesTests
 {
-    static string AsLatin1(byte[] bytes) => Encoding.Latin1.GetString(bytes);
-    const string ArialPath = @"C:\Windows\Fonts\arial.ttf";
+    static string AsLatin1(byte[] bytes) => PdfTestHelpers.AsLatin1(bytes);
+    static string? FindTestFontPath()
+    {
+        string[] candidates =
+        {
+            @"C:\Windows\Fonts\arial.ttf",
+            @"C:\Windows\Fonts\segoeui.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        };
+
+        foreach (string path in candidates)
+        {
+            if (File.Exists(path))
+                return path;
+        }
+
+        return null;
+    }
 
     // ---- 1. Larguras WinAnsi acentuadas ----
 
@@ -69,7 +88,7 @@ public class NewFeaturesTests
                 .Padding(10f).Text("gradiente"));
         }).GeneratePdf();
 
-        string content = AsLatin1(pdf);
+        string content = PdfTestHelpers.AllText(pdf);
         Assert.Contains("/PatternType 2", content);
         Assert.Contains("/ShadingType 2", content);
         Assert.Contains("/Pattern cs", content);
@@ -89,7 +108,7 @@ public class NewFeaturesTests
             doc.Page(page => page.Content().Background(brush).Padding(10f).Text("radial"));
         }).GeneratePdf();
 
-        string content = AsLatin1(pdf);
+        string content = PdfTestHelpers.AllText(pdf);
         Assert.Contains("/ShadingType 3", content);
         Assert.Contains("/FunctionType 3", content);   // stitching para 3 paradas
     }
@@ -99,8 +118,11 @@ public class NewFeaturesTests
     [Fact]
     public void Embedded_font_loads_and_maps_glyphs()
     {
-        Assert.True(File.Exists(ArialPath), "arial.ttf não encontrado.");
-        EmbeddedFont font = EmbeddedFont.FromFile(ArialPath);
+        string? path = FindTestFontPath();
+        if (path is null)
+            return;
+
+        EmbeddedFont font = EmbeddedFont.FromFile(path);
 
         Assert.True(font.NumGlyphs > 0);
         Assert.True(font.Ascent > 0f);
@@ -112,14 +134,18 @@ public class NewFeaturesTests
     [Fact]
     public void Embedded_font_generates_type0_with_unicode()
     {
-        EmbeddedFont font = EmbeddedFont.FromFile(ArialPath);
+        string? path = FindTestFontPath();
+        if (path is null)
+            return;
+
+        EmbeddedFont font = EmbeddedFont.FromFile(path);
 
         byte[] pdf = PdfDocument.Create(doc =>
         {
             doc.Page(page => page.Content().Text("Unção € ✓").Font(font).FontSize(18f));
         }).GeneratePdf();
 
-        string content = AsLatin1(pdf);
+        string content = PdfTestHelpers.AllText(pdf);
         Assert.Contains("/Subtype /Type0", content);
         Assert.Contains("/Encoding /Identity-H", content);
         Assert.Contains("/Subtype /CIDFontType2", content);
@@ -132,8 +158,12 @@ public class NewFeaturesTests
     [Fact]
     public void Embedded_font_is_subset_and_stays_small()
     {
-        EmbeddedFont font = EmbeddedFont.FromFile(ArialPath);
-        long fullFontSize = new FileInfo(ArialPath).Length;
+        string? path = FindTestFontPath();
+        if (path is null)
+            return;
+
+        EmbeddedFont font = EmbeddedFont.FromFile(path);
+        long fullFontSize = new FileInfo(path).Length;
 
         byte[] pdf = PdfDocument.Create(doc =>
         {

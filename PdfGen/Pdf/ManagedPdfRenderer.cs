@@ -15,6 +15,7 @@ internal sealed class ManagedPage
     public HashSet<string> Fonts { get; } = new();
     public HashSet<string> Images { get; } = new();
     public HashSet<string> Patterns { get; } = new();
+    public HashSet<string> ExtGStates { get; } = new();
 
     public int ContentObjId;
     public int PageObjId;
@@ -40,6 +41,8 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
     readonly Dictionary<PdfImage, ImageEntry> _images = new();
     readonly List<ImageEntry> _imageOrder = new();
     readonly List<PatternEntry> _patternOrder = new();
+    readonly Dictionary<byte, AlphaEntry> _alphaStates = new();
+    readonly List<AlphaEntry> _alphaOrder = new();
 
     sealed class FontEntry
     {
@@ -98,12 +101,32 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
         public int ObjId;
     }
 
+    sealed class AlphaEntry
+    {
+        public required byte Alpha;
+        public required string ResourceName;
+        public int ObjId;
+    }
+
     /// <summary>Registra um shading pattern e devolve seu nome de recurso na página.</summary>
     internal string AddPattern(string dictBody, ManagedPage page)
     {
         var entry = new PatternEntry { ResourceName = "P" + _patternOrder.Count, DictBody = dictBody };
         _patternOrder.Add(entry);
         page.Patterns.Add(entry.ResourceName);
+        return entry.ResourceName;
+    }
+
+    internal string GetAlphaResource(byte alpha, ManagedPage page)
+    {
+        if (!_alphaStates.TryGetValue(alpha, out AlphaEntry? entry))
+        {
+            entry = new AlphaEntry { Alpha = alpha, ResourceName = "GS" + _alphaOrder.Count };
+            _alphaStates[alpha] = entry;
+            _alphaOrder.Add(entry);
+        }
+
+        page.ExtGStates.Add(entry.ResourceName);
         return entry.ResourceName;
     }
 
@@ -200,6 +223,8 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
         }
         foreach (PatternEntry p in _patternOrder)
             p.ObjId = nextId++;
+        foreach (AlphaEntry alpha in _alphaOrder)
+            alpha.ObjId = nextId++;
         foreach (ManagedPage p in _pages)
         {
             p.ContentObjId = nextId++;
@@ -267,13 +292,21 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
             WriteAscii(ms, $"{pat.ObjId} 0 obj\n{pat.DictBody}\nendobj\n");
         }
 
+        foreach (AlphaEntry alpha in _alphaOrder)
+        {
+            offsets[alpha.ObjId] = ms.Length;
+            string a = PdfNum.F(alpha.Alpha / 255f);
+            WriteAscii(ms, $"{alpha.ObjId} 0 obj\n<< /Type /ExtGState /ca {a} /CA {a} >>\nendobj\n");
+        }
+
         // Páginas: content + dict
         foreach (ManagedPage p in _pages)
         {
             byte[] content = Encoding.Latin1.GetBytes(p.Content.ToString());
+            byte[] compressedContent = Deflate(content);
             offsets[p.ContentObjId] = ms.Length;
-            WriteAscii(ms, $"{p.ContentObjId} 0 obj\n<< /Length {content.Length} >>\nstream\n");
-            WriteBytes(ms, content);
+            WriteAscii(ms, $"{p.ContentObjId} 0 obj\n<< /Filter /FlateDecode /Length {compressedContent.Length} >>\nstream\n");
+            WriteBytes(ms, compressedContent);
             WriteAscii(ms, "\nendstream\nendobj\n");
 
             offsets[p.PageObjId] = ms.Length;
@@ -424,6 +457,17 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
             {
                 if (p.Patterns.Contains(pat.ResourceName))
                     WriteAscii(ms, $"/{pat.ResourceName} {pat.ObjId} 0 R ");
+            }
+            WriteAscii(ms, ">> ");
+        }
+
+        if (p.ExtGStates.Count > 0)
+        {
+            WriteAscii(ms, "/ExtGState << ");
+            foreach (AlphaEntry alpha in _alphaOrder)
+            {
+                if (p.ExtGStates.Contains(alpha.ResourceName))
+                    WriteAscii(ms, $"/{alpha.ResourceName} {alpha.ObjId} 0 R ");
             }
             WriteAscii(ms, ">> ");
         }

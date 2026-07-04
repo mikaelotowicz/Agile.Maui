@@ -8,7 +8,7 @@ namespace Agile.Maui.PdfGen.Tests;
 
 public class ManagedPdfTests
 {
-    static string AsLatin1(byte[] bytes) => Encoding.Latin1.GetString(bytes);
+    static string AsLatin1(byte[] bytes) => PdfTestHelpers.AsLatin1(bytes);
 
     [Fact]
     public void Generates_valid_pdf_header_and_trailer()
@@ -41,9 +41,23 @@ public class ManagedPdfTests
             doc.Page(page => page.Content().Text("Fatura").Bold().FontSize(20f));
         }).GeneratePdf();
 
-        string content = AsLatin1(pdf);
+        string content = PdfTestHelpers.AllText(pdf);
         Assert.Contains("/BaseFont /Helvetica-Bold", content);
         Assert.Contains("(Fatura) Tj", content);
+    }
+
+    [Fact]
+    public void Page_content_streams_are_compressed()
+    {
+        byte[] pdf = PdfDocument.Create(doc =>
+        {
+            doc.Page(page => page.Content().Text("conteudo comprimido"));
+        }).GeneratePdf();
+
+        string raw = AsLatin1(pdf);
+        Assert.Contains("/Filter /FlateDecode", raw);
+        Assert.DoesNotContain("(conteudo comprimido) Tj", raw);
+        Assert.Contains("(conteudo comprimido) Tj", PdfTestHelpers.AllText(pdf));
     }
 
     [Fact]
@@ -55,7 +69,20 @@ public class ManagedPdfTests
         }).GeneratePdf();
 
         // 'ç' = 0xE7 em WinAnsi/Latin-1; deve aparecer como byte literal, não escapado.
-        Assert.Contains((byte)0xE7, pdf);
+        Assert.Contains((byte)0xE7, PdfTestHelpers.DecodeStreams(pdf));
+    }
+
+    [Fact]
+    public void Winansi_punctuation_is_not_replaced_by_question_mark()
+    {
+        byte[] pdf = PdfDocument.Create(doc =>
+        {
+            doc.Page(page => page.Content().Text("A — B"));
+        }).GeneratePdf();
+
+        byte[] decoded = PdfTestHelpers.DecodeStreams(pdf);
+        Assert.Contains((byte)0x97, decoded); // em dash in WinAnsi / Windows-1252
+        Assert.DoesNotContain((byte)'?', decoded);
     }
 
     [Fact]
@@ -99,7 +126,7 @@ public class ManagedPdfTests
             });
         }).GeneratePdf();
 
-        string content = AsLatin1(pdf);
+        string content = PdfTestHelpers.AllText(pdf);
         // "Página 1 de N": o 'á' vira o byte WinAnsi 0xE1 (não escapado); o restante é ASCII.
         Assert.Contains("gina 1 de ", content);
     }
@@ -132,10 +159,51 @@ public class ManagedPdfTests
             });
         }).GeneratePdf();
 
-        string content = AsLatin1(pdf);
+        string content = PdfTestHelpers.AllText(pdf);
         Assert.Contains(" re\n", content);   // retângulos (fundo/borda/células)
         Assert.Contains(" c\n", content);    // curvas (cantos arredondados)
         Assert.Contains("(Produto A) Tj", content);
+    }
+
+    [Fact]
+    public void Semi_transparent_color_uses_extgstate()
+    {
+        byte[] pdf = PdfDocument.Create(doc =>
+        {
+            doc.Page(page =>
+            {
+                page.Content()
+                    .Background(new PdfColor(255, 0, 0, 128))
+                    .Padding(8f)
+                    .Text("alpha");
+            });
+        }).GeneratePdf();
+
+        string content = PdfTestHelpers.AllText(pdf);
+        Assert.Contains("/ExtGState", content);
+        Assert.Contains("/ca 0.502", content);
+        Assert.Contains("/CA 0.502", content);
+        Assert.Contains("/GS0 gs", content);
+    }
+
+    [Fact]
+    public void Justified_text_draws_words_independently()
+    {
+        byte[] pdf = PdfDocument.Create(doc =>
+        {
+            doc.Page(page =>
+            {
+                page.Content()
+                    .Width(45f)
+                    .Text("um dois tres quatro")
+                    .AlignJustify();
+            });
+        }).GeneratePdf();
+
+        string content = PdfTestHelpers.AllText(pdf);
+        Assert.Contains("(um) Tj", content);
+        Assert.Contains("(dois) Tj", content);
+        Assert.DoesNotContain("(um dois) Tj", content);
     }
 
     [Fact]

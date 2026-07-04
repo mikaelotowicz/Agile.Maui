@@ -60,6 +60,11 @@ public sealed class StandardFont
         return _defaultWidth;
     }
 
+    public int GlyphWidth(int codepoint) =>
+        codepoint >= 0 && codepoint <= char.MaxValue
+            ? GlyphWidth((char)codepoint)
+            : _defaultWidth;
+
     /// <summary>
     /// Letra ASCII cuja largura equivale à do caractere acentuado WinAnsi informado, ou '\0'
     /// quando não há equivalência direta (símbolos como ©, °, × usam a largura padrão).

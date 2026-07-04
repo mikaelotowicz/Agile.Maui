@@ -135,6 +135,9 @@ public sealed class EmbeddedFont
     /// <summary>Largura de um caractere em unidades/1000 (usada na quebra de linha).</summary>
     public int GlyphWidth(char c) => AdvanceUnits1000(GlyphId(c));
 
+    /// <summary>Largura de um codepoint Unicode em unidades/1000.</summary>
+    public int GlyphWidth(int codepoint) => AdvanceUnits1000(GlyphId(codepoint));
+
     /// <summary>Largura do texto no tamanho informado, em pontos. Trata pares substitutos Unicode.</summary>
     public float MeasureWidth(ReadOnlySpan<char> text, float fontSize)
     {

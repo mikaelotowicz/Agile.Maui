@@ -90,6 +90,16 @@ internal sealed class SingleLineElement : Element
         if (line.Text.Length == 0)
             return;
 
+        // Baseline: topo da linha + ascensão da fonte dentro do line spacing.
+        float leading = (style.LineSpacing - style.FontSize) / 2f;
+        float baseline = top + leading + style.Ascent * style.FontSize;
+
+        if (align == TextAlign.Justify && line.CanJustify && width > line.Width)
+        {
+            DrawJustified(context, line, style, left, baseline, width);
+            return;
+        }
+
         float x = align switch
         {
             TextAlign.Center => left + (width - line.Width) / 2f,
@@ -97,10 +107,45 @@ internal sealed class SingleLineElement : Element
             _ => left,
         };
 
-        // Baseline: topo da linha + ascensão da fonte dentro do line spacing.
-        float leading = (style.LineSpacing - style.FontSize) / 2f;
-        float baseline = top + leading + style.Ascent * style.FontSize;
-
         context.DrawText(line.Text, new PdfPoint(x, baseline), style);
+    }
+
+    static void DrawJustified(IRenderContext context, TextLine line, TextStyle style,
+        float left, float baseline, float width)
+    {
+        int spaces = 0;
+        foreach (char c in line.Text)
+            if (c == ' ')
+                spaces++;
+
+        if (spaces == 0)
+        {
+            context.DrawText(line.Text, new PdfPoint(left, baseline), style);
+            return;
+        }
+
+        float spaceWidth = style.MeasureWidth(" ");
+        float extra = (width - line.Width) / spaces;
+        float x = left;
+        int start = 0;
+
+        for (int i = 0; i < line.Text.Length; i++)
+        {
+            if (line.Text[i] != ' ')
+                continue;
+
+            if (i > start)
+            {
+                string run = line.Text.Substring(start, i - start);
+                context.DrawText(run, new PdfPoint(x, baseline), style);
+                x += style.MeasureWidth(run);
+            }
+
+            x += spaceWidth + extra;
+            start = i + 1;
+        }
+
+        if (start < line.Text.Length)
+            context.DrawText(line.Text.Substring(start), new PdfPoint(x, baseline), style);
     }
 }
