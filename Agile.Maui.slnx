@@ -3,10 +3,17 @@
     <Project Path="ChipGroup/ChipGroup.csproj" Id="f4f0d8fb-7456-4d55-90f1-0b8be03b7850" />
     <Project Path="GalleryView/GalleryView.csproj" Id="1f550c7a-362e-499d-9fde-b81a0329cd87" />
     <Project Path="PDFViewer/PDFViewer.csproj" Id="7e6bf05f-f149-4ed6-8479-79aa757f0cbe" />
+    <Project Path="PdfGen/PdfGen.csproj" />
     <Project Path="SignaturePad/SignaturePad.csproj" Id="a3d26f02-08e8-4a14-bc06-9bc5d23efc6a" />
     <Project Path="VirtualizedCollectionView/VirtualizedCollectionView.csproj" Id="ccf7a027-41d4-4a6a-a08a-53631fce3dc4" />
   </Folder>
-  <Project Path="sample/sample.csproj">
-    <Deploy />
-  </Project>
+  <Folder Name="/Tests/">
+    <Project Path="PdfGen.Tests/PdfGen.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Samples/">
+    <Project Path="PdfGen.Sample/PdfGen.Sample.csproj" />
+    <Project Path="sample/sample.csproj">
+      <Deploy />
+    </Project>
+  </Folder>
 </Solution>

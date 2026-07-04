@@ -11,6 +11,7 @@
 		<PackProject Include="ChipGroup\ChipGroup.csproj" />
 		<PackProject Include="GalleryView\GalleryView.csproj" />
 		<PackProject Include="PDFViewer\PDFViewer.csproj" />
+		<PackProject Include="PdfGen\PdfGen.csproj" />
 		<PackProject Include="SignaturePad\SignaturePad.csproj" />
 		<PackProject Include="VirtualizedCollectionView\VirtualizedCollectionView.csproj" />
 	</ItemGroup>
