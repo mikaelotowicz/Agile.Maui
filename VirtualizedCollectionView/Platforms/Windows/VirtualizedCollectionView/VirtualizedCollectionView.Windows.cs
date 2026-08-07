@@ -6,6 +6,7 @@
 // e ignoram o Content.
 
 using Microsoft.UI.Dispatching;
+using System.Collections.Specialized;
 using VirtualizedOrientation = Agile.Maui.VirtualizedOrientation;
 using MauiOrientation = Microsoft.Maui.Controls.ItemsLayoutOrientation;
 using Microsoft.UI.Input;
@@ -21,6 +22,8 @@ namespace Agile.Maui;
 public partial class VirtualizedCollectionView
 {
     private readonly CollectionView _cv;
+    private INotifyCollectionChanged? _itemsSourceCollectionChanged;
+    private int _observedItemsSourceCount;
 
     // ── Cursor via reflection (ProtectedCursor é protected em WinUI 3) ────────
     private static readonly System.Reflection.PropertyInfo? s_protectedCursorProp =
@@ -68,6 +71,8 @@ public partial class VirtualizedCollectionView
         _cv.RemainingItemsThresholdReached += (_, _) => RaiseRemainingItemsThresholdReached();
         _cv.Scrolled += (_, e) => RaiseScrolled(e.HorizontalOffset, e.VerticalOffset);
         _cv.HandlerChanged += OnCvHandlerChanged;
+        Loaded += OnControlLoaded;
+        Unloaded += OnControlUnloaded;
     }
 
     protected override void OnPropertyChanged(string? propertyName = null)
@@ -75,7 +80,7 @@ public partial class VirtualizedCollectionView
         base.OnPropertyChanged(propertyName);
         switch (propertyName)
         {
-            case nameof(ItemsSource):             _cv.ItemsSource             = ItemsSource;             break;
+            case nameof(ItemsSource):             SyncItemsSource();                                     break;
             case nameof(ItemTemplate):            _cv.ItemTemplate            = ItemTemplate;            break;
             case nameof(Header):                  _cv.Header                  = Header;                  break;
             case nameof(HeaderTemplate):          _cv.HeaderTemplate          = HeaderTemplate;          break;
@@ -91,6 +96,72 @@ public partial class VirtualizedCollectionView
             case nameof(VerticalScrollBarVisibility):   _cv.VerticalScrollBarVisibility   = VerticalScrollBarVisibility;   break;
             case nameof(HorizontalScrollBarVisibility): _cv.HorizontalScrollBarVisibility = HorizontalScrollBarVisibility; break;
         }
+    }
+
+    private void SyncItemsSource()
+    {
+        UnsubscribeItemsSourceCollection();
+        _cv.ItemsSource = ItemsSource;
+        _observedItemsSourceCount = CountItems(ItemsSource);
+        SubscribeItemsSourceCollection(ItemsSource);
+        if (_observedItemsSourceCount > 0)
+            ScrollToStartAfterDataRefresh();
+    }
+
+    private void OnControlLoaded(object? sender, EventArgs e)
+    {
+        if (_itemsSourceCollectionChanged is not null)
+            return;
+
+        _observedItemsSourceCount = CountItems(ItemsSource);
+        SubscribeItemsSourceCollection(ItemsSource);
+    }
+
+    private void OnControlUnloaded(object? sender, EventArgs e) =>
+        UnsubscribeItemsSourceCollection();
+
+    private void SubscribeItemsSourceCollection(System.Collections.IEnumerable? source)
+    {
+        if (_itemsSourceCollectionChanged is not null)
+            return;
+
+        if (source is INotifyCollectionChanged ncc)
+        {
+            _itemsSourceCollectionChanged = ncc;
+            ncc.CollectionChanged += OnItemsSourceCollectionChanged;
+        }
+    }
+
+    private void UnsubscribeItemsSourceCollection()
+    {
+        if (_itemsSourceCollectionChanged is null)
+            return;
+
+        _itemsSourceCollectionChanged.CollectionChanged -= OnItemsSourceCollectionChanged;
+        _itemsSourceCollectionChanged = null;
+    }
+
+    private void OnItemsSourceCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        var previousCount = _observedItemsSourceCount;
+        _observedItemsSourceCount = CountItems(ItemsSource);
+
+        if (previousCount == 0 && _observedItemsSourceCount > 0)
+            ScrollToStartAfterDataRefresh();
+    }
+
+    private static int CountItems(System.Collections.IEnumerable? source)
+    {
+        if (source is null)
+            return 0;
+
+        if (source is System.Collections.ICollection collection)
+            return collection.Count;
+
+        var count = 0;
+        foreach (var _ in source)
+            count++;
+        return count;
     }
 
     private void SyncLayout()
@@ -135,6 +206,26 @@ public partial class VirtualizedCollectionView
         }
 
         _cv.ScrollTo(0, animate: animated);
+    }
+
+    private void ScrollToStartAfterDataRefresh()
+    {
+        void Scroll() => ScrollToStart(false);
+
+        if (_cv.Handler?.PlatformView is FrameworkElement fe)
+        {
+            fe.DispatcherQueue.TryEnqueue(() =>
+            {
+                Scroll();
+                fe.DispatcherQueue.TryEnqueue(Scroll);
+            });
+            return;
+        }
+
+        if (_cv.Dispatcher is not null)
+            _cv.Dispatcher.Dispatch(Scroll);
+        else
+            Scroll();
     }
 
     // ── Ciclo de vida do handler ──────────────────────────────────────────────

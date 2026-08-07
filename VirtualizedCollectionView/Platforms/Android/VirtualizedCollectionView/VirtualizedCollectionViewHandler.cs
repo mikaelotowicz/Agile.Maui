@@ -392,6 +392,7 @@ public sealed class VirtualizedCollectionViewHandler
         ResetRemainingThresholdGate();
         _pendingChanges.Clear();
         _flushScheduled = false;
+        var previousDataItemCount = _adapter?.DataItemCount ?? 0;
 
         var template = VirtualView.ItemTemplate;
         if (template is null)
@@ -447,6 +448,8 @@ public sealed class VirtualizedCollectionViewHandler
 
         SubscribeCollection(VirtualView.ItemsSource);
         PlatformView.UpdateEmptyVisibility(_adapter.DataItemCount == 0);
+        if (previousDataItemCount == 0 && _adapter.DataItemCount > 0)
+            ScrollToStartAfterDataRefresh();
     }
 
     private void SubscribeCollection(IEnumerable? source)
@@ -504,6 +507,7 @@ public sealed class VirtualizedCollectionViewHandler
 
         var pending = _pendingChanges.ToArray();
         _pendingChanges.Clear();
+        var previousDataItemCount = _adapter.DataItemCount;
 
         var firstAction = pending[0].Action;
         var isMixed     = Array.Exists(pending, p => p.Action != firstAction);
@@ -546,6 +550,32 @@ public sealed class VirtualizedCollectionViewHandler
 
         ResetRemainingThresholdGate();
         PlatformView.UpdateEmptyVisibility(_adapter.DataItemCount == 0);
+        if (previousDataItemCount == 0 && _adapter.DataItemCount > 0)
+            ScrollToStartAfterDataRefresh();
+    }
+
+    private void ScrollToStartAfterDataRefresh()
+    {
+        var rv = PlatformView?.Rv;
+        if (rv is null) return;
+
+        rv.StopScroll();
+
+        void ScrollToStart()
+        {
+            var currentRv = PlatformView?.Rv;
+            if (currentRv is null) return;
+
+            if (currentRv.GetLayoutManager() is LinearLayoutManager lm)
+                lm.ScrollToPositionWithOffset(0, 0);
+            else
+                currentRv.ScrollToPosition(0);
+
+            ResetRemainingThresholdGate();
+        }
+
+        ScrollToStart();
+        rv.Post(ScrollToStart);
     }
 
     private static bool CanApplyPendingChanges(PendingCollectionChange[] pending, int currentCount)

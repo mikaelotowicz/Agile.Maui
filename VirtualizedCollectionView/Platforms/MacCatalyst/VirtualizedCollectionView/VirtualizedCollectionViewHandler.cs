@@ -302,6 +302,7 @@ public sealed class VirtualizedCollectionViewHandler
         // ao recarregar para manter a contagem em sincronia com a UICollectionView.
         _pendingChanges.Clear();
         _flushScheduled = false;
+        var previousDataItemCount = _dataSource?.Items.Count ?? 0;
 
         UnsubscribeCollection();
 
@@ -329,6 +330,8 @@ public sealed class VirtualizedCollectionViewHandler
 
         SubscribeCollection(VirtualView.ItemsSource);
         UpdateEmptyVisibility(items.Count == 0);
+        if (previousDataItemCount == 0 && items.Count > 0)
+            ScrollToStartAfterDataRefresh();
     }
 
     private void SubscribeCollection(IEnumerable? source)
@@ -376,6 +379,7 @@ public sealed class VirtualizedCollectionViewHandler
 
         var pending = _pendingChanges.ToArray();
         _pendingChanges.Clear();
+        var previousDataItemCount = _dataSource.Items.Count;
 
         var firstAction = pending[0].Action;
         var isMixed     = Array.Exists(pending, e => e.Action != firstAction);
@@ -390,6 +394,7 @@ public sealed class VirtualizedCollectionViewHandler
             return;
         }
 
+        var shouldScrollToStart = previousDataItemCount == 0;
         PlatformView.PerformBatchUpdates(() =>
         {
             foreach (var e in pending)
@@ -408,10 +413,31 @@ public sealed class VirtualizedCollectionViewHandler
                         break;
                 }
             }
-        }, null);
+        }, _ =>
+        {
+            if (shouldScrollToStart && _dataSource?.Items.Count > 0)
+                ScrollToStartAfterDataRefresh();
+        });
 
         ResetRemainingThresholdGate();
         UpdateEmptyVisibility(_dataSource.Items.Count == 0);
+    }
+
+    private void ScrollToStartAfterDataRefresh()
+    {
+        var collectionView = PlatformView;
+        if (collectionView is null) return;
+
+        void ScrollToStart()
+        {
+            if (PlatformView is null) return;
+
+            PlatformView.SetContentOffset(CGPoint.Empty, false);
+            ResetRemainingThresholdGate();
+        }
+
+        ScrollToStart();
+        collectionView.BeginInvokeOnMainThread(ScrollToStart);
     }
 
     private static bool CanApplyPendingChanges(NotifyCollectionChangedEventArgs[] pending, int currentCount)
