@@ -1696,28 +1696,37 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
         Rv.ScaleY    = _currentZoom;
         Rv.PivotX    = Width  / 2f;
         Rv.PivotY    = Height / 2f;
+        // Ampliado, o arrasto no limite do scroll vira pan por translação — sem isso o
+        // RV desenharia o glow de overscroll junto (feedback duplo). Em 100% mantém o
+        // comportamento nativo.
+        Rv.OverScrollMode = _currentZoom > 1.05f ? OverScrollMode.Never : OverScrollMode.Always;
         ClampPan();
     }
 
-    // ── Pan horizontal quando ampliado ─────────────────────────────────────────
-    // O RecyclerView só rola na vertical; ao ampliar via ScaleX, as laterais saem da
-    // viewport e ficam inacessíveis. TranslationX desloca o conteúdo na horizontal para
-    // revelá-las. O scroll vertical continua a cargo do RecyclerView (ScaleY).
+    // ── Pan quando ampliado ─────────────────────────────────────────────────────
+    // O RecyclerView só rola no seu eixo de orientação e o range de scroll NÃO cresce
+    // com o ScaleX/Y — ao ampliar, o conteúdo que transborda a viewport fica fora do
+    // alcance do scroll. TranslationX/Y desloca o conteúdo pós-escala para revelá-lo:
+    // no eixo cruzado (horizontal no modo vertical) sempre; no eixo de scroll, apenas
+    // na direção em que o RV não alcança (faixas de topo/fim do documento, ou a página
+    // inteira num PDF de página única, cujo range de scroll é zero).
 
     /// <summary>
-    /// Limites do pan no eixo CRUZADO ao scroll para o zoom/pivô atuais. Vertical → pan horizontal
-    /// (TranslationX); horizontal → pan vertical (TranslationY). O eixo de scroll fica com o RV.
+    /// Limita o pan nos DOIS eixos para o zoom/pivô atuais. No eixo de scroll, só
+    /// permite translação na direção em que o RecyclerView está no limite (senão o
+    /// transbordo seria inacessível: o scroll não enxerga o Scale).
     /// </summary>
     private void ClampPan()
     {
         if (_currentZoom <= 1.05f) { Rv.TranslationX = 0; Rv.TranslationY = 0; return; }
+
+        // Eixo cruzado ao scroll: pan integral (o RV nunca rola nele).
         if (!Horizontal)
         {
             float px = Rv.PivotX;
             float minTx = -(_currentZoom - 1f) * (Width - px);   // revela a borda direita
             float maxTx =  (_currentZoom - 1f) * px;             // revela a borda esquerda
             Rv.TranslationX = Math.Clamp(Rv.TranslationX, minTx, maxTx);
-            Rv.TranslationY = 0;
         }
         else
         {
@@ -1725,11 +1734,37 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
             float minTy = -(_currentZoom - 1f) * (Height - py);  // revela a borda inferior
             float maxTy =  (_currentZoom - 1f) * py;             // revela a borda superior
             Rv.TranslationY = Math.Clamp(Rv.TranslationY, minTy, maxTy);
-            Rv.TranslationX = 0;
+        }
+
+        ClampScrollAxisPan();
+    }
+
+    // Eixo de scroll: translação apenas na direção sem alcance de scroll. Se o RV ainda
+    // pode rolar para aquele lado, o limite é 0 — evita mover duas vezes o mesmo gesto
+    // (o RV consome o arrasto no seu eixo).
+    private void ClampScrollAxisPan()
+    {
+        if (!Horizontal)
+        {
+            float py = Rv.PivotY;
+            float maxTy = Rv.CanScrollVertically(-1) ? 0f : (_currentZoom - 1f) * py;         // topo do doc
+            float minTy = Rv.CanScrollVertically(1)  ? 0f : -(_currentZoom - 1f) * (Height - py); // fim do doc
+            Rv.TranslationY = Math.Clamp(Rv.TranslationY, minTy, maxTy);
+        }
+        else
+        {
+            float px = Rv.PivotX;
+            float maxTx = Rv.CanScrollHorizontally(-1) ? 0f : (_currentZoom - 1f) * px;
+            float minTx = Rv.CanScrollHorizontally(1)  ? 0f : -(_currentZoom - 1f) * (Width - px);
+            Rv.TranslationX = Math.Clamp(Rv.TranslationX, minTx, maxTx);
         }
     }
 
-    /// <summary>Arrasta a página no eixo cruzado (gesto de 1 dedo quando ampliado). Retorna true se ampliada.</summary>
+    /// <summary>
+    /// Arrasta a página quando ampliado (gesto de 1 dedo): eixo cruzado sempre, eixo de
+    /// scroll na direção sem alcance do RV (ClampScrollAxisPan limita). Retorna true se
+    /// ampliada.
+    /// </summary>
     public bool PanCross(float distanceX, float distanceY)
     {
         if (_currentZoom <= 1.05f)
@@ -1738,8 +1773,8 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
             if (Rv.TranslationY != 0) Rv.TranslationY = 0;
             return false;
         }
-        if (!Horizontal) Rv.TranslationX -= distanceX;   // distanceX>0 = dedo p/ esquerda → conteúdo acompanha
-        else             Rv.TranslationY -= distanceY;
+        Rv.TranslationX -= distanceX;   // distanceX>0 = dedo p/ esquerda → conteúdo acompanha
+        Rv.TranslationY -= distanceY;
         ClampPan();
         return true;
     }
@@ -1926,8 +1961,9 @@ internal sealed class PdfDoubleTapListener : GestureDetector.SimpleOnGestureList
     // Toque simples (confirmado, não é double-tap) → limpa a seleção ativa, se houver.
     public override bool OnSingleTapConfirmed(MotionEvent e) { _o.HandleSingleTap(e.GetX(), e.GetY()); return false; }
 
-    // Arrasto de 1 dedo: quando ampliado, faz pan horizontal (o scroll vertical fica com o
-    // RecyclerView). Com 2 dedos é pinch, tratado pelo ScaleGestureDetector — ignora aqui.
+    // Arrasto de 1 dedo: quando ampliado, faz pan nos dois eixos (no eixo de scroll, só
+    // na direção sem alcance do RV — ver PanCross). Com 2 dedos é pinch, tratado pelo
+    // ScaleGestureDetector — ignora aqui.
     public override bool OnScroll(MotionEvent? e1, MotionEvent? e2, float distanceX, float distanceY)
     {
         if (_o.Selecting) return true;   // o arraste estende a seleção (tratado em OnTouchEvent)
