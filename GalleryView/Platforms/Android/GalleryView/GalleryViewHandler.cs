@@ -254,6 +254,23 @@ public sealed class GalleryContainerView : global::Android.Widget.FrameLayout
         AddView(Dots, lp);
     }
 
+    // O MAUI mede com AT_MOST; repassado ao ViewPager2, o RecyclerView dele mede cada página pelo
+    // conteúdo — a largura da foto — e a página vizinha aparece na sobra. A página tem de ser
+    // sempre do tamanho da galeria, então o espaço oferecido vira EXACTLY.
+    protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
+    {
+        if (MeasureSpec.GetMode(widthMeasureSpec) == MeasureSpecMode.Unspecified
+            || MeasureSpec.GetMode(heightMeasureSpec) == MeasureSpecMode.Unspecified)
+        {
+            base.OnMeasure(widthMeasureSpec, heightMeasureSpec);
+            return;
+        }
+
+        base.OnMeasure(
+            MeasureSpec.MakeMeasureSpec(MeasureSpec.GetSize(widthMeasureSpec), MeasureSpecMode.Exactly),
+            MeasureSpec.MakeMeasureSpec(MeasureSpec.GetSize(heightMeasureSpec), MeasureSpecMode.Exactly));
+    }
+
     public override bool DispatchTouchEvent(MotionEvent? ev)
     {
         switch (ev?.ActionMasked)
