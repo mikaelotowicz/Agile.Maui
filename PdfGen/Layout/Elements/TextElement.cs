@@ -94,6 +94,15 @@ internal sealed class SingleLineElement : Element
         float leading = (style.LineSpacing - style.FontSize) / 2f;
         float baseline = top + leading + style.Ascent * style.FontSize;
 
+        // A ascensão da fonte embutida vem do hhea e passa bem da altura das maiúsculas (Open Sans:
+        // 1,07 em contra 0,72 da Helvetica): centraliza a caixa ascensão+descida na linha, senão o
+        // texto desce na linha e as descendentes invadem o elemento de baixo.
+        if (style.Embedded is EmbeddedFont embutida)
+        {
+            float caixa = (embutida.Ascent + embutida.Descent) * style.FontSize;
+            baseline = top + (style.LineSpacing - caixa) / 2f + embutida.Ascent * style.FontSize;
+        }
+
         if (align == TextAlign.Justify && line.CanJustify && width > line.Width)
         {
             DrawJustified(context, line, style, left, baseline, width);

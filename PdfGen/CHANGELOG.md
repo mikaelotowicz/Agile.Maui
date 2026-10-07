@@ -17,6 +17,9 @@ O formato segue Keep a Changelog e o versionamento e semantico.
 - O escritor PDF gerenciado agora respeita alpha em texto, linhas, bordas e
   fundos solidos usando `/ExtGState`.
 - O renderer Android libera os `Bitmap` decodificados ao finalizar a pagina.
+- Texto com fonte embutida agora fica centrado na linha (caixa ascensao+descida
+  do `hhea`); antes a baseline usava so a ascensao, e fontes como Open Sans
+  desciam na linha e invadiam o elemento de baixo. Base-14 nao muda.
 
 ### Alterado
 - Streams de conteudo de pagina agora sao comprimidos com `FlateDecode`.
