@@ -290,8 +290,9 @@ public sealed class VirtualizedCollectionViewHandler
         // Adia para fora do layout pass atual, evitando reentrância no UIKit.
         PlatformView.BeginInvokeOnMainThread(() =>
         {
-            if (PlatformView is null) return;
-            PlatformView.SetCollectionViewLayout(BuildCompositionalLayout(), animated: false);
+            // Pela interface: o getter tipado lança se o handler já foi desligado (ver ScrollToStart).
+            if (((IElementHandler)this).PlatformView is not UICollectionView cv) return;
+            cv.SetCollectionViewLayout(BuildCompositionalLayout(), animated: false);
         });
     }
 
@@ -444,9 +445,12 @@ public sealed class VirtualizedCollectionViewHandler
 
         void ScrollToStart()
         {
-            if (PlatformView is null) return;
+            // Postado: pode rodar depois de o handler ser desligado. O getter tipado PlatformView
+            // LANÇA ("PlatformView cannot be null here") em vez de devolver null — a leitura pela
+            // interface devolve null. É a mesma correção do Android.
+            if (((IElementHandler)this).PlatformView is not UICollectionView cv) return;
 
-            PlatformView.SetContentOffset(CGPoint.Empty, false);
+            cv.SetContentOffset(CGPoint.Empty, false);
             ResetRemainingThresholdGate();
         }
 
@@ -701,10 +705,7 @@ internal sealed class VrMauiCell : UICollectionViewCell
             if (_mauiView is not null)
             {
                 _mauiView.MeasureInvalidated -= OnMauiMeasureInvalidated;
-                if (_directView is null)
-                    _mauiView.BindingContext = null;
-                _mauiView.Handler?.DisconnectHandler();
-                _nativeView?.RemoveFromSuperview();
+                LiberarView();
                 _nativeView       = null;
                 _mauiView         = null;
                 _layoutStabilized = false;
@@ -727,8 +728,64 @@ internal sealed class VrMauiCell : UICollectionViewCell
             label.Text = item?.ToString() ?? string.Empty;
 
         if (directView is null && !ReferenceEquals(_mauiView.BindingContext, item))
+        {
             _mauiView.BindingContext = item;
+            InvalidarMedidas(_mauiView);
+        }
         SetNeedsLayout();
+    }
+
+    // O item novo liga e desliga filhos (o selo NOVO do card), mas o cache de medida nativo dos
+    // layouts internos guardava o tamanho do item anterior: o selo que aparecia ficava com
+    // tamanho zero até a célula ser reciclada de novo.
+    private static void InvalidarMedidas(IView view)
+    {
+        view.InvalidateMeasure();
+
+        if (view is not IVisualTreeElement elemento)
+            return;
+
+        foreach (var filho in elemento.GetVisualChildren())
+        {
+            if (filho is IView filhoView)
+                InvalidarMedidas(filhoView);
+        }
+    }
+
+    // Header e Footer passados como View são UMA instância do consumidor, e o ReloadData troca as
+    // células estruturais entre si: com a lista curta, a que hospedava o Header pode receber o
+    // Footer, e a do Footer, o Header. Desligar o handler dessa view a deixa medindo 0 na célula
+    // nova, e o Header some. A view do template é desta célula; a do consumidor só sai daqui.
+    private void LiberarView()
+    {
+        if (_mauiView is null)
+            return;
+
+        if (_directView is not null)
+        {
+            if (ReferenceEquals(_nativeView?.Superview, ContentView))
+                _nativeView?.RemoveFromSuperview();
+            return;
+        }
+
+        // Desmonta a árvore nativa antes de desligar. O ContentViewHandler desligado sai da célula
+        // mas continua segurando o filho: a raiz, sem pai, era recolhida pelo GC, o filho seguia
+        // vivo e, no layout dele, o MauiView subia até a raiz recolhida atrás da área segura e
+        // derrubava o app ("Failed to marshal ... ContentView"). Visto no troca grade | lista.
+        _nativeView?.RemoveFromSuperview();
+        if (_nativeView is not null)
+            DesmontarNativo(_nativeView);
+        _mauiView.BindingContext = null;
+        _mauiView.DisconnectHandlers();
+    }
+
+    private static void DesmontarNativo(UIView view)
+    {
+        foreach (var filho in view.Subviews)
+        {
+            DesmontarNativo(filho);
+            filho.RemoveFromSuperview();
+        }
     }
 
     private static View CreateMauiView(object? item, DataTemplate? template)
@@ -829,11 +886,8 @@ internal sealed class VrMauiCell : UICollectionViewCell
             if (_mauiView is not null)
             {
                 _mauiView.MeasureInvalidated -= OnMauiMeasureInvalidated;
-                if (_directView is null)
-                    _mauiView.BindingContext = null;
+                LiberarView();
             }
-            _mauiView?.Handler?.DisconnectHandler();
-            _nativeView?.RemoveFromSuperview();
             _collectionView = null;
             _nativeView     = null;
             _mauiView       = null;

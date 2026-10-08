@@ -563,7 +563,10 @@ public sealed class VirtualizedCollectionViewHandler
 
         void ScrollToStart()
         {
-            var currentRv = PlatformView?.Rv;
+            // Postado no RecyclerView: pode rodar depois de a página ser desmontada. O getter
+            // tipado PlatformView LANÇA ("PlatformView cannot be null here") em vez de devolver
+            // null, então o `?.` não protege — a leitura pela interface devolve null.
+            var currentRv = (((IElementHandler)this).PlatformView as VrContainerView)?.Rv;
             if (currentRv is null) return;
 
             if (currentRv.GetLayoutManager() is LinearLayoutManager lm)
@@ -1388,7 +1391,12 @@ internal sealed class VrAdapter : RecyclerView.Adapter
                 foreach (var h in _allHolders)
                 {
                     h.CancelHeavyBind();
-                    h.MauiView.BindingContext = null;
+                    // Header/Footer passados como View são do consumidor e voltam no adapter
+                    // seguinte (troca de ItemTemplate): zerar o contexto deles mata os bindings.
+                    // Mesma regra do _directView da célula iOS.
+                    var viewDoConsumidor = ReferenceEquals(h.MauiView, _header) || ReferenceEquals(h.MauiView, _footer);
+                    if (!viewDoConsumidor)
+                        h.MauiView.BindingContext = null;
                     h.MauiView.Handler?.DisconnectHandler();
                 }
                 _allHolders.Clear();
