@@ -49,6 +49,12 @@ public class GalleryView : View
         BindableProperty.Create(nameof(ThumbMaxPx), typeof(int), typeof(GalleryView), 720,
             validateValue: (_, v) => (int)v >= 64);
 
+    // Com AspectFit, onde a foto fica quando sobra altura na página: no topo, a sobra vai toda para
+    // baixo; embaixo, toda para cima. Android e iOS; nas outras plataformas fica centrada.
+    public static readonly BindableProperty VerticalImageAlignmentProperty =
+        BindableProperty.Create(nameof(VerticalImageAlignment), typeof(ImageAlignment), typeof(GalleryView),
+            ImageAlignment.Center);
+
     public IList<string>? Images { get => (IList<string>?)GetValue(ImagesProperty); set => SetValue(ImagesProperty, value); }
     [Obsolete("IsUrl nao e mais necessario. O GalleryView detecta automaticamente imagens http/https. Remova esta propriedade do XAML.")]
     public bool IsUrl { get => (bool)GetValue(IsUrlProperty); set => SetValue(IsUrlProperty, value); }
@@ -64,6 +70,7 @@ public class GalleryView : View
     public ICommand? ImageLoadedCommand { get => (ICommand?)GetValue(ImageLoadedCommandProperty); set => SetValue(ImageLoadedCommandProperty, value); }
     public ICommand? ImageFailedCommand { get => (ICommand?)GetValue(ImageFailedCommandProperty); set => SetValue(ImageFailedCommandProperty, value); }
     public int ThumbMaxPx { get => (int)GetValue(ThumbMaxPxProperty); set => SetValue(ThumbMaxPxProperty, value); }
+    public ImageAlignment VerticalImageAlignment { get => (ImageAlignment)GetValue(VerticalImageAlignmentProperty); set => SetValue(VerticalImageAlignmentProperty, value); }
 
     public event EventHandler<GalleryIndexChangedEventArgs>? SelectionChanged;
     public event EventHandler? ImageLoaded;
@@ -95,4 +102,11 @@ public sealed class GalleryIndexChangedEventArgs : EventArgs
 {
     public int Index { get; }
     public GalleryIndexChangedEventArgs(int index) => Index = index;
+}
+
+public enum ImageAlignment
+{
+    Center,
+    Start,
+    End
 }

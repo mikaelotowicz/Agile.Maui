@@ -131,6 +131,7 @@ zoom on the platforms that support this flow.
 | `Placeholder` | `string?` | `null` | Fallback while each image loads. |
 | `SelectedIndex` | `int` | `0` | Selected index. Minimum value: `0`. |
 | `AspectMode` | `ZoomImageAspect` | `CenterCrop` | How the image fills the space. |
+| `VerticalImageAlignment` | `ImageAlignment` | `Center` | With `AspectFit`, where each image sits when the page has leftover height: `Start` (top, leftover below), `Center` (split above and below) or `End` (bottom, leftover above). Android and iOS; centered elsewhere. Tapping the leftover area also opens fullscreen. |
 | `MaxZoom` | `float` | `5` | Maximum zoom in fullscreen. |
 | `ShowIndicator` | `bool` | `false` | Shows page indicators. |
 | `IndicatorColor` | `Color` | `White` | Color of the active indicator. |

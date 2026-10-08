@@ -18,6 +18,7 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.AspectMode)]    = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.ThumbMaxPx)]    = (h, _) => h.Reconfigure(),
+            [nameof(GalleryView.VerticalImageAlignment)] = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.MaxZoom)]                = (h, _) => { },
             [nameof(GalleryView.ShowIndicator)]          = (h, _) => h.UpdateIndicator(),
             [nameof(GalleryView.IndicatorColor)]         = (h, _) => h.UpdateIndicator(),
@@ -65,7 +66,10 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
             isUrl:       VirtualView.LegacyIsUrl,
             placeholder: VirtualView.Placeholder,
             thumbMaxPx:  VirtualView.ThumbMaxPx,
-            contentMode: contentMode);
+            contentMode: contentMode,
+            verticalAlignment: VirtualView.AspectMode == ZoomImageAspect.AspectFit
+                ? VirtualView.VerticalImageAlignment
+                : ImageAlignment.Center);
         SubscribeImages(images);
         SyncPage();
         UpdateIndicator();
@@ -181,6 +185,7 @@ internal sealed class ThumbGalleryView : UIView
     private string?                  _placeholder;
     private int                      _thumbMaxPx = 720;
     private UIViewContentMode        _contentMode = UIViewContentMode.ScaleAspectFill;
+    private ImageAlignment           _verticalAlignment = ImageAlignment.Center;
     private List<PageEntry>          _pages       = [];
     private bool                     _ignoreScroll;
     private int                      _pendingPage = -1;
@@ -203,6 +208,8 @@ internal sealed class ThumbGalleryView : UIView
             Bounces                        = true,
         };
         _scrollView.Delegate = new ThumbScrollDelegate(this);
+        // O toque é da página, não da foto: com a foto encostada, a sobra também abre a tela cheia.
+        _scrollView.AddGestureRecognizer(new UITapGestureRecognizer(() => OnPageTapped?.Invoke(_currentPage)));
         AddSubview(_scrollView);
 
         _pageControl = new UIPageControl
@@ -216,13 +223,14 @@ internal sealed class ThumbGalleryView : UIView
         AddSubview(_pageControl);
     }
 
-    public void Configure(string[] images, bool isUrl, string? placeholder, int thumbMaxPx, UIViewContentMode contentMode)
+    public void Configure(string[] images, bool isUrl, string? placeholder, int thumbMaxPx, UIViewContentMode contentMode, ImageAlignment verticalAlignment)
     {
         _images      = images;
         _isUrl       = isUrl;
         _placeholder = placeholder;
         _thumbMaxPx  = Math.Max(64, thumbMaxPx);
         _contentMode = contentMode;
+        _verticalAlignment = verticalAlignment;
 
         foreach (var p in _pages)
         {
@@ -249,13 +257,6 @@ internal sealed class ThumbGalleryView : UIView
             _pages.Add(new PageEntry(iv, null, PageLoadState.Empty, null));
         }
 
-        for (int i = 0; i < _pages.Count; i++)
-        {
-            var idx = i;
-            _pages[i].ImageView.AddGestureRecognizer(
-                new UITapGestureRecognizer(() => OnPageTapped?.Invoke(idx)));
-        }
-
         SetNeedsLayout();
     }
 
@@ -271,7 +272,7 @@ internal sealed class ThumbGalleryView : UIView
         _scrollView.ContentSize = new CGSize(w * _pages.Count, h);
 
         for (int i = 0; i < _pages.Count; i++)
-            _pages[i].ImageView.Frame = new CGRect(i * w, 0, w, h);
+            _pages[i].ImageView.Frame = PageFrame(i, w, h);
 
         LoadWindow(_currentPage);
 
@@ -289,6 +290,27 @@ internal sealed class ThumbGalleryView : UIView
             _ignoreScroll = false;
             _pendingPage  = -1;
         }
+    }
+
+    // Fora do centro, a foto ocupa a altura proporcional à largura, encostada no topo ou embaixo, e
+    // a sobra fica do outro lado. Sem foto ainda, a página inteira.
+    private CGRect PageFrame(int index, nfloat w, nfloat h)
+    {
+        var image = _pages[index].ImageView.Image;
+        if (_verticalAlignment == ImageAlignment.Center || image is null || image.Size.Width <= 0)
+            return new CGRect(index * w, 0, w, h);
+
+        var height = nfloat.Min(h, w * image.Size.Height / image.Size.Width);
+        var y = _verticalAlignment == ImageAlignment.End ? h - height : 0;
+        return new CGRect(index * w, y, w, height);
+    }
+
+    // Com a foto encostada, o quadro da página depende do tamanho da foto que chegou.
+    private void SetPageImage(UIImageView iv, UIImage image)
+    {
+        iv.Image = image;
+        if (_verticalAlignment != ImageAlignment.Center)
+            SetNeedsLayout();
     }
 
     public bool IndicatorVisible
@@ -369,7 +391,7 @@ internal sealed class ThumbGalleryView : UIView
             var cacheKey = AppleImageCache.Key(source, maxPixelSize);
             if (AppleImageCache.Get(cacheKey) is { } cached)
             {
-                entry.ImageView.Image = cached;
+                SetPageImage(entry.ImageView, cached);
                 _pages[index] = new PageEntry(entry.ImageView, null, PageLoadState.Loaded, source);
                 OnImageLoaded?.Invoke();
                 return;
@@ -390,7 +412,7 @@ internal sealed class ThumbGalleryView : UIView
             var image = AppleImageCache.LoadLocal(source, maxPixelSize, UIScreen.MainScreen.Scale);
             if (image is not null)
             {
-                entry.ImageView.Image = image;
+                SetPageImage(entry.ImageView, image);
                 _pages[index] = new PageEntry(entry.ImageView, null, PageLoadState.Loaded, source);
                 OnImageLoaded?.Invoke();
             }
@@ -457,7 +479,7 @@ internal sealed class ThumbGalleryView : UIView
                 {
                     AppleImageCache.Set(AppleImageCache.Key(url, maxPixelSize), image);
                     var iv = _pages[index].ImageView;
-                    iv.Image = image;
+                    SetPageImage(iv, image);
                     _pages[index] = new PageEntry(iv, null, PageLoadState.Loaded, url);
                     cts.Dispose();
                     OnImageLoaded?.Invoke();
@@ -508,7 +530,7 @@ internal sealed class ThumbGalleryView : UIView
     {
         if (string.IsNullOrWhiteSpace(_placeholder)) return;
         var ph = AppleImageCache.LoadLocal(_placeholder, _thumbMaxPx, UIScreen.MainScreen.Scale);
-        if (ph is not null) iv.Image = ph;
+        if (ph is not null) SetPageImage(iv, ph);
     }
 
     protected override void Dispose(bool disposing)

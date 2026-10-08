@@ -26,6 +26,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             [nameof(GalleryView.IndicatorColor)]         = (h, _) => h.UpdateDots(),
             [nameof(GalleryView.IndicatorInactiveColor)] = (h, _) => h.UpdateDots(),
             [nameof(GalleryView.ThumbMaxPx)]             = (h, _) => h.ReloadAdapter(),
+            [nameof(GalleryView.VerticalImageAlignment)] = (h, _) => h.ReloadAdapter(),
         };
 
     private GalleryPageCallback?         _pageCallback;
@@ -110,6 +111,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             isUrl:         VirtualView.LegacyIsUrl,
             placeholder:   VirtualView.Placeholder,
             aspectMode:    VirtualView.AspectMode,
+            verticalAlignment: VirtualView.VerticalImageAlignment,
             thumbMaxPx:    VirtualView.ThumbMaxPx,
             cellWidth:     pager.Width,
             cellHeight:    pager.Height,
@@ -402,6 +404,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
     private readonly bool                    _isUrl;
     private readonly string?                 _placeholder;
     private readonly ZoomImageAspect         _aspectMode;
+    private readonly ImageAlignment          _verticalAlignment;
     private readonly int                     _thumbMaxPx;
     private readonly int                     _cellWidth;
     private readonly int                     _cellHeight;
@@ -417,6 +420,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         bool                                 isUrl,
         string?                              placeholder,
         ZoomImageAspect                      aspectMode,
+        ImageAlignment                       verticalAlignment,
         int                                  thumbMaxPx,
         int                                  cellWidth,
         int                                  cellHeight,
@@ -429,6 +433,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         _isUrl          = isUrl;
         _placeholder    = placeholder;
         _aspectMode     = aspectMode;
+        _verticalAlignment = verticalAlignment;
         _thumbMaxPx     = thumbMaxPx > 0 ? thumbMaxPx : 720;
         _cellWidth      = cellWidth;
         _cellHeight     = cellHeight;
@@ -445,33 +450,43 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
     {
         var context = parent.Context!;
         var isFit   = _aspectMode != ZoomImageAspect.CenterCrop;
+        // Fora do centro, a foto mede a altura proporcional à largura (AdjustViewBounds) e a
+        // gravidade a encosta no topo ou embaixo; a sobra da página fica do outro lado.
+        var anchored = isFit && _verticalAlignment != ImageAlignment.Center;
+        var gravity  = _verticalAlignment == ImageAlignment.End ? GravityFlags.Bottom : GravityFlags.Top;
 
+        // O toque é da página, não da foto: com a foto encostada, a sobra também abre a tela cheia.
         var frame = new global::Android.Widget.FrameLayout(context)
         {
             LayoutParameters = new RecyclerView.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent,
-                ViewGroup.LayoutParams.MatchParent)
-        };
-
-        var imageView = new global::Android.Widget.ImageView(context)
-        {
-            LayoutParameters = new global::Android.Widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent,
                 ViewGroup.LayoutParams.MatchParent),
             Clickable = true,
             Focusable = true,
         };
 
+        var imageView = new global::Android.Widget.ImageView(context)
+        {
+            LayoutParameters = anchored
+                ? new global::Android.Widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MatchParent,
+                    ViewGroup.LayoutParams.WrapContent,
+                    gravity)
+                : new global::Android.Widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MatchParent,
+                    ViewGroup.LayoutParams.MatchParent),
+        };
+
         imageView.SetScaleType(isFit
             ? global::Android.Widget.ImageView.ScaleType.FitCenter
             : global::Android.Widget.ImageView.ScaleType.CenterCrop);
         imageView.SetPadding(0, 0, 0, 0);
-        imageView.SetAdjustViewBounds(false);
+        imageView.SetAdjustViewBounds(anchored);
 
         frame.AddView(imageView);
 
         var holder = new ThumbPageViewHolder(frame, imageView);
-        imageView.Click += (_, _) =>
+        frame.Click += (_, _) =>
         {
             var pos = holder.BindingAdapterPosition;
             if (pos >= 0) _onPageClick(pos);
