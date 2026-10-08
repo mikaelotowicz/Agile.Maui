@@ -1,6 +1,7 @@
 // Platforms/Android/VirtualizedCollectionView/VirtualizedCollectionViewHandler.cs
 using System.Collections;
 using System.Collections.Specialized;
+using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using Android.App;
 using Android.Content;
@@ -926,7 +927,10 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     private readonly Context             _context;
     private          List<object>        _items;
     private          int                 _itemHeightPx;
-    private readonly List<VrViewHolder>  _allHolders = [];
+    // Fraca: o holder que o RecyclerView descarta do pool (acima de poolMax) precisa ser coletado.
+    // Até o GC gerenciado, a tabela ainda entrega o holder cujo lado Java já morreu (Handle zerado).
+    // PoolingContainer não serve: o onRelease também dispara no detach da janela, com o holder vivo.
+    private readonly ConditionalWeakTable<VrViewHolder, object?> _allHolders = new();
     private          bool                _disposed;
     private          CachingLinearLayoutManager? _cachingLm;
     private          bool                _measureFirst;
@@ -1081,7 +1085,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         }
 
         var holder = new VrViewHolder(itemRoot, mauiView);
-        lock (_allHolders) _allHolders.Add(holder);
+        lock (_allHolders) _allHolders.AddOrUpdate(holder, null);
         return holder;
     }
 
@@ -1109,7 +1113,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         }
 
         var holder = new VrViewHolder(itemRoot, mauiView, isStructural: true);
-        lock (_allHolders) _allHolders.Add(holder);
+        lock (_allHolders) _allHolders.AddOrUpdate(holder, null);
         return holder;
     }
 
@@ -1227,9 +1231,9 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     {
         lock (_allHolders)
         {
-            foreach (var hh in _allHolders)
+            foreach (var (hh, _) in _allHolders)
             {
-                if (hh.IsStructural)
+                if (hh.Handle == IntPtr.Zero || hh.IsStructural)
                     continue;
 
                 if (hh.ItemView.LayoutParameters is not RecyclerView.LayoutParams lp)
@@ -1388,8 +1392,11 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         {
             lock (_allHolders)
             {
-                foreach (var h in _allHolders)
+                foreach (var (h, _) in _allHolders)
                 {
+                    if (h.Handle == IntPtr.Zero)
+                        continue;
+
                     h.CancelHeavyBind();
                     // Header/Footer passados como View são do consumidor e voltam no adapter
                     // seguinte (troca de ItemTemplate): zerar o contexto deles mata os bindings.
