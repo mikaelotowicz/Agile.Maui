@@ -44,11 +44,11 @@
 	</PropertyGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.71" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
 	</ItemGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-preview.5.26304.4" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
 	</ItemGroup>
 
 	<!-- Fonte de ícones do PdfReaderView (Material Design Icons), empacotada e registrada por UseAgilePdfViewer(). -->
@@ -60,14 +60,14 @@
 	     PDFiumCore (binding P/Invoke de baixo nível, binários nativos inclusos). Acesso direto à
 	     API de texto (FPDFText_*) para seleção/busca, e ao documento persistente (sem reabrir). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-		<PackageReference Include="PDFiumCore" Version="151.0.7891" />
+		<PackageReference Include="PDFiumCore" Version="153.0.7999" />
 	</ItemGroup>
 
 	<!-- Android: PDFium só para a CAMADA DE TEXTO (seleção/busca). O render continua via
 	     PdfRenderer nativo. Binding PDFiumCore + binário nativo bblanchon.PDFium.Android. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="PDFiumCore" Version="151.0.7891" />
-		<PackageReference Include="bblanchon.PDFium.Android" Version="151.0.7891" />
+		<PackageReference Include="PDFiumCore" Version="153.0.7999" />
+		<PackageReference Include="bblanchon.PDFium.Android" Version="153.0.8009" />
 	</ItemGroup>
 
 	<ItemGroup>
