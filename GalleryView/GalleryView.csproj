@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.Gallery</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.0.6</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.0.6-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.Gallery</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -45,7 +45,7 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.Gallery</Title>
-		<PackageReleaseNotes>1.0.6: VerticalImageAlignment no ImageView/GalleryView, páginas da galeria Android ocupando a área inteira e correções de robustez no carregamento de imagens.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.1.0: GalleryView.VerticalImageAlignment (Start/Center/End) posiciona a foto com AspectFit no Android, iOS e Mac Catalyst. Correções: páginas da galeria Android ocupam a área inteira; pinch sem crash em foto menor que a tela; proporção preservada no decode do Windows (só DecodePixelWidth); fim do loop de ImageFailed com placeholder inválido; rotação re-ancora o zoom e a página; decode do fullscreen proporcional à tela (teto de 4096 px) e, no iOS/Mac, fora da main thread; cache Apple limitado a 96 MB. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
 		<PackageIcon>agile.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>

@@ -41,18 +41,18 @@ thumbnails and navigation.
 
 ### Advanced features
 
-- LRU cache and configurable page prefetch.
-- Thumbnails as drawer/overlay on mobile and fixed sidebar on Windows.
+- LRU cache and configurable page prefetch; thumbnails also use an LRU cache.
+- Thumbnails as a fixed sidebar on Windows and as a drawer/overlay on Android, iOS and macOS Catalyst.
 - Text selection and copy where supported by the handler.
 - Localization of the ready-to-use reader's text.
 - Render control via `RenderScale`, `MaxCacheMB`, `PrefetchAbove` and `PrefetchBelow`.
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 with package `Agile.Maui.Pdf` `1.0.4`.
-- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.Pdf` `1.0.4-preview.1`.
-- Android API 21+.
-- iOS 15.0+.
+- .NET MAUI / .NET 10.0 with package `Agile.Maui.Pdf` `1.1.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later; on Android and Windows, also on PDFium `153.0.7999`).
+- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.Pdf` `1.1.0-preview.1`.
+- Android 7.0 (API 24)+.
+- iOS 15.0+ (raised from 12.1 in `1.1.0`).
 - macOS Catalyst 15.0+.
 - Windows 10.0.17763.0+; recommended Windows target: `net10.0-windows10.0.19041.0`.
 
@@ -61,13 +61,13 @@ thumbnails and navigation.
 ### 1. Install the package
 
 ```powershell
-dotnet add package Agile.Maui.Pdf --version 1.0.4
+dotnet add package Agile.Maui.Pdf --version 1.1.0
 ```
 
 For .NET 11 preview projects:
 
 ```powershell
-dotnet add package Agile.Maui.Pdf --version 1.0.4-preview.1
+dotnet add package Agile.Maui.Pdf --version 1.1.0-preview.1
 ```
 
 ### 2. Register the handler
@@ -121,9 +121,9 @@ events and commands for navigation, zoom, search, print and thumbnails.
 
 | Input | Behavior |
 |---|---|
-| `https://...` or `http://...` | Downloads and opens as a URL. |
+| `https://...` or `http://...` | Downloads and opens as a URL. Downloads share one `HttpClient` per process, with a 60-second timeout; Android and Windows stream the response to a cache file. |
 | Existing file path | Opens the local file. |
-| `PdfStream` | Opens the bytes provided by the application. |
+| `PdfStream` | Opens the bytes provided by the application. The stream is rewound on reload, so setting `Password` after `PdfStream` reopens the same document. |
 | `PdfReaderView Source="file.pdf"` | If it is not a URL/local file, tries to open it as a MauiAsset and copies it to the cache. |
 
 ### State and navigation
@@ -138,10 +138,17 @@ events and commands for navigation, zoom, search, print and thumbnails.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `ZoomFactor` | `double` | `1.0` | Zoom relative to the base fit. |
+| `ZoomFactor` | `double` | `1.0` | Zoom relative to the base fit, `TwoWay`. Clamped to `MinZoom`..`MaxZoom`, and re-clamped when the range changes. |
 | `MinZoom` | `double` | `0.5` | Minimum zoom. |
 | `MaxZoom` | `double` | `8.0` | Maximum zoom. |
 | `IsPinchZoomEnabled` | `bool` | `true` | Enables the pinch gesture when supported. |
+
+Since `1.1.0`, switching `ScrollOrientation` resets the zoom to `1.0` (100%,
+fit) instead of `MinZoom`, and on Android a double tap while zoomed in also
+returns to 100%. `ResetZoomAsync()` sets `1.0`. On Windows the effective minimum
+zoom is `max(1.0, MinZoom)`, so pages never shrink below fit. On Android, while
+zoomed in, one-finger drag pans on both axes, and horizontal mode snaps page by
+page only at about 100%. `CurrentPage` is re-clamped when `PageCount` changes.
 | `RenderScale` | `double` | `1.5` | Render scale/DPI. |
 | `MaxCacheMB` | `int` | `200` | Limit for the rendered page cache. |
 | `EnablePageCaching` | `bool` | `true` | Enables cache/prefetch. |
@@ -163,8 +170,8 @@ events and commands for navigation, zoom, search, print and thumbnails.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `EnableThumbnailBar` | `bool` | `false` | Fixed sidebar on Windows. |
-| `IsThumbnailBarOpen` | `bool` | `false` | Mobile drawer, `TwoWay`. |
+| `EnableThumbnailBar` | `bool` | `false` | Fixed sidebar on Windows. No effect on the other platforms, macOS Catalyst included. |
+| `IsThumbnailBarOpen` | `bool` | `false` | Drawer on Android, iOS and macOS Catalyst, `TwoWay`. |
 | `ThumbnailBarPlacement` | `PdfThumbnailPlacement` | `None` | `None`, `Left` or `Right`. |
 
 ### Events
@@ -199,6 +206,10 @@ Viewer.FindNext();
 Viewer.FindPrevious();
 Viewer.ClearSearch();
 ```
+
+On Android and Windows (PDFium search), changing `Source` while a search is
+running cancels it page by page, and the previous document is disposed in the
+background, so the UI does not freeze.
 
 ### Enums
 

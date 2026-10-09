@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.SignaturePad</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.0.4</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.0.4-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.SignaturePad</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,7 +20,7 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.SignaturePad</Title>
-		<PackageReleaseNotes>1.0.4: captura de assinatura com pressão por plataforma, export PNG/JPEG via serviço nativo e correções de robustez na serialização e no toque.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.1.0: fundo branco de papel por padrão (BackgroundColor = White, sobrescrevível inclusive com Transparent) para a tinta preta continuar legível no tema escuro. Correções: export PNG/JPEG na escala certa no Android/iOS/Mac (a assinatura ocupava só um canto do bitmap); JSON com contexto source-generated, compatível com trimming/AOT; segundo toque (palma) não interfere no traço; botão direito, botão da caneta e borracha não desenham no Windows e o ScrollViewer não rouba o gesto; linha do tempo contínua após carregar uma assinatura; JSON com nulos gera InvalidOperationException; redesenho com cache por traço; UseAgileSignaturePad idempotente. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>

@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.VirtualizedCollection</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.0.4</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.0.4-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.VirtualizedCollection</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,7 +20,7 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.VirtualizedCollection</Title>
-		<PackageReleaseNotes>1.0.4: correções de memória e teardown no Android (holders sob referência fraca), self-sizing estável no iOS e Header preservado na reciclagem.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.1.0: ItemTemplate aceita DataTemplateSelector (template resolvido por item no Android e no iOS/Mac Catalyst); a lista volta ao topo quando passa de vazia para preenchida. Correções: mudanças de coleção enfileiradas e coalescidas no dispatcher (lotes de thread de fundo não derrubam o iOS); célula iOS sem reter a lista e sem crash ao liberar o card; Header/Footer preservados na reciclagem; holders do Android sob referência fraca; altura medida invalidada na troca de item e na rotação; scroll sem alocação por frame. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>

@@ -5,14 +5,14 @@
 		<RootNamespace>Agile.Maui.PdfGen</RootNamespace>
 		<PackageId>Agile.Maui.PdfGen</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.2.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.2.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.PdfGen</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
 		<RepositoryUrl>https://github.com/mikaelotowicz/agile.maui</RepositoryUrl>
 		<PackageProjectUrl>https://github.com/mikaelotowicz/agile.maui</PackageProjectUrl>
-		<Description>Biblioteca open source de geração de PDF para .NET MAUI com API fluente inspirada no QuestPDF. Motor de layout independente de plataforma; renderização via APIs nativas (Android PdfDocument, iOS/Mac UIGraphicsPDFRenderer) e escritor PDF gerenciado. Fontes TrueType/OTF embutidas com Unicode e subsetting, gradientes, imagens PNG/JPEG e exportação SVG. Sem SkiaSharp, sem WebView, sem HTML.</Description>
+		<Description>Biblioteca open source de geração de PDF para .NET MAUI com API fluente inspirada no QuestPDF. Motor de layout independente de plataforma; renderização via APIs nativas (Android PdfDocument, iOS/Mac CGContextPDF) e escritor PDF gerenciado. Fontes TrueType/OTF embutidas com Unicode e subsetting, gradientes, imagens PNG/JPEG e exportação SVG. Sem SkiaSharp, sem WebView, sem HTML.</Description>
 		<PackageTags>maui;pdf;pdf-generation;document;questpdf;android;ios;maccatalyst;windows;report;svg;font-embedding;unicode;truetype;gradient</PackageTags>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
@@ -45,7 +45,7 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<PackageIcon>agile.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<PackageReleaseNotes>1.1.x: fontes TrueType/OTF embutidas com Unicode e subsetting automático; gradientes linear/radial; alpha em texto, linhas, bordas e fundos sólidos no escritor gerenciado; content streams comprimidos; paginação de wrappers decorativos; PNG com transparência (SMask); exportação para SVG; alinhamento justificado; correções de medição Unicode. Veja CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.2.0 (primeira versão publicada no nuget.org): fontes embutidas também em GeneratePdfNative (Android e iOS/Mac); Background/Border com cantos arredondados desenhados uma vez por página sobre conteúdo paginado; AlignRight/AlignCenter do contêiner alinham o PageNumber; JPEG em escala de cinza e CMYK com o colorspace certo; texto com fonte embutida centrado na linha; Typeface por processo no Android, sem vazar a cada documento; alpha em texto, linhas, bordas e fundos sólidos; content streams e ToUnicode comprimidos; alinhamento justificado; decoders de PNG/fonte blindados contra entrada malformada. Inclui o conteúdo da 1.1.0 (fontes TrueType embutidas com Unicode e subsetting, gradientes, PNG com transparência, exportação SVG). Veja CHANGELOG.md.</PackageReleaseNotes>
 	</PropertyGroup>
 
 	<ItemGroup>

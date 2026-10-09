@@ -9,20 +9,20 @@ Registration: `builder.UseAgileVirtualizedCollectionView()`
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 with package `Agile.Maui.VirtualizedCollection` `1.0.4`.
-- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.VirtualizedCollection` `1.0.4-preview.1`.
-- Android, iOS, macOS Catalyst, or Windows.
+- .NET MAUI / .NET 10.0 with package `Agile.Maui.VirtualizedCollection` `1.1.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later).
+- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.VirtualizedCollection` `1.1.0-preview.1`.
+- Android 7.0 (API 24)+, iOS 15.0+, macOS Catalyst 15.0+, or Windows 10.0.17763.0+.
 
 ## Installation
 
 ```powershell
-dotnet add package Agile.Maui.VirtualizedCollection --version 1.0.4
+dotnet add package Agile.Maui.VirtualizedCollection --version 1.1.0
 ```
 
 For .NET 11 preview projects:
 
 ```powershell
-dotnet add package Agile.Maui.VirtualizedCollection --version 1.0.4-preview.1
+dotnet add package Agile.Maui.VirtualizedCollection --version 1.1.0-preview.1
 ```
 
 ```csharp
@@ -53,10 +53,15 @@ xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedColle
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `ItemsSource` | `IEnumerable?` | `null` | Data source. Supports `INotifyCollectionChanged`. |
-| `ItemTemplate` | `DataTemplate?` | `null` | MAUI template for each item. |
+| `ItemsSource` | `IEnumerable?` | `null` | Data source. Supports `INotifyCollectionChanged`; see [Collection changes](#collection-changes). |
+| `ItemTemplate` | `DataTemplate?` | `null` | MAUI template for each item. Accepts a `DataTemplateSelector`; see [Template selector](#template-selector). |
+| `Header` | `object?` | `null` | Content shown before the items. Without `HeaderTemplate`, a `View` is used directly and any other value is shown as text. A `View` without its own `BindingContext` inherits the control's. |
+| `HeaderTemplate` | `DataTemplate?` | `null` | Template for `Header`; the created content receives `Header` as its `BindingContext`. |
+| `Footer` | `object?` | `null` | Content shown after the items. Same rules as `Header`. |
+| `FooterTemplate` | `DataTemplate?` | `null` | Template for `Footer`. |
 | `ItemHeight` | `double` | `-1` | Explicit fixed height. When `> 0`, it overrides the sizing strategy on Android/iOS/Mac. Ignored on Windows. |
 | `ItemHeightRequest` | `double` | `350` | Fixed item height in `Fixed`; scroll estimate in `Dynamic` and `MeasureFirst`. On Windows there is no equivalent for estimated height. |
+| `ItemWidthRequest` | `double` | `-1` | Item width for `Orientation=Horizontal`: absolute column width on iOS/Mac and size estimate on Android. `-1` falls back to the height values. No effect on Windows. |
 | `Span` | `int` | `1` | Columns in vertical layout; rows in horizontal layout. |
 | `Orientation` | `VirtualizedOrientation` | `Vertical` | `Vertical` or `Horizontal`. |
 | `ItemSizingStrategy` | `ItemSizingStrategy` | `Fixed` | `Fixed` (predictable height), `Dynamic` (height measured per item from content), or `MeasureFirst` (measure the first item and apply its height to all). |
@@ -76,6 +81,31 @@ xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedColle
 | `RemainingItemsThresholdReached` | Infinite scroll event. |
 | `Scrolled` | Scroll event; args expose `HorizontalOffset` and `VerticalOffset`. |
 | `ScrollTo(int index, bool animated = true)` | Scrolls to an index. |
+| `ScrollToStart(bool animated = true)` | Scrolls back to the first item. |
+
+## Template selector
+
+`ItemTemplate` accepts a `DataTemplateSelector`. On Android and iOS/Mac the
+template is resolved per item, and a recycled cell whose item maps to a different
+template recreates its content on rebind. On Windows the internal MAUI
+`CollectionView` resolves the selector natively. With `MeasureFirst`, switching
+the template re-measures the first item.
+
+```xml
+<virtualized:VirtualizedCollectionView
+    ItemsSource="{Binding Feed}"
+    ItemTemplate="{StaticResource FeedTemplateSelector}"
+    ItemSizingStrategy="Dynamic" />
+```
+
+## Collection changes
+
+- On Android and iOS/Mac, `INotifyCollectionChanged` notifications are queued
+  under a lock and coalesced through the view's dispatcher (on iOS/Mac, one batch
+  update per dispatch), so batches raised from a background thread are applied on
+  the UI thread.
+- When the list goes from empty to non-empty (first load, or a refresh after an
+  empty result), the view scrolls back to the first item on every platform.
 
 ## Enums
 
@@ -165,8 +195,8 @@ fixed height on Windows, set `HeightRequest` within the `DataTemplate` itself.
 
 | Platform | Implementation |
 |---|---|
-| Android | `RecyclerView`, `LinearLayoutManager`, `GridLayoutManager`, and `CachingLinearLayoutManager` for dynamic height. |
-| iOS/MacCatalyst | `UICollectionView` with `UICollectionViewCompositionalLayout`; `PreferredLayoutAttributesFitting` measures MAUI views. |
+| Android | `RecyclerView`, `LinearLayoutManager`, `GridLayoutManager`, and `CachingLinearLayoutManager` for dynamic height. View holders discarded by the recycled-view pool are tracked by weak reference and can be collected. |
+| iOS/MacCatalyst | `UICollectionView` with `UICollectionViewCompositionalLayout`; `PreferredLayoutAttributesFitting` measures MAUI views. Cells hold the collection view by weak reference, so closing the page releases the list, cells, and views. |
 | Windows | `ContentView` hosting a MAUI `CollectionView`, with mouse drag-to-scroll and inertia. |
 
 ## Example with inline template

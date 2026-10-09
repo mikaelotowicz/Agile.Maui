@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.ChipGroup</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.0.4</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.0.4-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.ChipGroup</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,7 +20,7 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.ChipGroup</Title>
-		<PackageReleaseNotes>1.0.4: sincronização inicial e two-way da seleção com ChipItem, rebuild coalescido no dispatcher, teardown de ciclo de vida sem leaks e acessibilidade (SemanticProperties e alvo de toque de 44pt).</PackageReleaseNotes>
+		<PackageReleaseNotes>1.1.0: seleção two-way com a VM (definir SelectedItem/SelectedItems seleciona os chips) e estado inicial lido de ChipItem.IsSelected; altura mínima de 44pt por chip (alvo de toque); SemanticProperties para leitores de tela. Mudanças de comportamento: a lista SelectedItems do consumidor é mutada em vez de substituída; o rebuild dos chips é coalescido e despachado na UI thread; novo toque no chip já selecionado em Single não dispara evento; Multiple→Single mantém só o primeiro selecionado. Teardown de eventos sem leak. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>

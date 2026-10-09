@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.Pdf</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.0.4</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.0.4-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.Pdf</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,7 +20,7 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.Pdf</Title>
-		<PackageReleaseNotes>1.0.4: pan vertical e horizontal quando ampliado no Android, PDFium 153 com binding e binário nativo alinhados e correções de robustez no render e no share.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.1.0: a troca de orientação (todas as plataformas) e o duplo toque para afastar (Android) voltam ao zoom de 100% (fit) em vez de MinZoom; pan nos dois eixos quando ampliado no Android; iOS mínimo 15.0. Correções: reload confiável de PdfStream ao definir Password; pinch sem salto; busca cancelável que não trava a UI ao trocar Source; HttpClient compartilhado com timeout de 60 s e download em streaming; miniaturas com LRU e botão de miniaturas funcionando no Mac Catalyst; PageBackgroundColor aplicada no Windows; renders deduplicados e lock do PDFium enxuto. PDFium 153, Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>

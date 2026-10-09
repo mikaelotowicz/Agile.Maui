@@ -11,20 +11,20 @@ Registration: `builder.UseAgileGalleryView()`
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 with package `Agile.Maui.Gallery` `1.0.4`.
-- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.Gallery` `1.0.4-preview.1`.
-- Android, iOS, macOS Catalyst, or Windows.
+- .NET MAUI / .NET 10.0 with package `Agile.Maui.Gallery` `1.1.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later).
+- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.Gallery` `1.1.0-preview.1`.
+- Android 7.0 (API 24)+, iOS 15.0+, macOS Catalyst 15.0+, or Windows 10.0.17763.0+.
 
 ## Installation
 
 ```powershell
-dotnet add package Agile.Maui.Gallery --version 1.0.4
+dotnet add package Agile.Maui.Gallery --version 1.1.0
 ```
 
 For .NET 11 preview projects:
 
 ```powershell
-dotnet add package Agile.Maui.Gallery --version 1.0.4-preview.1
+dotnet add package Agile.Maui.Gallery --version 1.1.0-preview.1
 ```
 
 ```csharp
@@ -93,8 +93,15 @@ small but realistic value such as `128`, `192`, or `256`; use a higher
 
 On Android, `DecodeMaxPx` is passed to Glide through
 `RequestOptions.Override(width, height)`. On iOS and MacCatalyst, local and
-remote images are downsampled through `AppleImageCache`. On Windows, it maps to
-`BitmapImage.DecodePixelWidth` and `DecodePixelHeight`.
+remote images are downsampled through `AppleImageCache` to the view's actual
+bounds times the screen scale; `DecodeMaxPx` is the fallback used before the
+view has been laid out. The Apple decode cache is capped at 96 MB. On Windows,
+it maps to `BitmapImage.DecodePixelWidth` only, so non-square images keep their
+aspect ratio.
+
+The fullscreen viewers (Android, iOS, MacCatalyst) decode at the largest screen
+dimension times `min(MaxZoom, 2)`, clamped between 720 and 4096 px. On iOS and
+MacCatalyst, remote fullscreen images are decoded off the main thread.
 
 ### Loading state and fade-in
 
@@ -131,7 +138,7 @@ zoom on the platforms that support this flow.
 | `Placeholder` | `string?` | `null` | Fallback while each image loads. |
 | `SelectedIndex` | `int` | `0` | Selected index. Minimum value: `0`. |
 | `AspectMode` | `ZoomImageAspect` | `CenterCrop` | How the image fills the space. |
-| `VerticalImageAlignment` | `ImageAlignment` | `Center` | With `AspectFit`, where each image sits when the page has leftover height: `Start` (top, leftover below), `Center` (split above and below) or `End` (bottom, leftover above). Android and iOS; centered elsewhere. Tapping the leftover area also opens fullscreen. |
+| `VerticalImageAlignment` | `ImageAlignment` | `Center` | Since `1.1.0`. With `AspectFit`, where each image sits when the page has leftover height: `Start` (top, leftover below), `Center` (split above and below) or `End` (bottom, leftover above). Android, iOS and MacCatalyst; always centered on Windows. Tapping the leftover area also opens fullscreen. |
 | `MaxZoom` | `float` | `5` | Maximum zoom in fullscreen. |
 | `ShowIndicator` | `bool` | `false` | Shows page indicators. |
 | `IndicatorColor` | `Color` | `White` | Color of the active indicator. |
@@ -163,11 +170,32 @@ zoom on the platforms that support this flow.
     HeightRequest="240" />
 ```
 
+Product detail with the photo pinned to the top of the page and the leftover
+space below it, next to the indicators:
+
+```xml
+<gallery:GalleryView
+    Images="{Binding Photos}"
+    AspectMode="AspectFit"
+    VerticalImageAlignment="Start"
+    ShowIndicator="True"
+    HeightRequest="360" />
+```
+
+```csharp
+public enum ImageAlignment
+{
+    Center,
+    Start,
+    End
+}
+```
+
 ## Per-platform behavior
 
 | Platform | `ImageView` | `GalleryView` |
 |---|---|---|
-| Android | `Android.Widget.ImageView` with Glide, disk/memory cache, bounded decode, and fullscreen via `DialogFragment`/`Matrix`. | `ViewPager2`/`RecyclerView`; native fullscreen with swipe and zoom. |
+| Android | `Android.Widget.ImageView` with Glide, disk/memory cache, bounded decode, and fullscreen via `DialogFragment`/`Matrix`. | `ViewPager2`/`RecyclerView`; each page fills the whole gallery; native fullscreen with swipe and zoom. |
 | iOS/MacCatalyst | `UIImageView`; local/remote decode through `AppleImageCache`; fullscreen with `UIScrollView`. | Paged `UIScrollView` + `UIPageControl`; fullscreen with zoom. |
 | Windows | `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage` with decode limits; fullscreen is not implemented. | `FlipView` with indicators. |
 
