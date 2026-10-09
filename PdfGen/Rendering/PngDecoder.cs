@@ -25,10 +25,15 @@ internal readonly struct DecodedPng
 /// <summary>
 /// Decodificador PNG mínimo e sem dependências: suporta profundidade de 8 bits para tons de cinza,
 /// RGB, cinza+alfa e RGBA, e paleta em 1/2/4/8 bits. Não suporta 16 bits nem entrelaçamento Adam7.
+/// Entrada malformada (dimensões forjadas, chunk inválido, IDAT truncado ou maior que o declarado)
+/// gera InvalidDataException/NotSupportedException — nunca exceções de índice/overflow nem OOM.
 /// </summary>
 internal static class PngDecoder
 {
     static readonly byte[] Signature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+
+    // Teto por lado: mantém stride/altura dentro de int e barra alocações absurdas de cabeçalhos forjados.
+    const int MaxDimension = 16384;
 
     public static DecodedPng Decode(byte[] data)
     {
@@ -48,6 +53,8 @@ internal static class PngDecoder
         while (pos + 8 <= data.Length)
         {
             int length = ReadBE32(data, pos);
+            if (length < 0)
+                throw new InvalidDataException("PNG com comprimento de chunk inválido.");
             string type = System.Text.Encoding.ASCII.GetString(data, pos + 4, 4);
             int dataStart = pos + 8;
             if (dataStart + length > data.Length)
@@ -56,6 +63,8 @@ internal static class PngDecoder
             switch (type)
             {
                 case "IHDR":
+                    if (length < 13)
+                        throw new InvalidDataException("PNG com IHDR truncado.");
                     width = ReadBE32(data, dataStart);
                     height = ReadBE32(data, dataStart + 4);
                     bitDepth = data[dataStart + 8];
@@ -83,6 +92,8 @@ internal static class PngDecoder
 
         if (width <= 0 || height <= 0)
             throw new InvalidDataException("PNG sem IHDR válido.");
+        if (width > MaxDimension || height > MaxDimension)
+            throw new InvalidDataException($"PNG de {width}x{height} excede o limite de {MaxDimension} px por lado.");
         if (interlace != 0)
             throw new System.NotSupportedException("PNG entrelaçado (Adam7) não é suportado pelo escritor gerenciado.");
         if (bitDepth == 16)
@@ -100,20 +111,34 @@ internal static class PngDecoder
 
         if (bitDepth != 8 && colorType != 3)
             throw new System.NotSupportedException("PNG só suporta 8 bits (exceto paleta, que aceita 1/2/4/8).");
+        if (colorType == 3 && bitDepth != 1 && bitDepth != 2 && bitDepth != 4 && bitDepth != 8)
+            throw new InvalidDataException($"PNG com bit depth {bitDepth} inválido para paleta.");
 
-        byte[] raw = Inflate(idat.ToArray());
+        // Com os tetos acima, stride e o total esperado cabem com folga em int.
+        int stride = (width * channels * bitDepth + 7) / 8;
+        int expected = height * (stride + 1); // +1 = byte de filtro por scanline
+
+        byte[] raw = Inflate(idat.ToArray(), expected);
         byte[] samples = Unfilter(raw, width, height, channels, bitDepth);
 
         return Compose(samples, width, height, colorType, bitDepth, channels, palette, paletteAlpha);
     }
 
-    static byte[] Inflate(byte[] zlibData)
+    /// <summary>Descomprime o zlib dos IDAT exigindo exatamente o tamanho esperado pelas dimensões.</summary>
+    static byte[] Inflate(byte[] zlibData, int expectedLength)
     {
         using var input = new MemoryStream(zlibData);
         using var zlib = new ZLibStream(input, CompressionMode.Decompress);
-        using var output = new MemoryStream();
-        zlib.CopyTo(output);
-        return output.ToArray();
+        var output = new byte[expectedLength];
+        int total = 0;
+        int read;
+        while (total < expectedLength && (read = zlib.Read(output, total, expectedLength - total)) > 0)
+            total += read;
+        if (total < expectedLength)
+            throw new InvalidDataException("PNG com IDAT truncado: dados insuficientes para as dimensões declaradas.");
+        if (zlib.ReadByte() >= 0)
+            throw new InvalidDataException("PNG com IDAT maior que o esperado para as dimensões declaradas.");
+        return output;
     }
 
     /// <summary>Desfaz os filtros PNG por scanline, devolvendo bytes crus (ainda em bit depth original).</summary>

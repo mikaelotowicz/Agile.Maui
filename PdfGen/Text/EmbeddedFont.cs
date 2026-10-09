@@ -31,10 +31,12 @@ public sealed class EmbeddedFont
     internal int BBoxXMax { get; }
     internal int BBoxYMax { get; }
     internal int CapHeight { get; }
+    /// <summary>Inclinação do itálico em graus (post.italicAngle; 0 = sem inclinação).</summary>
+    internal float ItalicAngle { get; }
 
     EmbeddedFont(byte[] data, string psName, int unitsPerEm, int numGlyphs, ushort[] advances,
         Dictionary<int, ushort> cmap, float ascent, float descent,
-        int bxMin, int byMin, int bxMax, int byMax, int capHeight)
+        int bxMin, int byMin, int bxMax, int byMax, int capHeight, float italicAngle)
     {
         FontData = data;
         PostScriptName = psName;
@@ -49,6 +51,7 @@ public sealed class EmbeddedFont
         BBoxXMax = bxMax;
         BBoxYMax = byMax;
         CapHeight = capHeight;
+        ItalicAngle = italicAngle;
     }
 
     public static EmbeddedFont FromFile(string path) => Load(File.ReadAllBytes(path));
@@ -64,6 +67,8 @@ public sealed class EmbeddedFont
             throw new NotSupportedException("Fontes OpenType/CFF ('OTTO') não são suportadas; use uma fonte TrueType (glyf).");
 
         int numTables = r.U16(4);
+        if (12 + numTables * 16 > data.Length)
+            throw new InvalidDataException("Fonte TrueType truncada ou corrompida.");
         var tables = new Dictionary<string, (int offset, int length)>();
         int dir = 12;
         for (int i = 0; i < numTables; i++)
@@ -72,13 +77,16 @@ public sealed class EmbeddedFont
             string tag = System.Text.Encoding.ASCII.GetString(data, rec, 4);
             int off = (int)r.U32(rec + 8);
             int len = (int)r.U32(rec + 12);
+            if (off < 0 || len < 0 || (long)off + len > data.Length)
+                throw new InvalidDataException("Fonte TrueType truncada ou corrompida (tabela fora dos limites).");
             tables[tag] = (off, len);
         }
 
         if (!tables.TryGetValue("head", out var head) || !tables.TryGetValue("hhea", out var hhea)
             || !tables.TryGetValue("maxp", out var maxp) || !tables.TryGetValue("hmtx", out var hmtx)
-            || !tables.TryGetValue("cmap", out var cmap) || !tables.ContainsKey("glyf"))
-            throw new NotSupportedException("Fonte sem as tabelas TrueType necessárias (head/hhea/maxp/hmtx/cmap/glyf).");
+            || !tables.TryGetValue("cmap", out var cmap) || !tables.ContainsKey("glyf")
+            || !tables.ContainsKey("loca"))
+            throw new NotSupportedException("Fonte sem as tabelas TrueType necessárias (head/hhea/maxp/hmtx/cmap/glyf/loca).");
 
         int unitsPerEm = r.U16(head.offset + 18);
         if (unitsPerEm == 0) unitsPerEm = 1000;
@@ -114,12 +122,17 @@ public sealed class EmbeddedFont
         else
             capHeight = to1000(capHeight);
 
+        // post.italicAngle é Fixed 16.16 com sinal (graus; negativo inclina para a direita).
+        float italicAngle = 0f;
+        if (tables.TryGetValue("post", out var post) && post.length >= 8)
+            italicAngle = (int)r.U32(post.offset + 4) / 65536f;
+
         string psName = ReadPostScriptName(r, tables, data);
 
         return new EmbeddedFont(
             data, psName, unitsPerEm, numGlyphs, advances, charMap,
             toEm(ascender), MathF.Abs(toEm(descender)),
-            to1000(xMin), to1000(yMin), to1000(xMax), to1000(yMax), capHeight);
+            to1000(xMin), to1000(yMin), to1000(xMax), to1000(yMax), capHeight, italicAngle);
     }
 
     /// <summary>GlyphId de um codepoint (0 = .notdef quando ausente).</summary>
@@ -280,6 +293,8 @@ public sealed class EmbeddedFont
             int strOff = r.U16(rec + 10);
             if (nameId != 6)
                 continue;
+            if ((long)stringOffset + strOff + len > data.Length)
+                continue; // registro aponta além do arquivo: ignora e tenta o próximo
 
             string value = platform == 3
                 ? System.Text.Encoding.BigEndianUnicode.GetString(data, stringOffset + strOff, len)
@@ -301,15 +316,25 @@ public sealed class EmbeddedFont
         return sb.Length == 0 ? "EmbeddedFont" : sb.ToString();
     }
 
-    /// <summary>Leitor big-endian sobre o buffer da fonte.</summary>
+    /// <summary>Leitor big-endian sobre o buffer da fonte, com checagem de limites.</summary>
     readonly struct BeReader
     {
         readonly byte[] _d;
         public BeReader(byte[] d) => _d = d;
 
-        public byte U8(int o) => _d[o];
-        public int U16(int o) => (_d[o] << 8) | _d[o + 1];
-        public int I16(int o) => (short)((_d[o] << 8) | _d[o + 1]);
-        public uint U32(int o) => ((uint)_d[o] << 24) | ((uint)_d[o + 1] << 16) | ((uint)_d[o + 2] << 8) | _d[o + 3];
+        void Need(int o, int n)
+        {
+            if (o < 0 || (long)o + n > _d.Length)
+                throw new InvalidDataException("Fonte TrueType truncada ou corrompida.");
+        }
+
+        public byte U8(int o) { Need(o, 1); return _d[o]; }
+        public int U16(int o) { Need(o, 2); return (_d[o] << 8) | _d[o + 1]; }
+        public int I16(int o) { Need(o, 2); return (short)((_d[o] << 8) | _d[o + 1]); }
+        public uint U32(int o)
+        {
+            Need(o, 4);
+            return ((uint)_d[o] << 24) | ((uint)_d[o + 1] << 16) | ((uint)_d[o + 2] << 8) | _d[o + 3];
+        }
     }
 }

@@ -90,6 +90,8 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
         public int PixelWidth;
         public int PixelHeight;
         public bool IsJpeg;              // true = DCTDecode (bytes crus); false = FlateDecode (RGB)
+        public int Components = 3;       // nº de componentes do JPEG (1=cinza, 3=RGB, 4=CMYK)
+        public bool AdobeCmyk;           // JPEG CMYK com APP14 Adobe: amostras invertidas (/Decode)
         public byte[]? SMaskStream;      // alfa deflacionado (cinza) ou null quando opaco
         public int SMaskObjId;           // id do objeto SMask (0 = sem máscara)
     }
@@ -177,6 +179,12 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
             entry.Stream = image.Data;
             entry.PixelWidth = image.PixelWidth;
             entry.PixelHeight = image.PixelHeight;
+            // O ColorSpace do dicionário precisa bater com o nº de componentes do SOF.
+            if (ImageDecoder.TryReadJpegInfo(image.Data, out _, out _, out int components, out bool adobe))
+            {
+                entry.Components = components;
+                entry.AdobeCmyk = components == 4 && adobe;
+            }
             return;
         }
 
@@ -267,10 +275,15 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
         {
             offsets[im.ObjId] = ms.Length;
             string filter = im.IsJpeg ? "/DCTDecode" : "/FlateDecode";
+            string colorSpace = im.IsJpeg
+                ? im.Components switch { 1 => "/DeviceGray", 4 => "/DeviceCMYK", _ => "/DeviceRGB" }
+                : "/DeviceRGB";
+            // JPEGs CMYK da Adobe gravam as amostras invertidas; /Decode desfaz a inversão.
+            string decode = im.AdobeCmyk ? " /Decode [1 0 1 0 1 0 1 0]" : "";
             string smask = im.SMaskObjId > 0 ? $" /SMask {im.SMaskObjId} 0 R" : "";
             WriteAscii(ms,
                 $"{im.ObjId} 0 obj\n<< /Type /XObject /Subtype /Image /Width {im.PixelWidth} /Height {im.PixelHeight} " +
-                $"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter {filter}{smask} /Length {im.Stream.Length} >>\nstream\n");
+                $"/ColorSpace {colorSpace} /BitsPerComponent 8 /Filter {filter}{decode}{smask} /Length {im.Stream.Length} >>\nstream\n");
             WriteBytes(ms, im.Stream);
             WriteAscii(ms, "\nendstream\nendobj\n");
 
@@ -335,6 +348,10 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
         {
             EmbeddedFont f = ef.Font;
 
+            // Nome com tag de subset (6 maiúsculas + '+', ISO 32000-1 §9.6.4): identifica o subconjunto
+            // e evita colisão de cache entre subsets diferentes da mesma fonte.
+            string baseName = SubsetTag(ef) + "+" + f.PostScriptName;
+
             // FontFile2: fonte reduzida aos glifos usados, comprimida (FlateDecode), /Length1 = tamanho do subset.
             byte[] subset = TrueTypeSubsetter.Subset(f.FontData, ef.UsedGlyphs.Keys);
             byte[] compressed = Deflate(subset);
@@ -346,17 +363,20 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
             // FontDescriptor
             int ascent = (int)MathF.Round(f.Ascent * 1000f);
             int descent = -(int)MathF.Round(f.Descent * 1000f);
+            int flags = 32;                 // nonsymbolic
+            if (f.ItalicAngle != 0f)
+                flags |= 64;                // bit itálico
             offsets[ef.DescriptorObjId] = ms.Length;
             WriteAscii(ms,
-                $"{ef.DescriptorObjId} 0 obj\n<< /Type /FontDescriptor /FontName /{f.PostScriptName} /Flags 32 " +
-                $"/FontBBox [{f.BBoxXMin} {f.BBoxYMin} {f.BBoxXMax} {f.BBoxYMax}] /ItalicAngle 0 " +
+                $"{ef.DescriptorObjId} 0 obj\n<< /Type /FontDescriptor /FontName /{baseName} /Flags {flags} " +
+                $"/FontBBox [{f.BBoxXMin} {f.BBoxYMin} {f.BBoxXMax} {f.BBoxYMax}] /ItalicAngle {PdfNum.F(f.ItalicAngle)} " +
                 $"/Ascent {ascent} /Descent {descent} /CapHeight {f.CapHeight} /StemV 80 " +
                 $"/FontFile2 {ef.FontFileObjId} 0 R >>\nendobj\n");
 
             // CIDFontType2 (descendente) com /W dos glifos usados.
             offsets[ef.CidFontObjId] = ms.Length;
             WriteAscii(ms,
-                $"{ef.CidFontObjId} 0 obj\n<< /Type /Font /Subtype /CIDFontType2 /BaseFont /{f.PostScriptName} " +
+                $"{ef.CidFontObjId} 0 obj\n<< /Type /Font /Subtype /CIDFontType2 /BaseFont /{baseName} " +
                 "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> " +
                 $"/FontDescriptor {ef.DescriptorObjId} 0 R /CIDToGIDMap /Identity /DW 1000 /W [{BuildWidths(ef)}] >>\nendobj\n");
 
@@ -370,9 +390,25 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
             // Type0 (fonte referenciada pelas páginas).
             offsets[ef.Type0ObjId] = ms.Length;
             WriteAscii(ms,
-                $"{ef.Type0ObjId} 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /{f.PostScriptName} " +
+                $"{ef.Type0ObjId} 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /{baseName} " +
                 $"/Encoding /Identity-H /DescendantFonts [{ef.CidFontObjId} 0 R] /ToUnicode {ef.ToUnicodeObjId} 0 R >>\nendobj\n");
         }
+    }
+
+    /// <summary>Tag determinística de 6 letras (A–Z) derivada dos glifos usados (hash FNV-1a).</summary>
+    static string SubsetTag(EmbeddedFontEntry ef)
+    {
+        uint h = 2166136261;
+        foreach (System.Collections.Generic.KeyValuePair<ushort, int> kv in ef.UsedGlyphs)
+            h = unchecked((h ^ kv.Key) * 16777619);
+
+        var tag = new char[6];
+        for (int i = 0; i < 6; i++)
+        {
+            tag[i] = (char)('A' + h % 26);
+            h /= 26;
+        }
+        return new string(tag);
     }
 
     static string BuildWidths(EmbeddedFontEntry ef)

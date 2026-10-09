@@ -19,10 +19,20 @@ internal static class ImageDecoder
         return width > 0 && height > 0;
     }
 
-    public static bool TryReadJpeg(byte[] data, out int width, out int height)
+    public static bool TryReadJpeg(byte[] data, out int width, out int height) =>
+        TryReadJpegInfo(data, out width, out height, out _, out _);
+
+    /// <summary>
+    /// Lê dimensões, número de componentes (Nf do SOF: 1=cinza, 3=YCbCr/RGB, 4=CMYK/YCCK) e a
+    /// presença do marcador APP14 "Adobe" — JPEGs CMYK da Adobe gravam as amostras invertidas.
+    /// </summary>
+    public static bool TryReadJpegInfo(byte[] data, out int width, out int height,
+        out int components, out bool adobeApp14)
     {
         width = 0;
         height = 0;
+        components = 3;
+        adobeApp14 = false;
 
         // SOI
         if (data.Length < 4 || data[0] != 0xFF || data[1] != 0xD8)
@@ -50,6 +60,12 @@ internal static class ImageDecoder
 
             int segmentLength = (data[pos] << 8) | data[pos + 1];
 
+            // APP14 "Adobe" (precede o SOF nos JPEGs da Adobe).
+            if (marker == 0xEE && pos + 6 < data.Length
+                && data[pos + 2] == (byte)'A' && data[pos + 3] == (byte)'d' && data[pos + 4] == (byte)'o'
+                && data[pos + 5] == (byte)'b' && data[pos + 6] == (byte)'e')
+                adobeApp14 = true;
+
             // SOF0..SOF15 (exceto DHT/DAC): altura/largura vêm logo após o comprimento + precisão.
             bool isStartOfFrame = marker >= 0xC0 && marker <= 0xCF
                 && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
@@ -60,6 +76,7 @@ internal static class ImageDecoder
                     return false;
                 height = (data[pos + 3] << 8) | data[pos + 4];
                 width = (data[pos + 5] << 8) | data[pos + 6];
+                components = data[pos + 7];
                 return width > 0 && height > 0;
             }
 

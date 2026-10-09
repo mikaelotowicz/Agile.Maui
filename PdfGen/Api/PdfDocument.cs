@@ -24,6 +24,9 @@ namespace Agile.Maui.PdfGen.Api;
 ///     });
 /// }).GeneratePdf();
 /// </code>
+/// A instância não é thread-safe: não renderize o mesmo documento em paralelo (chamadas
+/// concorrentes a GeneratePdf/GenerateSvg/Render corrompem o estado de layout compartilhado).
+/// Renders sequenciais da mesma instância são suportados.
 /// </summary>
 public sealed class PdfDocument
 {
@@ -49,7 +52,9 @@ public sealed class PdfDocument
     /// <summary>
     /// Gera o PDF usando o renderer nativo da plataforma corrente (Android/iOS/Mac); nas demais,
     /// recai no escritor gerenciado. Prefira este método em app MAUI para aproveitar as fontes e
-    /// o suporte a PNG do sistema.
+    /// o suporte a PNG do sistema. Atenção: nos renderers nativos, fontes embutidas
+    /// (<c>.Font(EmbeddedFont)</c>) caem para a fonte do sistema e gradientes para a cor sólida
+    /// da primeira parada — para fidelidade total a esses recursos, use <see cref="GeneratePdf()"/>.
     /// </summary>
     public byte[] GeneratePdfNative() => Render(PlatformRenderer.Create());
 

@@ -16,12 +16,12 @@ internal static class TrueTypeSubsetter
     public static byte[] Subset(byte[] font, IEnumerable<ushort> usedGids)
     {
         var dir = ReadDirectory(font, out _);
-        var head = dir["head"];
-        var hhea = dir["hhea"];
-        var maxp = dir["maxp"];
-        var hmtx = dir["hmtx"];
-        var loca = dir["loca"];
-        var glyf = dir["glyf"];
+        if (!dir.TryGetValue("head", out var head) || !dir.TryGetValue("hhea", out var hhea)
+            || !dir.TryGetValue("maxp", out var maxp) || !dir.TryGetValue("hmtx", out var hmtx)
+            || !dir.TryGetValue("loca", out var loca) || !dir.TryGetValue("glyf", out var glyf))
+            throw new InvalidDataException("Fonte sem as tabelas TrueType necessárias para o subset.");
+        if (head.length < 54 || hhea.length < 36 || maxp.length < 6)
+            throw new InvalidDataException("Fonte TrueType truncada ou corrompida (head/hhea/maxp curtas).");
 
         int numGlyphs = U16(font, maxp.offset + 4);
         int indexToLocFormat = U16(font, head.offset + 50);
@@ -44,6 +44,8 @@ internal static class TrueTypeSubsetter
             int end = glyf.offset + locaOffsets[gid + 1];
             if (end <= start)
                 continue; // glifo vazio
+            if (start < 0 || end > font.Length)
+                throw new InvalidDataException("Fonte TrueType truncada ou corrompida (loca aponta fora do glyf).");
             AddComposites(font, start, used, work);
         }
 
@@ -63,7 +65,11 @@ internal static class TrueTypeSubsetter
                 int start = glyf.offset + locaOffsets[gid];
                 int end = glyf.offset + locaOffsets[gid + 1];
                 if (end > start)
+                {
+                    if (start < 0 || end > font.Length)
+                        throw new InvalidDataException("Fonte TrueType truncada ou corrompida (loca aponta fora do glyf).");
                     newGlyf.Write(font, start, end - start);
+                }
             }
             // Alinha em 2 bytes.
             if ((newGlyf.Length & 1) != 0)
@@ -253,6 +259,8 @@ internal static class TrueTypeSubsetter
     static Dictionary<string, (int offset, int length)> ReadDirectory(byte[] font, out int numTables)
     {
         numTables = U16(font, 4);
+        if (12 + numTables * 16 > font.Length)
+            throw new InvalidDataException("Fonte TrueType truncada ou corrompida.");
         var dir = new Dictionary<string, (int, int)>();
         for (int i = 0; i < numTables; i++)
         {
@@ -260,6 +268,8 @@ internal static class TrueTypeSubsetter
             string tag = System.Text.Encoding.ASCII.GetString(font, rec, 4);
             int off = (int)U32(font, rec + 8);
             int len = (int)U32(font, rec + 12);
+            if (off < 0 || len < 0 || (long)off + len > font.Length)
+                throw new InvalidDataException("Fonte TrueType truncada ou corrompida (tabela fora dos limites).");
             dir[tag] = (off, len);
         }
         return dir;
@@ -272,9 +282,19 @@ internal static class TrueTypeSubsetter
         return b;
     }
 
-    static int U16(byte[] d, int o) => (d[o] << 8) | d[o + 1];
-    static int I16(byte[] d, int o) => (short)((d[o] << 8) | d[o + 1]);
-    static uint U32(byte[] d, int o) => ((uint)d[o] << 24) | ((uint)d[o + 1] << 16) | ((uint)d[o + 2] << 8) | d[o + 3];
+    static void Need(byte[] d, int o, int n)
+    {
+        if (o < 0 || (long)o + n > d.Length)
+            throw new InvalidDataException("Fonte TrueType truncada ou corrompida.");
+    }
+
+    static int U16(byte[] d, int o) { Need(d, o, 2); return (d[o] << 8) | d[o + 1]; }
+    static int I16(byte[] d, int o) { Need(d, o, 2); return (short)((d[o] << 8) | d[o + 1]); }
+    static uint U32(byte[] d, int o)
+    {
+        Need(d, o, 4);
+        return ((uint)d[o] << 24) | ((uint)d[o + 1] << 16) | ((uint)d[o + 2] << 8) | d[o + 3];
+    }
 
     static void WriteU16(byte[] d, int o, ushort v) { d[o] = (byte)(v >> 8); d[o + 1] = (byte)v; }
     static void WriteU32(byte[] d, int o, uint v)
