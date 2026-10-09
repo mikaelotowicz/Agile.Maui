@@ -51,7 +51,7 @@ Each module can be installed separately, so the app consumes only what it uses.
 | `Agile.Maui.Pdf` | Base `PdfViewer` and a ready-to-use `PdfReaderView` with search, print/share, zoom, thumbnails, and navigation. |
 | `Agile.Maui.PdfGen` | Fluent PDF generation with a managed backend for MAUI, WinForms, Blazor, services, and native MAUI renderers where useful. |
 | `Agile.Maui.VirtualizedCollection` | High-performance virtualized list for large volumes of items, with header/footer and `DataTemplateSelector` support. |
-| `Agile.Maui.ChipGroup` | Chip selection control with single/multiple two-way selection, 44pt touch targets, and wrap, horizontal, or vertical layout modes. |
+| `Agile.Maui.ChipGroup` | Chip selection control with single/multiple two-way selection and wrap, horizontal, or vertical layout modes. |
 | `Agile.Maui.SignaturePad` | Freehand signature capture with vector strokes, pressure metadata, undo/redo, and PNG/JPEG export. |
 
 ## What's new
@@ -65,7 +65,7 @@ marked as such.
 | `Agile.Maui.Pdf` | `1.1.0` | Behavior change: switching orientation (all platforms) and double-tap zoom-out (Android) return to 100% instead of `MinZoom`. iOS minimum raised to 15.0. Fixes: two-axis pan when zoomed on Android, reliable `PdfStream` reload with `Password`, cancellable search, shared `HttpClient` with timeout, thumbnails button on Mac Catalyst, `PdfReaderView` icon font now ships in the NuGet package (icons were blank when installed from NuGet). |
 | `Agile.Maui.PdfGen` | `1.2.0` | First version published on nuget.org. Embedded fonts in `GeneratePdfNative()`, per-page rounded decorations over paginated content, page numbers that follow container alignment, grayscale/CMYK JPEG. See the package `CHANGELOG.md`. |
 | `Agile.Maui.VirtualizedCollection` | `1.1.0` | `ItemTemplate` accepts a `DataTemplateSelector`. Behavior change: the list scrolls back to the first item when it goes from empty to non-empty. Fixes: collection changes from background threads, iOS cell leaks/crashes, header/footer kept across recycling, no UI freeze on Windows with MAUI 11 when a hidden list is filled with a large batch. |
-| `Agile.Maui.ChipGroup` | `1.1.0` | Two-way selection with the view model and initial state from `ChipItem.IsSelected`. Behavior changes: chips have a 44pt minimum height, a bound `SelectedItems` list is updated in place, and chips are rebuilt asynchronously on the UI dispatcher. |
+| `Agile.Maui.ChipGroup` | `1.1.0` | Two-way selection with the view model and initial state from `ChipItem.IsSelected`. Behavior changes: a bound `SelectedItems` list is updated in place, and chips are rebuilt asynchronously on the UI dispatcher. |
 | `Agile.Maui.SignaturePad` | `1.1.0` | Behavior change: white "paper" `BackgroundColor` by default (override it, including with `Transparent`). Fixes: export scale on Android/iOS/Mac, trimming-safe JSON, palm/second touch ignored, Windows pen eraser and right button no longer draw. |
 
 The five control packages now depend on `Microsoft.Maui.Controls` `10.0.90`

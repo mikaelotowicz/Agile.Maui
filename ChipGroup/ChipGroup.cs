@@ -463,9 +463,8 @@ public sealed class ChipGroup : ContentView
             Content = row,
             Opacity = enabled ? 1 : 0.45,
             WidthRequest = ChipWidth > 0 ? ChipWidth : -1,
-            // Alvo de toque mínimo: 44pt (Apple HIG). O Material pede 48dp, mas 44 preserva
-            // melhor o visual compacto atual dos chips.
-            MinimumHeightRequest = 44,
+            // Sem altura mínima: a altura vem de ChipPadding + texto. Os 44pt da 1.1.0 inflavam
+            // os chips compactos dos consumidores (ChipPadding 8 vertical ≈ 34pt).
         };
 
         if (Elevation > 0)
@@ -680,11 +679,17 @@ public sealed class ChipGroup : ContentView
         _syncingSelection = true;
         try
         {
-            var selected = EnumerateEntries().Where(IsEntrySelected).Select(static e => e.Value).ToList();
-            SetSelectedValues(selected);
-            SelectedItem = SelectionMode == ChipSelectionMode.Single
-                ? selected.FirstOrDefault()
-                : selected.LastOrDefault();
+            var selectedEntries = EnumerateEntries().Where(IsEntrySelected).ToList();
+            SetSelectedValues(selectedEntries.Select(static e => e.Value).ToList());
+
+            var current = SelectionMode == ChipSelectionMode.Single
+                ? selectedEntries.FirstOrDefault()
+                : selectedEntries.LastOrDefault();
+
+            // SelectedItem que já aponta para o chip (ex.: o próprio ChipItem) fica como a VM passou:
+            // trocá-lo pelo Value devolveria à VM, pelo TwoWay, um objeto de outro tipo.
+            if (current is null || !MatchesEntry(SelectedItem, current))
+                SelectedItem = current?.Value;
         }
         finally
         {
@@ -736,8 +741,8 @@ public sealed class ChipGroup : ContentView
                 if (entry.ChipItem is null) continue;
 
                 var selected = SelectionMode == ChipSelectionMode.Single
-                    ? EqualsValue(SelectedItem, entry.Value)
-                    : SelectedItems?.Cast<object?>().Any(value => EqualsValue(value, entry.Value)) == true;
+                    ? MatchesEntry(SelectedItem, entry)
+                    : SelectedItems?.Cast<object?>().Any(value => MatchesEntry(value, entry)) == true;
                 entry.ChipItem.IsSelected = selected;
             }
         }
@@ -780,6 +785,10 @@ public sealed class ChipGroup : ContentView
 
     private static bool EqualsValue(object? left, object? right)
         => EqualityComparer<object?>.Default.Equals(left, right);
+
+    // A VM pode selecionar pelo Value ou pelo próprio item da fonte (ex.: o ChipItem de ItemsSource).
+    private static bool MatchesEntry(object? selected, ChipEntry entry)
+        => EqualsValue(selected, entry.Value) || (selected is not null && ReferenceEquals(selected, entry.Source));
 
     private sealed record ChipEntry(object? Source, string Text, object? Value, ChipItem? ChipItem);
 }

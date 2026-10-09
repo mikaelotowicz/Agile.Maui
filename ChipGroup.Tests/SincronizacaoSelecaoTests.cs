@@ -196,3 +196,76 @@ public class SelectedItemsListaDoConsumidorTests
         Assert.Equal(new object?[] { "b" }, group.SelectedItems!.Cast<object?>().ToArray());
     }
 }
+
+// Regressão (E2E no app, 09/10): a VM guardava em SelectedItem o próprio ChipItem, não o Value. O two-way
+// da 1.1.0 comparava só com o Value: desmarcava todos os chips e o rebuild devolvia null à VM.
+public class SelectedItemComItemDaFonteTests
+{
+    private static ObservableCollection<ChipItem> TresItens() =>
+    [
+        new() { Text = "A", Value = "a" },
+        new() { Text = "B", Value = "b" },
+        new() { Text = "C", Value = "c" },
+    ];
+
+    [Fact]
+    public void SelectedItem_com_o_proprio_ChipItem_seleciona_o_chip()
+    {
+        var items = TresItens();
+        var group = new ChipGroup { ItemsSource = items };
+
+        group.SelectedItem = items[1];
+
+        Assert.False(items[0].IsSelected);
+        Assert.True(items[1].IsSelected);
+        Assert.False(items[2].IsSelected);
+        Assert.Equal(group.SelectedBackgroundColor, GetChips(group)[1].BackgroundColor);
+    }
+
+    [Fact]
+    public void SelectedItem_com_o_proprio_ChipItem_nao_e_trocado_pelo_Value()
+    {
+        var items = TresItens();
+        var group = new ChipGroup { ItemsSource = items };
+
+        group.SelectedItem = items[1];
+
+        Assert.Same(items[1], group.SelectedItem);
+    }
+
+    [Fact]
+    public void ChipItem_preselecionado_gravado_em_SelectedItem_sobrevive_ao_rebuild_adiado()
+    {
+        // Ordem da tela de Pedidos: a VM troca o ItemsSource (chip preferido com IsSelected) e logo grava
+        // o mesmo ChipItem em SelectedItem; o rebuild só roda depois, no dispatcher.
+        using var scope = Enqueue();
+        var items = new ObservableCollection<ChipItem>
+        {
+            new() { Text = "Pendentes", Value = "Pendentes" },
+            new() { Text = "Enviados", Value = "Enviados" },
+            new() { Text = "Todos", Value = "Todos", IsSelected = true },
+        };
+        var group = new ChipGroup();
+        group.ItemsSource = items;
+        group.SelectedItem = items[2];
+
+        scope.Dispatcher.ProcessQueue();
+
+        Assert.Same(items[2], group.SelectedItem);
+        Assert.True(items[2].IsSelected);
+        Assert.Equal(group.SelectedBackgroundColor, GetChips(group)[2].BackgroundColor);
+    }
+
+    [Fact]
+    public void SelectedItems_com_os_proprios_ChipItems_seleciona_em_Multiple()
+    {
+        var items = TresItens();
+        var group = new ChipGroup { SelectionMode = ChipSelectionMode.Multiple, ItemsSource = items };
+
+        group.SelectedItems = new List<object?> { items[0], items[2] };
+
+        Assert.True(items[0].IsSelected);
+        Assert.False(items[1].IsSelected);
+        Assert.True(items[2].IsSelected);
+    }
+}

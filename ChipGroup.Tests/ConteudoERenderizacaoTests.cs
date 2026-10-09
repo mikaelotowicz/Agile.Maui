@@ -71,12 +71,18 @@ public class RebuildConteudoTests
         Assert.Null(GetIndicator(GetChips(semCheckmark)[0]));
     }
 
+    // Regressão (E2E no app, 09/10): o mínimo de 44pt da 1.1.0 inflou os chips compactos dos
+    // consumidores (ChipPadding 8 vertical ≈ 34pt). A altura vem só de ChipPadding + texto.
     [Fact]
-    public void Chips_tem_alvo_de_toque_minimo_de_44()
+    public void Chips_nao_impoem_altura_minima()
     {
         var group = new ChipGroup { ItemsSource = new[] { "um", "dois" } };
 
-        Assert.All(GetChips(group), chip => Assert.Equal(44, chip.MinimumHeightRequest));
+        Assert.All(GetChips(group), chip =>
+        {
+            Assert.Equal(-1, chip.MinimumHeightRequest);
+            Assert.Equal(-1, chip.HeightRequest);
+        });
     }
 
     [Fact]

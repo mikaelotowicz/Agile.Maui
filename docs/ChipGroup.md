@@ -117,7 +117,10 @@ Selection is synchronized in both directions:
 - `ChipItem.IsSelected` set before the first tap is reflected in `SelectedItem`
   and `SelectedItems` as soon as the chips are built.
 - Setting `SelectedItem` (single) or `SelectedItems` (multiple) from the view
-  model selects the matching chips; values are compared with `Equals`.
+  model selects the matching chips; values are compared with `Equals`. The item
+  from `ItemsSource` itself (for example, the `ChipItem` instance) is also
+  accepted, and the control keeps it in `SelectedItem` instead of replacing it
+  with the value.
 - When the app binds a writable list to `SelectedItems`, the control updates that
   list in place. Observe `SelectionChanged`, `SelectionChangedCommand` or the
   list itself (for example an `ObservableCollection<object>`) instead of waiting
@@ -133,8 +136,8 @@ Selection is synchronized in both directions:
 
 ## Accessibility
 
-- Each chip has a minimum height of 44 (Apple HIG touch target), even with a
-  small `FontSize` or `ChipPadding`.
+- Chips have no minimum height: the height comes from `ChipPadding` and the
+  text. For a 44pt touch target, size `ChipPadding` and `FontSize` accordingly.
 - Each chip exposes `SemanticProperties.Description` with its text and
   `SemanticProperties.Hint` with its state. The hint text is fixed in Portuguese
   (`Selecionado` / `Não selecionado`).
