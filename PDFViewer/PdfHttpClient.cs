@@ -1,24 +1,35 @@
 namespace Agile.Maui;
 
 /// <summary>
-/// Fábrica de HttpClient para download de PDFs.
+/// HttpClient COMPARTILHADO para download de PDFs.
+/// Instância única por processo (criar/dispor um client por request esgota portas — guideline
+/// oficial: https://learn.microsoft.com/dotnet/fundamentals/networking/http/httpclient-guidelines),
+/// com PooledConnectionLifetime para respeitar mudanças de DNS e Timeout explícito.
 /// Configura headers completos de browser + proxy do sistema + decompressão automática.
 /// </summary>
 internal static class PdfHttpClient
 {
-    public static HttpClient Create()
+    private static readonly Lazy<HttpClient> _shared = new(CreateClient);
+
+    /// <summary>Instância compartilhada — NÃO dispor.</summary>
+    public static HttpClient Shared => _shared.Value;
+
+    private static HttpClient CreateClient()
     {
-        var handler = new HttpClientHandler
+        var handler = new SocketsHttpHandler
         {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),   // renova conexões (DNS) sem recriar o client
             AutomaticDecompression   = System.Net.DecompressionMethods.All,
             AllowAutoRedirect        = true,
             MaxAutomaticRedirections = 10,
             UseCookies               = true,
             UseProxy                 = true,               // respeita proxy do sistema
-            Proxy                    = System.Net.WebRequest.GetSystemWebProxy(),
         };
 
-        var client = new HttpClient(handler);
+        var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(60),
+        };
         var h = client.DefaultRequestHeaders;
 
         h.TryAddWithoutValidation("User-Agent",

@@ -663,8 +663,10 @@ public partial class PdfReaderView : ContentView
     // ── Miniaturas ──────────────────────────────────────────────────────────────
     private void OnThumbnailsClicked(object? sender, EventArgs e)
     {
-        // Desktop: barra lateral fixa (EnableThumbnailBar). Mobile: drawer sobreposto.
-        if (DeviceInfo.Current.Idiom == DeviceIdiom.Desktop)
+        // Decidido por PLATAFORMA, não por idiom: só o handler Windows implementa a sidebar fixa
+        // (EnableThumbnailBar). No MacCatalyst o idiom é Desktop mas o handler é o do iOS, onde
+        // EnableThumbnailBar é no-op — por idiom, o botão ficava inerte no Mac.
+        if (DeviceInfo.Current.Platform == DevicePlatform.WinUI)
             Viewer.EnableThumbnailBar = !Viewer.EnableThumbnailBar;
         else
             IsThumbnailBarOpen = !IsThumbnailBarOpen;
@@ -717,7 +719,7 @@ public partial class PdfReaderView : ContentView
     {
         _searchOpen = false;
         _suppressSearchTextChanged = true;
-        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Cancel(); _searchDebounceCts?.Dispose(); _searchDebounceCts = null;
         SearchToolbarDismissOverlay.IsVisible = false;
         SearchDismissOverlay.IsVisible = false;
         SearchEntry.Unfocus();
@@ -733,7 +735,7 @@ public partial class PdfReaderView : ContentView
     {
         if (_suppressSearchTextChanged) return;
 
-        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Cancel(); _searchDebounceCts?.Dispose();
         _searchDebounceCts = new CancellationTokenSource();
         var ct = _searchDebounceCts.Token;
         var term = e.NewTextValue ?? string.Empty;

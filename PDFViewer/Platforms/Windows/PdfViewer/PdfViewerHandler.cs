@@ -55,7 +55,7 @@ public sealed class PdfViewerHandler
             [nameof(PdfViewer.MinZoom)]             = (h, _) => h.ApplyZoomLimits(),
             [nameof(PdfViewer.MaxZoom)]             = (h, _) => h.ApplyZoomLimits(),
             [nameof(PdfViewer.MaxCacheMB)]          = (h, _) => h.ApplyCache(),
-            [nameof(PdfViewer.PageBackgroundColor)] = (h, _) => h.RenderVisible(),
+            [nameof(PdfViewer.PageBackgroundColor)] = (h, _) => h.ApplyPageBackground(),
             [nameof(PdfViewer.PageSpacing)]         = (h, _) => h.ApplySpacing(),
             [nameof(PdfViewer.ScrollOrientation)]   = (h, _) => h.ApplyOrientation(),
             [nameof(PdfViewer.IsPinchZoomEnabled)]  = (h, _) => h.ApplyZoomEnabled(),
@@ -92,6 +92,7 @@ public sealed class PdfViewerHandler
     private readonly SemaphoreSlim        _decodeGate = new(2, 2);
     private bool                          _syncingPage;
     private bool                          _syncingZoom;
+    private int                           _lastReportedPage = -1; // dedup: ViewChanged repete a mesma página a cada frame
     private float                         _lastZoom = 1f;   // último ZoomFactor visto (detecta zoom vs scroll)
     private long                          _lastWheelPageTick; // anti-rajada: 1 página por gesto de roda (ms, Environment.TickCount64)
     private float                         _renderedZoom = 1f; // zoom no qual as bitmaps atuais foram rasterizadas
@@ -140,6 +141,13 @@ public sealed class PdfViewerHandler
 
     // Itens da barra de miniaturas (para destacar a página atual com borda azul)
     private List<PdfThumbItem>?           _thumbItems;
+
+    // Itens com miniatura MATERIALIZADA (Image != null), em ordem LRU e com teto: sem limite,
+    // rolar a sidebar de um PDF grande retinha as BitmapImages de todas as páginas. Ao estourar,
+    // solta a mais antiga (Image = null) — a virtualização re-renderiza ao rolar de volta.
+    // Acesso só na UI thread.
+    private const int                     ThumbCacheMax = 128;
+    private readonly LinkedList<PdfThumbItem> _thumbLru = new();
 
     public PdfViewerHandler() : base(Mapper, CommandMapper) { }
 
@@ -242,14 +250,23 @@ public sealed class PdfViewerHandler
         _findCts?.Cancel(); _findCts?.Dispose(); _findCts = null;
 
         _cache?.Dispose(); _cache  = null;
-        _renderGate.Dispose();
-        _decodeGate.Dispose();
-        _pdfDoc?.Dispose(); _pdfDoc = null;
+        // _renderGate/_decodeGate NÃO são dispostos: SemaphoreSlim.Dispose não é thread-safe com
+        // operações em voo (renders/decodes tardios ainda dão Wait/Release) e, sem uso do
+        // AvailableWaitHandle, não há recurso nativo a liberar — o GC coleta.
 
-        if (_tempPdfPath is not null)
+        // Dispose do PDFium em BACKGROUND: ele disputa o lock global com um render/busca em curso
+        // e bloquearia a UI thread. O guard interno sob o lock torna o dispose tardio seguro; o
+        // temp é apagado DEPOIS que o documento solta o arquivo (no Windows, deletar arquivo
+        // aberto falha).
         {
-            try { System.IO.File.Delete(_tempPdfPath); } catch { }
-            _tempPdfPath = null;
+            var oldDoc  = _pdfDoc;      _pdfDoc = null;
+            var oldTemp = _tempPdfPath; _tempPdfPath = null;
+            if (oldDoc is not null || oldTemp is not null)
+                _ = Task.Run(() =>
+                {
+                    oldDoc?.Dispose();
+                    if (oldTemp is not null) try { System.IO.File.Delete(oldTemp); } catch { }
+                });
         }
 
         base.DisconnectHandler(pv);
@@ -278,11 +295,26 @@ public sealed class PdfViewerHandler
         _decodeFailures.Clear();
         _selecting = false; _selPage = _selAnchor = _selFocus = -1; _selectedText = string.Empty;
         _findCts?.Cancel(); _findHits = new(); _findCurrent = -1; _findTerm = string.Empty;
-        _pdfDoc?.Dispose();   // fecha o handle PDFium do documento anterior
-        _pdfDoc = null;
+        _lastReportedPage = -1;   // novo doc → a página 0 volta a ser reportada
+
+        // Dispose do documento anterior em BACKGROUND: disputa o lock global do PDFium com um
+        // render/busca em curso e bloquearia a UI thread (janela "não responde" em docs pesados).
+        // O temp anterior é apagado DEPOIS que o documento solta o arquivo. O NOVO temp só é
+        // comitado em _tempPdfPath na UI thread (ver MainThread abaixo) — sem corrida entre loads.
+        {
+            var oldDoc  = _pdfDoc;      _pdfDoc = null;
+            var oldTemp = _tempPdfPath; _tempPdfPath = null;
+            if (oldDoc is not null || oldTemp is not null)
+                _ = Task.Run(() =>
+                {
+                    oldDoc?.Dispose();
+                    if (oldTemp is not null) try { System.IO.File.Delete(oldTemp); } catch { }
+                });
+        }
 
         // Limpa a barra de miniaturas do documento anterior.
         _thumbItems = null;
+        _thumbLru.Clear();
         PlatformView.ThumbnailHost.Visibility = global::Microsoft.UI.Xaml.Visibility.Collapsed;
         PlatformView.ThumbnailList.ItemsSource = null;
 
@@ -333,13 +365,17 @@ public sealed class PdfViewerHandler
                 }
                 else if (isUrl)
                 {
-                    using var http = PdfHttpClient.Create();
-                    var bytes = await http.GetByteArrayAsync(source, cts.Token);
-                    _fileBytes = bytes.LongLength;
                     var tp = System.IO.Path.Combine(
                         System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
                     localTempPath = tp;
-                    await System.IO.File.WriteAllBytesAsync(tp, bytes, cts.Token);
+                    // Client COMPARTILHADO + download em streaming direto para o temp (não
+                    // bufferiza o PDF inteiro em memória).
+                    using var resp = await PdfHttpClient.Shared.GetAsync(
+                        source, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                    resp.EnsureSuccessStatusCode();
+                    await using (var fs = new FileStream(tp, FileMode.Create, FileAccess.Write))
+                        await resp.Content.CopyToAsync(fs, cts.Token);
+                    _fileBytes = SafeFileLength(tp);
                     path = tp;
                 }
                 else
@@ -350,27 +386,28 @@ public sealed class PdfViewerHandler
 
                 // Abre via PDFium (lê contagem e tamanhos das páginas — não rasteriza nada ainda).
                 var doc = await Task.Run(() => new PdfiumDoc(path, password), cts.Token);
-
-                if (cts.IsCancellationRequested)
-                {
-                    // Load cancelado: limpa o temp deste load sem tocar no campo compartilhado.
-                    if (localTempPath is not null) try { System.IO.File.Delete(localTempPath); } catch { }
-                    return;
-                }
-
-                // Comita o estado deste load só agora que sabemos que venceu. Remove o temp
-                // anterior (se houver) e adota o novo.
-                var prevTemp = _tempPdfPath;
-                _tempPdfPath = localTempPath;
-                if (prevTemp is not null && prevTemp != localTempPath)
-                    try { System.IO.File.Delete(prevTemp); } catch { }
-
-                _pdfDoc = doc;
                 int count = doc.PageCount;
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    if (cts.IsCancellationRequested || PlatformView is null) return;
+                    // Commit de _pdfDoc/_tempPdfPath SÓ AQUI, na UI thread — a mesma do
+                    // Disconnect e de re-loads. Comitar no thread de background corria com o
+                    // Dispose/re-load da UI (doc vazado ou documento errado exibido); espelha o
+                    // padrão do Android. A PlatformView é lida pela INTERFACE (a tipada lança
+                    // após o disconnect).
+                    if (cts.IsCancellationRequested
+                        || ((Microsoft.Maui.IElementHandler)this).PlatformView is null)
+                    {
+                        _ = Task.Run(() =>
+                        {
+                            doc.Dispose();
+                            if (localTempPath is not null) try { System.IO.File.Delete(localTempPath); } catch { }
+                        });
+                        return;
+                    }
+
+                    _tempPdfPath = localTempPath;
+                    _pdfDoc      = doc;
                     InitVirtualCanvas(count);
                     ApplySpacing();
                     ApplyZoomLimits();
@@ -381,12 +418,13 @@ public sealed class PdfViewerHandler
             }
             catch (OperationCanceledException)
             {
-                if (localTempPath is not null && localTempPath != _tempPdfPath)
+                // Nenhum commit aconteceu (ele é a última etapa) → o temp deste load é órfão.
+                if (localTempPath is not null)
                     try { System.IO.File.Delete(localTempPath); } catch { }
             }
             catch (Exception ex)
             {
-                if (localTempPath is not null && localTempPath != _tempPdfPath)
+                if (localTempPath is not null)
                     try { System.IO.File.Delete(localTempPath); } catch { }
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
@@ -662,6 +700,9 @@ public sealed class PdfViewerHandler
         double effSuper = zoom >= 2f ? 1.0 : rScale;
         double target   = dispW * zoom * raster * effSuper;
         double minW     = Math.Max(1, dispW * raster);   // nunca abaixo da exibição base
+        // Em monitores muito largos (ex.: ultrawide/4K @100% no modo horizontal) dispW×raster
+        // pode exceder o teto — e Math.Clamp LANÇA ArgumentException quando min > max.
+        if (minW > RenderCeiling) minW = RenderCeiling;
         // Teto RenderCeiling (≈50 MB/bitmap A4) — nítido para leitura e cabe com a janela de
         // prefetch inteira. A largura mínima efetiva é elevada ao tamanho NATIVO da página em
         // RenderPageAsync (ver nota lá): o Windows.Data.Pdf renderiza conteúdo vetorial em BRANCO
@@ -721,6 +762,12 @@ public sealed class PdfViewerHandler
         {
             int destW = (int)Math.Max(1, RenderTargetWidth(idx));
 
+            // Cor da página no PRÓPRIO bitmap (antes o fundo era fixo em branco e cobria a
+            // PageBackgroundColor assim que o render chegava). Formato 8888 ARGB do FillRect.
+            var  bgc    = VirtualView?.PageBackgroundColor ?? Colors.White;
+            uint bgArgb = ((uint)(bgc.Alpha * 255) << 24) | ((uint)(bgc.Red  * 255) << 16)
+                        | ((uint)(bgc.Green * 255) <<  8) |  (uint)(bgc.Blue * 255);
+
             // UM render por vez: o PDFium não é thread-safe. A rasterização é SÍNCRONA/CPU-bound,
             // então roda em Task.Run (fora da UI thread) para não congelar a interface; o gate
             // serializa o acesso ao motor nativo.
@@ -731,7 +778,7 @@ public sealed class PdfViewerHandler
             {
                 if (ct.IsCancellationRequested || _pdfDoc is null) return;
                 var doc = _pdfDoc;
-                (pixels, pw, ph) = await Task.Run(() => doc.RenderBgra(idx, destW), ct);
+                (pixels, pw, ph) = await Task.Run(() => doc.RenderBgra(idx, destW, bgArgb), ct);
             }
             finally { _renderGate.Release(); }
 
@@ -832,7 +879,10 @@ public sealed class PdfViewerHandler
         _ = Task.Delay(400).ContinueWith(_ =>
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                if (PlatformView is null || FindPageImage(idx) is null) return;   // saiu da janela
+                // O handler pode ter sido desconectado durante o atraso — a PlatformView TIPADA
+                // lança "PlatformView cannot be null here"; checa pela interface, que devolve null.
+                if (((Microsoft.Maui.IElementHandler)this).PlatformView is null) return;
+                if (FindPageImage(idx) is null) return;                           // saiu da janela
                 if (HasImage(idx)) { _decodeFailures.Remove(idx); return; }       // já preenchida
                 var ct = _prefetchCts?.Token ?? CancellationToken.None;
                 if (!ct.IsCancellationRequested) _ = RenderPageAsync(idx, ct);
@@ -1034,9 +1084,15 @@ public sealed class PdfViewerHandler
             if (_pageOffsets[i] <= centerBase) page = i;
             else break;
         }
-        _syncingPage = true;
-        VirtualView?.RaisePageChanged(page);
-        _syncingPage = false;
+        // Dedup: o ViewChanged intermediário dispara a cada frame com a MESMA página; sem o
+        // filtro, PageChanged (evento + Command) era invocado ~60×/s com o mesmo valor.
+        if (page != _lastReportedPage)
+        {
+            _lastReportedPage = page;
+            _syncingPage = true;
+            VirtualView?.RaisePageChanged(page);
+            _syncingPage = false;
+        }
 
         // Mantém a miniatura da página atual destacada (borda azul) e visível na barra.
         if (PlatformView.ThumbnailHost.Visibility == global::Microsoft.UI.Xaml.Visibility.Visible)
@@ -1244,6 +1300,15 @@ public sealed class PdfViewerHandler
         PlatformView.ScrollViewer.MaxZoomFactor = (float)VirtualView.MaxZoom;
     }
 
+    // Cor da página mudou: os streams cacheados foram rasterizados com a cor antiga — esvazia o
+    // cache e re-rasteriza in-place (force) para a cor valer também nas páginas já exibidas
+    // (paridade com o ApplyPageBackground do Android).
+    private void ApplyPageBackground()
+    {
+        _cache?.EvictAll();
+        RenderVisible(force: true);
+    }
+
     private void ApplyCache()
     {
         if (VirtualView is null) return;
@@ -1357,6 +1422,7 @@ public sealed class PdfViewerHandler
             host.Visibility  = global::Microsoft.UI.Xaml.Visibility.Collapsed;
             list.ItemsSource = null;
             _thumbItems      = null;
+            _thumbLru.Clear();
             return;
         }
 
@@ -1370,6 +1436,7 @@ public sealed class PdfViewerHandler
         var items = new List<PdfThumbItem>(count);
         for (int i = 0; i < count; i++)
             items.Add(new PdfThumbItem(i, thumbW, thumbW * PageRatio(i)));
+        _thumbLru.Clear();                // itens antigos saem de cena junto com a lista
         _thumbItems       = items;
         list.ItemsSource  = items;
         int cur = Math.Clamp(VirtualView.CurrentPage, 0, Math.Max(0, count - 1));
@@ -1434,6 +1501,17 @@ public sealed class PdfViewerHandler
             await bmp.SetSourceAsync(stream);   // decode síncrono dentro do await; seguro dispor após
             stream.Dispose();
             item.Image = bmp;
+
+            // Teto do cache de miniaturas (LRU): as continuations rodam na UI thread (contexto
+            // do WinUI), então a lista não precisa de lock.
+            _thumbLru.Remove(item);
+            _thumbLru.AddFirst(item);
+            while (_thumbLru.Count > ThumbCacheMax && _thumbLru.Last is not null)
+            {
+                var evict = _thumbLru.Last.Value;
+                _thumbLru.RemoveLast();
+                evict.Image = null;
+            }
         }
         catch (Exception ex)
         {
@@ -1597,7 +1675,7 @@ public sealed class PdfViewerHandler
         var doc = _pdfDoc;
         _ = Task.Run(() =>
         {
-            var hits = doc.FindAll(term);
+            var hits = doc.FindAll(term, ct);   // cancelável por página — não monopoliza o lock PDFium
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 if (ct.IsCancellationRequested) return;
@@ -1652,7 +1730,7 @@ public sealed class PdfViewerHandler
 
     private void ClearSearchState()
     {
-        _findCts?.Cancel();
+        _findCts?.Cancel(); _findCts?.Dispose(); _findCts = null;
         _findHits = new(); _findCurrent = -1; _findTerm = string.Empty;
         ClearRects(FindRectTag);
         VirtualView?.RaiseSearchResult(0, -1);
@@ -2172,18 +2250,28 @@ file sealed class PdfWinPrintJob
     {
         _doc       = await global::System.Threading.Tasks.Task.Run(() => new PdfiumDoc(_path));
         _pageCount = _doc.PageCount;
-        if (_pageCount == 0) return;
+        if (_pageCount == 0) { Cleanup(); return; }
 
-        _printDoc = new PrintDocument();
-        _source   = _printDoc.DocumentSource;
-        _printDoc.Paginate       += OnPaginate;
-        _printDoc.GetPreviewPage += OnGetPreviewPage;
-        _printDoc.AddPages       += OnAddPages;
+        try
+        {
+            _printDoc = new PrintDocument();
+            _source   = _printDoc.DocumentSource;
+            _printDoc.Paginate       += OnPaginate;
+            _printDoc.GetPreviewPage += OnGetPreviewPage;
+            _printDoc.AddPages       += OnAddPages;
 
-        _printManager = global::Windows.Graphics.Printing.PrintManagerInterop.GetForWindow(_hwnd);
-        _printManager.PrintTaskRequested += OnPrintTaskRequested;
+            _printManager = global::Windows.Graphics.Printing.PrintManagerInterop.GetForWindow(_hwnd);
+            _printManager.PrintTaskRequested += OnPrintTaskRequested;
 
-        await global::Windows.Graphics.Printing.PrintManagerInterop.ShowPrintUIForWindowAsync(_hwnd);
+            await global::Windows.Graphics.Printing.PrintManagerInterop.ShowPrintUIForWindowAsync(_hwnd);
+        }
+        catch
+        {
+            // Sem PrintTask não haverá Completed → desinscreve e solta o doc AQUI, senão o
+            // handle PDFium (e o handler em PrintTaskRequested) vazariam até o fim do processo.
+            Cleanup();
+            throw;
+        }
     }
 
     private void OnPrintTaskRequested(PrintManager sender, PrintTaskRequestedEventArgs args)
@@ -2201,14 +2289,30 @@ file sealed class PdfWinPrintJob
         _printDoc!.SetPreviewPageCount(_pageCount, PreviewPageCountType.Final);
     }
 
+    // async void (contrato do PrintDocument): uma exceção sem catch aqui derrubaria o app —
+    // páginas corrompidas/OOM viram falha logada do job, não crash.
     private async void OnGetPreviewPage(object sender, GetPreviewPageEventArgs e)
-        => _printDoc!.SetPreviewPage(e.PageNumber, await BuildPageAsync(e.PageNumber - 1));
+    {
+        try { _printDoc!.SetPreviewPage(e.PageNumber, await BuildPageAsync(e.PageNumber - 1)); }
+        catch (Exception ex) { PdfViewerLog.Write("Pdf/Win", $"Print preview({e.PageNumber}) ERRO: {ex.Message}"); }
+    }
 
     private async void OnAddPages(object sender, AddPagesEventArgs e)
     {
-        for (int i = 0; i < _pageCount; i++)
-            _printDoc!.AddPage(await BuildPageAsync(i));
-        _printDoc!.AddPagesComplete();
+        try
+        {
+            for (int i = 0; i < _pageCount; i++)
+                _printDoc!.AddPage(await BuildPageAsync(i));
+        }
+        catch (Exception ex)
+        {
+            PdfViewerLog.Write("Pdf/Win", $"Print AddPages ERRO: {ex.Message}");
+        }
+        finally
+        {
+            // Sempre fecha o lote — sem isto o spooler ficaria pendurado aguardando páginas.
+            try { _printDoc?.AddPagesComplete(); } catch { }
+        }
     }
 
     // Rasteriza a página (PDFium, ~200 DPI relativo à área imprimível) e a envolve numa folha do
@@ -2398,20 +2502,23 @@ internal sealed class PdfiumDoc : IDisposable
 
     // Busca 'term' (case-insensitive) em TODO o documento. Retorna (página, índice do 1º char,
     // nº de chars) por ocorrência. Usa text pages temporárias (não a cacheada da seleção).
-    public List<(int page, int index, int count)> FindAll(string term, int maxHits = 5000)
+    // Lock POR PÁGINA (não pelo documento inteiro): renders/seleção intercalam entre páginas e o
+    // cancelamento (busca-enquanto-digita, troca de Source) interrompe a varredura cedo — sem
+    // isso, varreduras obsoletas monopolizavam o lock global e bloqueavam a UI thread no Dispose.
+    public List<(int page, int index, int count)> FindAll(string term, CancellationToken ct = default, int maxHits = 5000)
     {
         var hits = new List<(int, int, int)>();
         if (string.IsNullOrEmpty(term)) return hits;
 
-        lock (Lib)
+        var wbuf = new ushort[term.Length + 1];     // UTF-16 terminado em null
+        for (int i = 0; i < term.Length; i++) wbuf[i] = term[i];
+
+        for (int p = 0; p < _wPt.Length; p++)
         {
-            if (_doc is null) return hits;
-
-            var wbuf = new ushort[term.Length + 1];     // UTF-16 terminado em null
-            for (int i = 0; i < term.Length; i++) wbuf[i] = term[i];
-
-            for (int p = 0; p < _wPt.Length && hits.Count < maxHits; p++)
+            if (ct.IsCancellationRequested || hits.Count >= maxHits) break;
+            lock (Lib)
             {
+                if (_doc is null) break;
                 var page = fpdfview.FPDF_LoadPage(_doc, p);
                 if (page is null) continue;
                 var tp = fpdf_text.FPDFTextLoadPage(page);
@@ -2438,7 +2545,8 @@ internal sealed class PdfiumDoc : IDisposable
 
     // Rasteriza a página na largura pedida (proporção preservada) → buffer BGRA (8888) + dimensões.
     // SÍNCRONO/CPU-bound: chame em Task.Run. Serializado pelo lock de processo.
-    public (byte[] pixels, int width, int height) RenderBgra(int index, int width)
+    // bgArgb: cor de fundo da folha em 8888 ARGB (default branco — thumbs/impressão).
+    public (byte[] pixels, int width, int height) RenderBgra(int index, int width, uint bgArgb = 0xFFFFFFFF)
     {
         lock (Lib)
         {
@@ -2460,7 +2568,7 @@ internal sealed class PdfiumDoc : IDisposable
                     if (bmp is null) return (Array.Empty<byte>(), 0, 0);
                     try
                     {
-                        fpdfview.FPDFBitmapFillRect(bmp, 0, 0, w, h, 0xFFFFFFFF);   // fundo branco (8888 ARGB)
+                        fpdfview.FPDFBitmapFillRect(bmp, 0, 0, w, h, bgArgb);
                         fpdfview.FPDF_RenderPageBitmap(bmp, page, 0, 0, w, h, 0, FPDF_ANNOT);
                     }
                     finally { fpdfview.FPDFBitmapDestroy(bmp); }

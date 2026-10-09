@@ -238,19 +238,23 @@ internal sealed class PdfiumDoc : IDisposable
     }
 
     // Busca 'term' (case-insensitive) no documento → (página, índice do 1º char, nº de chars).
-    public List<(int page, int index, int count)> FindAll(string term, int maxHits = 5000)
+    // Lock POR PÁGINA (não pelo documento inteiro): renders/seleção intercalam entre páginas e o
+    // cancelamento (busca-enquanto-digita, troca de Source) interrompe a varredura cedo — sem
+    // isso, varreduras obsoletas monopolizavam o lock global e bloqueavam a UI thread no Dispose.
+    public List<(int page, int index, int count)> FindAll(string term, CancellationToken ct = default, int maxHits = 5000)
     {
         var hits = new List<(int, int, int)>();
         if (string.IsNullOrEmpty(term)) return hits;
 
-        lock (Lib)
-        {
-            if (_doc is null) return hits;
-            var wbuf = new ushort[term.Length + 1];
-            for (int i = 0; i < term.Length; i++) wbuf[i] = term[i];
+        var wbuf = new ushort[term.Length + 1];
+        for (int i = 0; i < term.Length; i++) wbuf[i] = term[i];
 
-            for (int p = 0; p < _wPt.Length && hits.Count < maxHits; p++)
+        for (int p = 0; p < _wPt.Length; p++)
+        {
+            if (ct.IsCancellationRequested || hits.Count >= maxHits) break;
+            lock (Lib)
             {
+                if (_doc is null) break;
                 var page = fpdfview.FPDF_LoadPage(_doc, p);
                 if (page is null) continue;
                 var tp = fpdf_text.FPDFTextLoadPage(page);
@@ -324,7 +328,8 @@ internal sealed class PdfiumDoc : IDisposable
                             try { fpdf_doc.FPDFActionGetURIPath(_doc, action, h.AddrOfPinnedObject(), (ulong)n); }
                             finally { h.Free(); }
                             if (buf[n - 1] == 0) n--;   // remove o terminador null
-                            if (n > 0) return (System.Text.Encoding.ASCII.GetString(buf, 0, n), -1);
+                            // URIs em PDFs reais frequentemente vêm em UTF-8 (ASCII as mutilava em '?').
+                            if (n > 0) return (System.Text.Encoding.UTF8.GetString(buf, 0, n), -1);
                         }
                     }
                 }

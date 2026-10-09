@@ -33,7 +33,7 @@ public class PdfViewer : View
 
     public static readonly BindableProperty PageCountProperty =
         BindableProperty.Create(nameof(PageCount), typeof(int), typeof(PdfViewer), 0,
-            propertyChanged: (b, _, __) => ((PdfViewer)b).CoerceValue(CurrentPageProperty));
+            propertyChanged: (b, _, __) => ((PdfViewer)b).ReapplyCurrentPageClamp());
 
     // ── Zoom ─────────────────────────────────────────────────────────────────────
     public static readonly BindableProperty ZoomFactorProperty =
@@ -76,11 +76,23 @@ public class PdfViewer : View
         return Math.Clamp((double)value, min, max);
     }
 
+    // No MAUI 10, BindableObject.CoerceValue() não reaplica a coerção ao valor já
+    // armazenado (é inerte); quando o range muda, o clamp precisa ser re-escrito
+    // explicitamente para o valor corrente voltar aos limites.
+    private void ReapplyCurrentPageClamp()
+    {
+        var clamped = (int)CoerceCurrentPage(this, CurrentPage);
+        if (clamped != CurrentPage)
+            CurrentPage = clamped;
+    }
+
     // Quando MinZoom/MaxZoom mudam, re-coage ZoomFactor para o novo range.
     private static void OnZoomRangeChanged(BindableObject bindable, object oldValue, object newValue)
     {
         var viewer = (PdfViewer)bindable;
-        viewer.CoerceValue(ZoomFactorProperty);
+        var clamped = (double)CoerceZoomFactor(viewer, viewer.ZoomFactor);
+        if (clamped != viewer.ZoomFactor)
+            viewer.ZoomFactor = clamped;
     }
 
     // ── Funcionalidades ───────────────────────────────────────────────────────────

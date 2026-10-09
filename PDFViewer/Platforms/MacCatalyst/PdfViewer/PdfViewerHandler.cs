@@ -87,6 +87,30 @@ public sealed class PdfViewerHandler
     private bool                     _syncingZoom;     // origem da mudança = zoom nativo  → não re-aplicar
     private int                      _findCount;       // total de ocorrências da busca atual
     private int                      _findIndex = -1;  // índice 0-based da ocorrência atual
+    private int                      _searchGen;       // invalida resultados de buscas obsoletas (digitação rápida)
+
+    // Dispose ADIADO do PdfDocument: impressão (GetDataRepresentation) e busca (Find) usam o
+    // documento em worker; liberar o objeto nativo no meio seria use-after-free (o PDFKit não
+    // tem guard próprio). Enquanto houver uso em voo, o doc substituído espera em _retiredDocs.
+    // Todos os campos abaixo são manipulados SÓ na main thread.
+    private int                        _docUsers;
+    private readonly List<PdfDocument> _retiredDocs = new();
+
+    private void RetireDocument()
+    {
+        var doc = _document;
+        _document = null;
+        if (doc is null) return;
+        if (_docUsers > 0) _retiredDocs.Add(doc);
+        else doc.Dispose();
+    }
+
+    private void FlushRetiredDocs()
+    {
+        if (_docUsers > 0 || _retiredDocs.Count == 0) return;
+        foreach (var d in _retiredDocs) d.Dispose();
+        _retiredDocs.Clear();
+    }
 
     public PdfViewerHandler() : base(Mapper, CommandMapper) { }
 
@@ -109,14 +133,18 @@ public sealed class PdfViewerHandler
         }
 
         // Stream/URL em memória (sem arquivo): serializa em BACKGROUND e apresenta na main thread,
-        // para não congelar a UI durante a serialização.
+        // para não congelar a UI durante a serialização. _docUsers impede o Dispose do documento
+        // enquanto a serialização está em voo (troca de Source/disconnect → RetireDocument).
         var doc = _document;
+        _docUsers++;
         _ = Task.Run(() =>
         {
             NSData? data = null;
             try { data = doc.GetDataRepresentation(); } catch { }
             MainThread.BeginInvokeOnMainThread(() =>
             {
+                _docUsers--;
+                FlushRetiredDocs();
                 if (data is null || data.Length == 0) { PdfViewerLog.Write(Tag, "Print: sem dados."); return; }
                 PresentPrint(data);
             });
@@ -219,9 +247,9 @@ public sealed class PdfViewerHandler
         pv.OnPageTapped = null;
         pv.OnLinkClicked = null;
         pv.Teardown();
-        _findCount = 0; _findIndex = -1;
+        _findCount = 0; _findIndex = -1; _searchGen++;
 
-        _document?.Dispose(); _document = null;
+        RetireDocument();   // dispose adiado se impressão/busca ainda usam o documento
 
         DeleteTemp(_tempPath); _tempPath = null;
 
@@ -239,7 +267,7 @@ public sealed class PdfViewerHandler
         _loadCts = cts;
 
         PlatformView.SetDocument(null);
-        _document?.Dispose(); _document = null;
+        RetireDocument();   // dispose adiado se impressão/busca ainda usam o documento
 
         var source = VirtualView.Source;
         var stream = VirtualView.PdfStream;
@@ -270,8 +298,8 @@ public sealed class PdfViewerHandler
                 }
                 else if (isUrl)
                 {
-                    using var http  = PdfHttpClient.Create();
-                    var       bytes = await http.GetByteArrayAsync(source, cts.Token);
+                    // Client COMPARTILHADO (não criar/dispor por request — exaustão de portas).
+                    var bytes = await PdfHttpClient.Shared.GetByteArrayAsync(source, cts.Token);
                     if (cts.IsCancellationRequested) return;
                     PdfViewerLog.Write(Tag, $"download {bytes.Length / 1024} KB");
                     using var data = NSData.FromArray(bytes);
@@ -336,6 +364,10 @@ public sealed class PdfViewerHandler
 
     private static async Task<NSData> ReadStreamAsync(Stream stream, CancellationToken ct)
     {
+        // O PdfStream pode vir posicionado no fim (já lido — o mapper dispara LoadDocument para
+        // Source/PdfStream/Password); rebobina se possível (paridade com o Windows). Sem isto o
+        // 2º load lia 0 bytes.
+        if (stream.CanSeek) stream.Position = 0;
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms, ct);
         return NSData.FromArray(ms.ToArray());
@@ -412,10 +444,11 @@ public sealed class PdfViewerHandler
         int page = VirtualView.CurrentPage;   // a troca de DisplayMode/UsePageViewController volta p/ a 1ª página
         PlatformView.SetHorizontal(VirtualView.ScrollOrientation == PdfScrollOrientation.Horizontal);
 
-        // Zoom MÍNIMO ao trocar de modo (paridade com Android/Windows).
+        // Zoom de 100% (fit) ao trocar de modo — não MinZoom: com o default de 0.5 a página
+        // ficava à metade do tamanho (paridade com Android/Windows, cujo mínimo efetivo é 100%).
         _syncingZoom = true;
-        VirtualView.ZoomFactor = VirtualView.MinZoom;
-        PlatformView.SetZoomFactor(VirtualView.MinZoom);
+        VirtualView.ZoomFactor = 1.0;
+        PlatformView.ResetZoom();
         _syncingZoom = false;
 
         // Restaura a página atual depois que o novo modo/controller assenta.
@@ -431,13 +464,35 @@ public sealed class PdfViewerHandler
     }
 
     // ── Busca (PDFKit FindString) ──────────────────────────────────────────────────
+    // O Find do PDFKit é SÍNCRONO e varre o documento inteiro — fora da main thread para não
+    // congelar a UI em documentos grandes; o resultado é aplicado de volta na main thread.
+    // _searchGen descarta resultados de buscas obsoletas; _docUsers adia o Dispose do documento
+    // enquanto a varredura está em voo (ver RetireDocument).
     private void DoSearch(string term)
     {
         if (PlatformView is null) return;
-        _findCount = PlatformView.FindAll(term);
-        _findIndex = _findCount > 0 ? 0 : -1;
-        if (_findIndex >= 0) PlatformView.GoToMatch(_findIndex);
-        VirtualView?.RaiseSearchResult(_findCount, _findIndex);
+        int gen = ++_searchGen;
+        var pv  = PlatformView;
+        var doc = _document;
+        if (doc is null || string.IsNullOrWhiteSpace(term)) { ClearSearchState(); return; }
+
+        _docUsers++;
+        _ = Task.Run(() =>
+        {
+            PdfSelection[] found;
+            try { found = doc.Find(term, NSStringCompareOptions.CaseInsensitiveSearch) ?? Array.Empty<PdfSelection>(); }
+            catch { found = Array.Empty<PdfSelection>(); }
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                _docUsers--;
+                FlushRetiredDocs();
+                if (gen != _searchGen) return;   // já há busca mais nova (ou clear/doc trocado)
+                _findCount = pv.SetMatches(found);
+                _findIndex = _findCount > 0 ? 0 : -1;
+                if (_findIndex >= 0) pv.GoToMatch(_findIndex);
+                VirtualView?.RaiseSearchResult(_findCount, _findIndex);
+            });
+        });
     }
 
     private void StepHit(int delta)
@@ -450,6 +505,7 @@ public sealed class PdfViewerHandler
 
     private void ClearSearchState()
     {
+        _searchGen++;   // invalida varreduras em voo
         _findCount = 0; _findIndex = -1;
         PlatformView?.ClearSearch();
         VirtualView?.RaiseSearchResult(0, -1);
@@ -496,8 +552,20 @@ public sealed class PdfNativeView : UIView
     private UIView?           _drawerPanel;
     private UITableView?      _drawerTable;        // lista própria (uma miniatura por linha, top-aligned)
     private PdfThumbSource?   _thumbSource;
-    private readonly Dictionary<int, UIImage> _thumbImages = new();   // cache de miniaturas renderizadas
+    // Cache LRU de miniaturas renderizadas, com TETO: sem limite, rolar o drawer de um PDF
+    // grande retinha todas as páginas. Acesso só na main thread. O Dispose da UIImage descartada
+    // solta a ref gerenciada (a célula visível retém a sua própria ref nativa).
+    private const int ThumbCacheMax = 128;
+    private readonly Dictionary<int, UIImage> _thumbImages = new();
+    private readonly LinkedList<int>          _thumbLru    = new();
     private bool              _drawerOpen;
+
+    private void ClearThumbCache()
+    {
+        foreach (var im in _thumbImages.Values) im.Dispose();
+        _thumbImages.Clear();
+        _thumbLru.Clear();
+    }
     private bool              _thumbRight = true;   // lado do drawer (direita por padrão)
 
     public Action<int>?    OnPageChanged { get; set; }
@@ -563,7 +631,8 @@ public sealed class PdfNativeView : UIView
 
     internal void SetDocument(PdfDocument? doc)
     {
-        _thumbImages.Clear();   // miniaturas do doc anterior (índices reusados)
+        ClearThumbCache();   // miniaturas do doc anterior (índices reusados) — COM dispose
+                             // (memória nativa de CGImage não pressiona o GC)
         _pdfView.Document = doc;
         if (doc is not null)
         {
@@ -586,8 +655,7 @@ public sealed class PdfNativeView : UIView
         _thumbSource?.Dispose(); _thumbSource = null;
         _drawerPanel?.RemoveFromSuperview(); _drawerPanel?.Dispose(); _drawerPanel = null;
         _drawerScrim?.RemoveFromSuperview(); _drawerScrim?.Dispose(); _drawerScrim = null;
-        foreach (var im in _thumbImages.Values) im.Dispose();
-        _thumbImages.Clear();
+        ClearThumbCache();
         _drawerOpen = false;
 
         _pdfView.Document = null;
@@ -633,13 +701,12 @@ public sealed class PdfNativeView : UIView
     }
 
     // ── Busca (PDFKit) ─────────────────────────────────────────────────────────────
-    internal int FindAll(string term)
+    // Aplica as ocorrências encontradas (a VARREDURA roda em background no handler — ver
+    // DoSearch). Retorna o total.
+    internal int SetMatches(PdfSelection[] matches)
     {
         ClearSearch();
-        var doc = _pdfView.Document;
-        if (doc is null || string.IsNullOrWhiteSpace(term)) return 0;
-        var found = doc.Find(term, NSStringCompareOptions.CaseInsensitiveSearch);
-        _matches = found ?? Array.Empty<PdfSelection>();
+        _matches = matches;
         if (_matches.Length > 0)
         {
             foreach (var m in _matches) m.Color = UIColor.Yellow;
@@ -676,11 +743,26 @@ public sealed class PdfNativeView : UIView
 
     internal UIImage? GetThumb(int page)
     {
-        if (_thumbImages.TryGetValue(page, out var img)) return img;
+        if (_thumbImages.TryGetValue(page, out var img))
+        {
+            _thumbLru.Remove(page);          // O(n) com n ≤ 128 — irrelevante
+            _thumbLru.AddFirst(page);
+            return img;
+        }
         var pg = _pdfView.Document?.GetPage((nint)page);
         if (pg is null) return null;
         var thumb = pg.GetThumbnail(new CGSize(100, 130), PdfDisplayBox.Crop);
-        if (thumb is not null) _thumbImages[page] = thumb;
+        if (thumb is not null)
+        {
+            _thumbImages[page] = thumb;
+            _thumbLru.AddFirst(page);
+            while (_thumbImages.Count > ThumbCacheMax && _thumbLru.Last is not null)
+            {
+                int evict = _thumbLru.Last.Value;
+                _thumbLru.RemoveLast();
+                if (_thumbImages.Remove(evict, out var old)) old.Dispose();
+            }
+        }
         return thumb;
     }
 

@@ -93,6 +93,7 @@ public sealed class PdfViewerHandler
     private volatile int               _scrollDir = 1;  // +1 avançando páginas, -1 retrocedendo (prioriza a fila)
     private bool                       _syncingPage;
     private bool                       _reportingPage;  // mudança originada do scroll → não re-sincronizar
+    private int                        _lastReportedPage = -1;  // dedup: OnScrolled repete a mesma página a cada frame
     private int                        _targetPage = -1;
     private int                        _lastPrefetchCenter = -1;  // evita prefetch redundante por frame
     private bool                       _syncingZoom;
@@ -121,8 +122,43 @@ public sealed class PdfViewerHandler
     private global::Android.Widget.FrameLayout? _thumbScrim;   // FrameLayout p/ aceitar clique de forma confiável
     private AndroidX.RecyclerView.Widget.RecyclerView? _thumbRv;
     private PdfThumbAdapter?                    _thumbAdapter;
-    private readonly Dictionary<int, Bitmap>    _thumbCache = new();
     private bool                                _thumbOpen;
+
+    // Cache LRU das miniaturas do drawer, com TETO: sem limite, rolar o drawer de um PDF grande
+    // acumulava todas as páginas (~0,5 MB cada). Acesso SÓ na UI thread (sem lock). O Dispose do
+    // bitmap descartado solta o peer gerenciado (não é Recycle — a ImageView visível mantém a
+    // própria referência Java e o GC coleta depois).
+    private const int ThumbCacheMax = 128;
+    private readonly Dictionary<int, Bitmap>    _thumbCache = new();
+    private readonly LinkedList<int>            _thumbLru   = new();
+
+    private Bitmap? ThumbCacheGet(int idx)
+    {
+        if (!_thumbCache.TryGetValue(idx, out var bmp)) return null;
+        _thumbLru.Remove(idx);              // O(n) com n ≤ 128 — irrelevante
+        _thumbLru.AddFirst(idx);
+        return bmp;
+    }
+
+    private void ThumbCachePut(int idx, Bitmap bmp)
+    {
+        if (_thumbCache.TryGetValue(idx, out var old)) { _thumbLru.Remove(idx); old.Dispose(); }
+        _thumbCache[idx] = bmp;
+        _thumbLru.AddFirst(idx);
+        while (_thumbCache.Count > ThumbCacheMax && _thumbLru.Last is not null)
+        {
+            int evict = _thumbLru.Last.Value;
+            _thumbLru.RemoveLast();
+            if (_thumbCache.Remove(evict, out var e)) e.Dispose();
+        }
+    }
+
+    private void ThumbCacheClear()
+    {
+        foreach (var b in _thumbCache.Values) b.Dispose();
+        _thumbCache.Clear();
+        _thumbLru.Clear();
+    }
 
     public PdfViewerHandler() : base(Mapper, CommandMapper) { }
 
@@ -238,14 +274,25 @@ public sealed class PdfViewerHandler
         if (_thumbOverlay is not null) { pv.RemoveView(_thumbOverlay); }
         pv.ThumbOverlay = null;
         _thumbOverlay = null; _thumbScrim = null; _thumbRv = null;
-        _thumbCache.Clear();
+        ThumbCacheClear();
         _thumbOpen = false;
 
         _findCts?.Cancel(); _findCts?.Dispose(); _findCts = null;
 
         // _doc serve render E texto — descartado uma vez (fecha o handle PDFium → libera o arquivo).
-        _doc?.Dispose();
-        _doc = null;
+        // Dispose em BACKGROUND: ele disputa o lock global do PDFium com um render/busca em curso
+        // e bloquearia a UI thread (ANR em docs pesados). O guard interno sob o lock torna o
+        // dispose tardio seguro; o temp é apagado DEPOIS que o documento solta o arquivo.
+        {
+            var oldDoc  = _doc;          _doc = null;
+            var oldTemp = _tempFilePath; _tempFilePath = null;
+            if (oldDoc is not null || oldTemp is not null)
+                _ = Task.Run(() =>
+                {
+                    oldDoc?.Dispose();
+                    if (oldTemp is not null) try { System.IO.File.Delete(oldTemp); } catch { }
+                });
+        }
 
         // EvictAll SEM recycle — o RecyclerView pode ainda estar visível na animação de
         // saída com ImageViews referenciando bitmaps. Reciclar aqui causaria
@@ -254,12 +301,6 @@ public sealed class PdfViewerHandler
         _cache = null;
 
         lock (_queueLock) _queued.Clear();
-
-        if (_tempFilePath is not null)
-        {
-            try { System.IO.File.Delete(_tempFilePath); } catch { }
-            _tempFilePath = null;
-        }
 
         _shutdownCts.Dispose();
         base.DisconnectHandler(pv);
@@ -284,26 +325,33 @@ public sealed class PdfViewerHandler
 
         PlatformView.Rv.SetAdapter(null);
         _adapter?.Dispose();  _adapter = null;
-        _doc?.Dispose();      _doc     = null;
         _pageSizes = null;
-        _thumbCache.Clear();                 // miniaturas do doc anterior (índices reusados)
+        ThumbCacheClear();                   // miniaturas do doc anterior (índices reusados)
         _thumbAdapter?.Configure(0, 0);      // esvazia o drawer até o novo doc carregar
-        _findCts?.Cancel(); _findHits = new(); _findCurrent = -1; _findTerm = string.Empty;
+        _findCts?.Cancel(); _findCts?.Dispose(); _findCts = null;
+        _findHits = new(); _findCurrent = -1; _findTerm = string.Empty;
         _lastPrefetchCenter = -1;
+        _lastReportedPage   = -1;            // novo doc → a página 0 volta a ser reportada
 
         // Descarta as páginas do documento anterior: o cache é keyed por índice de página e o
         // novo PDF reusa os mesmos índices — sem esvaziar, as primeiras páginas do PDF antigo
         // apareceriam (cache hit) ao abrir o novo documento.
         _cache?.EvictAll();
 
-        // O engine anterior já foi disposed acima (fecha renderer + pfd → libera o arquivo),
-        // então é seguro deletar o temp anterior agora, na UI thread. O novo temp tem nome
-        // único (Guid) e só é registrado em _tempFilePath na UI thread (ver MainThread abaixo),
-        // eliminando qualquer corrida com o DisconnectHandler.
-        if (_tempFilePath is not null)
+        // Dispose do engine anterior em BACKGROUND: ele disputa o lock global do PDFium com um
+        // render/busca em curso e bloquearia a UI thread (ANR em docs pesados). O guard interno
+        // sob o lock torna o dispose tardio seguro; o temp anterior é apagado DEPOIS que o
+        // documento solta o arquivo. O novo temp tem nome único (Guid) e só é registrado em
+        // _tempFilePath na UI thread (ver MainThread abaixo) — sem corrida com o Disconnect.
         {
-            try { System.IO.File.Delete(_tempFilePath); } catch { }
-            _tempFilePath = null;
+            var oldDoc  = _doc;          _doc = null;
+            var oldTemp = _tempFilePath; _tempFilePath = null;
+            if (oldDoc is not null || oldTemp is not null)
+                _ = Task.Run(() =>
+                {
+                    oldDoc?.Dispose();
+                    if (oldTemp is not null) try { System.IO.File.Delete(oldTemp); } catch { }
+                });
         }
 
         var source   = VirtualView.Source;
@@ -333,6 +381,10 @@ public sealed class PdfViewerHandler
                 {
                     newTemp = System.IO.Path.Combine(
                         context.CacheDir!.AbsolutePath, Guid.NewGuid().ToString("N") + ".pdf");
+                    // O PdfStream pode vir posicionado no fim (já lido — o mapper dispara
+                    // LoadDocument para Source/PdfStream/Password); rebobina se possível
+                    // (paridade com o Windows). Sem isto o 2º load copiava 0 bytes.
+                    if (stream.CanSeek) stream.Position = 0;
                     await using (var fs = new FileStream(newTemp, FileMode.Create, FileAccess.Write))
                         await stream.CopyToAsync(fs, cts.Token);
                     localPath = newTemp;
@@ -341,10 +393,14 @@ public sealed class PdfViewerHandler
                 {
                     newTemp = System.IO.Path.Combine(
                         context.CacheDir!.AbsolutePath, Guid.NewGuid().ToString("N") + ".pdf");
-                    using var http = PdfHttpClient.Create();
-                    var bytes = await http.GetByteArrayAsync(source, cts.Token);
-                    PdfViewerLog.Write(Tag, $"LoadDocument: download {bytes.Length / 1024} KB");
-                    await System.IO.File.WriteAllBytesAsync(newTemp, bytes, cts.Token);
+                    // Client COMPARTILHADO + download em streaming direto para o temp (não
+                    // bufferiza o PDF inteiro em memória).
+                    using var resp = await PdfHttpClient.Shared.GetAsync(
+                        source, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                    resp.EnsureSuccessStatusCode();
+                    await using (var fs = new FileStream(newTemp, FileMode.Create, FileAccess.Write))
+                        await resp.Content.CopyToAsync(fs, cts.Token);
+                    PdfViewerLog.Write(Tag, $"LoadDocument: download {SafeFileLength(newTemp) / 1024} KB");
                     localPath = newTemp;
                 }
                 else
@@ -413,7 +469,10 @@ public sealed class PdfViewerHandler
                     // viewport já é definitiva). Sem isto, o offset de centralização de 1 página é
                     // computado com Height=0 e fica cacheado — por isso só centralizava depois de
                     // alternar a orientação (que reconstrói o adapter e reaplica a decoração).
-                    PlatformView.Rv.Post(() => PlatformView?.Rv.InvalidateItemDecorations());
+                    // Usa a referência CAPTURADA: após o disconnect a PlatformView tipada LANÇA
+                    // "PlatformView cannot be null here" (ver nota em RefreshSelectionHighlight).
+                    var pview = PlatformView;
+                    pview.Rv.Post(() => pview.Rv.InvalidateItemDecorations());
                 });
             }
             catch (OperationCanceledException) { doc?.Dispose(); CleanupTemp(newTemp); }
@@ -697,6 +756,10 @@ public sealed class PdfViewerHandler
     private void ReportPage(int page)
     {
         _currentCenter = page;   // mantém a prioridade da fila de render colada ao scroll
+        // Dedup: o OnScrolled dispara a cada frame com a MESMA primeira página visível; sem o
+        // filtro, PageChanged (evento + Command) era invocado ~60×/s com o mesmo valor.
+        if (page == _lastReportedPage) return;
+        _lastReportedPage = page;
         _reportingPage = true;
         VirtualView?.RaisePageChanged(page);
         _reportingPage = false;
@@ -737,17 +800,6 @@ public sealed class PdfViewerHandler
         _syncingZoom = false;
     }
 
-    /// <summary>Reseta o zoom para o MÍNIMO (MinZoom) — chamado ao trocar a orientação.</summary>
-    private void ResetZoomToMin()
-    {
-        if (PlatformView is null || VirtualView is null) return;
-        double min = VirtualView.MinZoom;
-        _syncingZoom = true;
-        PlatformView.SetZoom((float)min);
-        VirtualView.ZoomFactor = min;
-        _syncingZoom = false;
-    }
-
     private void ApplyZoomLimits()
     {
         if (PlatformView is null || VirtualView is null) return;
@@ -772,7 +824,7 @@ public sealed class PdfViewerHandler
         var text = _doc;
         _ = Task.Run(() =>
         {
-            var hits = text.FindAll(term);
+            var hits = text.FindAll(term, ct);   // cancelável por página — não monopoliza o lock PDFium
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 if (ct.IsCancellationRequested) return;
@@ -803,7 +855,7 @@ public sealed class PdfViewerHandler
 
     private void ClearSearchState()
     {
-        _findCts?.Cancel();
+        _findCts?.Cancel(); _findCts?.Dispose(); _findCts = null;
         _findHits = new(); _findCurrent = -1; _findTerm = string.Empty;
         _adapter?.ClearSearchHighlight();
         VirtualView?.RaiseSearchResult(0, -1);
@@ -894,7 +946,7 @@ public sealed class PdfViewerHandler
         int dir = cy < edge ? -1 : (cy > pv.Height - edge ? +1 : 0);
         if (dir == _autoScrollDir) return;
         _autoScrollDir = dir;
-        _autoScrollCts?.Cancel(); _autoScrollCts = null;
+        _autoScrollCts?.Cancel(); _autoScrollCts?.Dispose(); _autoScrollCts = null;
         if (dir == 0) return;
 
         var cts = new CancellationTokenSource();
@@ -923,7 +975,7 @@ public sealed class PdfViewerHandler
     private void StopAutoScroll()
     {
         _autoScrollDir = 0;
-        _autoScrollCts?.Cancel(); _autoScrollCts = null;
+        _autoScrollCts?.Cancel(); _autoScrollCts?.Dispose(); _autoScrollCts = null;
     }
 
     private void FinishSelection()
@@ -1357,9 +1409,11 @@ public sealed class PdfViewerHandler
     {
         if (PlatformView is null || VirtualView is null) return;
 
-        // Volta ao zoom MÍNIMO ANTES de trocar o eixo (ainda na orientação atual, dimensões
-        // válidas) — sem isto a folha herda a escala/pan da orientação anterior (zoom à direita).
-        ResetZoomToMin();
+        // Volta ao zoom de 100% (fit) ANTES de trocar o eixo (ainda na orientação atual,
+        // dimensões válidas) — sem isto a folha herda a escala/pan da orientação anterior.
+        // 100% (não MinZoom): com o MinZoom default de 0.5 a página ficava à metade do tamanho
+        // após a troca — paridade com o Windows, cujo mínimo efetivo é 100%.
+        ResetZoomTo100();
 
         bool horizontal = VirtualView.ScrollOrientation == PdfScrollOrientation.Horizontal;
         if (!PlatformView.SetHorizontal(horizontal)) return;   // já estava nessa orientação
@@ -1374,11 +1428,14 @@ public sealed class PdfViewerHandler
         _lastPrefetchCenter = -1;       // cache da janela muda de eixo → permite re-prefetch
 
         // A troca de LayoutManager reseta a posição de scroll; restaura a página no próximo frame.
-        PlatformView.Rv.Post(() =>
+        // Captura a view: após o disconnect a PlatformView TIPADA lança "PlatformView cannot be
+        // null here" (ver nota em RefreshSelectionHighlight) — checa pela interface, que devolve null.
+        var pview = PlatformView;
+        pview.Rv.Post(() =>
         {
-            if (PlatformView is null || _doc is null) return;
-            ResetZoomToMin();           // reforça no mínimo após o re-layout (pivô com dimensões finais)
-            if (PlatformView.Rv.GetLayoutManager() is LinearLayoutManager lm)
+            if (((Microsoft.Maui.IElementHandler)this).PlatformView is null || _doc is null) return;
+            ResetZoomTo100();           // reforça o fit após o re-layout (pivô com dimensões finais)
+            if (pview.Rv.GetLayoutManager() is LinearLayoutManager lm)
                 lm.ScrollToPositionWithOffset(Math.Clamp(page, 0, Math.Max(0, _doc.PageCount - 1)), 0);
             TrimAndPrefetch(page);
         });
@@ -1507,7 +1564,7 @@ public sealed class PdfViewerHandler
     private void BindThumb(int idx, PdfThumbVH vh)
     {
         vh.Bound = idx;
-        if (_thumbCache.TryGetValue(idx, out var cached) && cached is not null && !cached.IsRecycled)
+        if (ThumbCacheGet(idx) is { IsRecycled: false } cached)
         {
             vh.Iv.SetImageBitmap(cached);
             return;
@@ -1530,7 +1587,7 @@ public sealed class PdfViewerHandler
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
                     if (tok.IsCancellationRequested) return;
-                    _thumbCache[idx] = bmp;
+                    ThumbCachePut(idx, bmp);
                     if (vh.Bound == idx) vh.Iv.SetImageBitmap(bmp);   // ainda visível → aplica; senão, fica no cache p/ o próximo bind
                 });
             }
@@ -1559,8 +1616,10 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
     private readonly GestureDetector          _gd;
     internal         float                    _currentZoom = 1f;
     internal         float                    _gestureZoom = 1f;
+    private          float                    _lastFocusX, _lastFocusY;   // foco do pinch no evento anterior (focus-follow)
     private          CancellationTokenSource? _commitCts;
-    // Snap "tipo livro" (horizontal): cada fling avança UMA página e trava nela. Null no vertical.
+    // Snap "tipo livro" (horizontal, só em fit ~100%): cada fling avança UMA página e trava nela.
+    // Null no vertical E quando ampliado (ver UpdatePagerSnap).
     private          PagerSnapHelper?         _pagerSnap;
 
     public float MinZoom     { get; set; } = 0.9f;
@@ -1586,12 +1645,27 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
         // alinha a página na viewport. Vertical: sem snap (scroll contínuo).
         _pagerSnap?.AttachToRecyclerView(null);
         _pagerSnap = null;
-        if (horizontal)
+        UpdatePagerSnap();
+        return true;
+    }
+
+    // Snap de paginação só no horizontal E em fit (~100%): ampliado, o snap desfazia o pan no
+    // eixo de scroll (realinhava o slot ao soltar o dedo, impedindo ver a outra metade da página)
+    // — espelha o Windows, cujo SnapHorizontalIfNeeded ignora zoom > 1.05.
+    private void UpdatePagerSnap()
+    {
+        bool want = Horizontal && _currentZoom <= 1.05f;
+        if (want == (_pagerSnap is not null)) return;
+        if (want)
         {
             _pagerSnap = new PagerSnapHelper();
             _pagerSnap.AttachToRecyclerView(Rv);
         }
-        return true;
+        else
+        {
+            _pagerSnap?.AttachToRecyclerView(null);
+            _pagerSnap = null;
+        }
     }
 
     public Action<int>?   OnPageChanged { get; set; }
@@ -1688,18 +1762,32 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
         canvas.RestoreToCount(save);
     }
 
+    // Troca o pivô MANTENDO o que está na tela: com a transform x' = P + s·(x−P) + T, mudar o
+    // pivô P→C desloca o conteúdo em (1−s)·(C−P); compensa na translação (T' = T + (s−1)·(C−P)).
+    // Sem isto, recentrar o pivô no commit do pinch fazia o conteúdo SALTAR (s−1)·|C−F| px.
+    private void MovePivotTo(float px, float py)
+    {
+        float s = Rv.ScaleX <= 0 ? 1f : Rv.ScaleX;
+        Rv.TranslationX += (s - 1f) * (px - Rv.PivotX);
+        Rv.TranslationY += (s - 1f) * (py - Rv.PivotY);
+        Rv.PivotX = px;
+        Rv.PivotY = py;
+    }
+
     public void SetZoom(float zoom)
     {
         _currentZoom = Math.Clamp(zoom, MinZoom, MaxZoom);
         _gestureZoom = _currentZoom;
+        // Recentra o pivô SEM salto (compensado) e só então aplica a escala — assim o zoom
+        // programático (botões/API) fica ancorado no centro da viewport.
+        MovePivotTo(Width / 2f, Height / 2f);
         Rv.ScaleX    = _currentZoom;
         Rv.ScaleY    = _currentZoom;
-        Rv.PivotX    = Width  / 2f;
-        Rv.PivotY    = Height / 2f;
         // Ampliado, o arrasto no limite do scroll vira pan por translação — sem isso o
         // RV desenharia o glow de overscroll junto (feedback duplo). Em 100% mantém o
         // comportamento nativo.
         Rv.OverScrollMode = _currentZoom > 1.05f ? OverScrollMode.Never : OverScrollMode.Always;
+        UpdatePagerSnap();
         ClampPan();
     }
 
@@ -1773,6 +1861,9 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
             if (Rv.TranslationY != 0) Rv.TranslationY = 0;
             return false;
         }
+        // Ancestrais roláveis (pager/ScrollView) não podem roubar o pan ampliado — o RV só pede
+        // disallow quando ELE rola no próprio eixo; o pan por translação precisa pedir aqui.
+        Parent?.RequestDisallowInterceptTouchEvent(true);
         Rv.TranslationX -= distanceX;   // distanceX>0 = dedo p/ esquerda → conteúdo acompanha
         Rv.TranslationY -= distanceY;
         ClampPan();
@@ -1871,7 +1962,11 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
 
     public override void RequestDisallowInterceptTouchEvent(bool disallowIntercept)
     {
-        if (!disallowIntercept) base.RequestDisallowInterceptTouchEvent(false);
+        // Propaga o disallow aos ANCESTRAIS (sem isto um ScrollView/pager pai roubava o scroll do
+        // RV), mas não seta a flag NESTE container — o OnInterceptTouchEvent daqui precisa seguir
+        // ativo para alças de seleção e pinch mesmo com o RecyclerView rolando.
+        if (disallowIntercept) Parent?.RequestDisallowInterceptTouchEvent(true);
+        else base.RequestDisallowInterceptTouchEvent(false);
     }
 
     public bool OnScaleBegin(ScaleGestureDetector? d)
@@ -1879,15 +1974,26 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
         _commitCts?.Cancel(); _commitCts = null;
         _currentZoom = Math.Clamp(Rv.ScaleX, MinZoom, MaxZoom);
         _gestureZoom = _currentZoom;
+        if (d is not null) { _lastFocusX = d.FocusX; _lastFocusY = d.FocusY; }
+        Parent?.RequestDisallowInterceptTouchEvent(true);   // o pinch não pode ser roubado por ancestral rolável
         return true;
     }
 
     public bool OnScale(ScaleGestureDetector? d)
     {
         if (d is null) return false;
+        // Focus-follow sem salto: mover o pivô para o foco SEM compensar deslocava o conteúdo em
+        // (s−1)·ΔP — e contra os dedos. MovePivotTo compensa a troca de pivô; o deslocamento do
+        // FOCO (pan de 2 dedos) é acumulado na translação; o ClampPan aplica os MESMOS limites do
+        // pan de 1 dedo (eixo de scroll só nas extremidades) → nada a "desfazer" no commit.
+        MovePivotTo(d.FocusX, d.FocusY);
+        Rv.TranslationX += d.FocusX - _lastFocusX;
+        Rv.TranslationY += d.FocusY - _lastFocusY;
+        _lastFocusX = d.FocusX; _lastFocusY = d.FocusY;
         _gestureZoom = Math.Clamp(_gestureZoom * d.ScaleFactor, MinZoom, MaxZoom);
+        _currentZoom = _gestureZoom;   // mantém ClampPan/CurrentZoom corretos DURANTE o gesto
         Rv.ScaleX = _gestureZoom; Rv.ScaleY = _gestureZoom;
-        Rv.PivotX = d.FocusX;    Rv.PivotY = d.FocusY;
+        ClampPan();
         return true;
     }
 
@@ -1914,20 +2020,32 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
     public void StartZoomAnimation(float from, float to, float fx, float fy)
     {
         _commitCts?.Cancel(); _commitCts = null;
+        MovePivotTo(fx, fy);   // troca o pivô SEM salto (compensa a translação) antes de animar a escala
+        bool  toFit = to <= 1.05f;
+        float tx0 = Rv.TranslationX, ty0 = Rv.TranslationY;
         var anim = ValueAnimator.OfFloat(from, to)!;
         anim.SetDuration(220);
         anim.SetInterpolator(new DecelerateInterpolator());
         anim.Update += (s, _) =>
         {
-            var z = (float)((ValueAnimator)s!).AnimatedValue!;
-            Rv.ScaleX = z; Rv.ScaleY = z; Rv.PivotX = fx; Rv.PivotY = fy;
+            var a = (ValueAnimator)s!;
+            var z = (float)a.AnimatedValue!;
+            Rv.ScaleX = z; Rv.ScaleY = z;
+            if (toFit)
+            {
+                // Voltando ao fit: leva a translação a 0 JUNTO com a escala — sem isto o ClampPan
+                // do fim zerava T de uma vez (salto).
+                float f = 1f - a.AnimatedFraction;
+                Rv.TranslationX = tx0 * f;
+                Rv.TranslationY = ty0 * f;
+            }
         };
         anim.AnimationEnd += (_, _) =>
         {
             _currentZoom = to; _gestureZoom = to;
-            Rv.PivotX = to > 1.05f ? fx : Width  / 2f;
-            Rv.PivotY = to > 1.05f ? fy : Height / 2f;
-            ClampPan();   // ao voltar ao zoom 1, zera o pan; ampliado, mantém dentro dos limites
+            if (toFit) MovePivotTo(Width / 2f, Height / 2f);   // a s≈1 a troca de pivô é ~neutra
+            UpdatePagerSnap();
+            ClampPan();   // ao voltar ao fit, zera o pan residual; ampliado, mantém nos limites
             OnZoomChanged?.Invoke(to);
         };
         anim.Start();
@@ -1947,7 +2065,9 @@ internal sealed class PdfDoubleTapListener : GestureDetector.SimpleOnGestureList
     public override bool OnDoubleTap(MotionEvent e)
     {
         if (!_o.ZoomEnabled) return false;
-        float target = _o._currentZoom > 1.05f ? _o.MinZoom : 2.5f;
+        // Des-zoom volta ao FIT (100%), não ao MinZoom: com o MinZoom default de 0.5 a página
+        // encolhia à metade (paridade com o Windows, cujo mínimo efetivo é 100%).
+        float target = _o._currentZoom > 1.05f ? 1f : 2.5f;
         _o.StartZoomAnimation(_o._currentZoom, target, e.GetX(), e.GetY());
         return true;
     }
@@ -2634,6 +2754,11 @@ internal sealed class PdfSpacingDecoration : RecyclerView.ItemDecoration
 
 internal sealed class ClippedRecyclerView : RecyclerView
 {
+    // Construtor de ativação: se o peer gerenciado for coletado com o lado Java ainda vivo, o
+    // runtime reativa por aqui — sem ele, NotSupportedException "Unable to activate instance
+    // ... from native handle" (mesma classe de bug do VrRecyclerListener).
+    protected ClippedRecyclerView(IntPtr h, JniHandleOwnership t) : base(h, t) { }
+
     public ClippedRecyclerView(Context context) : base(context) { }
 
     protected override void DispatchDraw(global::Android.Graphics.Canvas? canvas)
@@ -2691,25 +2816,31 @@ internal sealed class PdfFilePrintAdapter : PrintDocumentAdapter
         global::Android.OS.CancellationSignal? cancellationSignal,
         PrintDocumentAdapter.WriteResultCallback? callback)
     {
-        try
+        // Os callbacks do PrintDocumentAdapter chegam na MAIN thread; copiar um PDF grande aqui
+        // congelava a UI durante o spool — a doc oficial manda mover o trabalho pesado para outra
+        // thread (os ResultCallbacks aceitam ser chamados de background, como no sample oficial).
+        _ = global::System.Threading.Tasks.Task.Run(() =>
         {
-            using var input  = new Java.IO.FileInputStream(_path);
-            using var output = new Java.IO.FileOutputStream(destination!.FileDescriptor);
-
-            var buffer = new byte[16 * 1024];
-            int read;
-            while ((read = input.Read(buffer)) != -1)
+            try
             {
-                if (cancellationSignal?.IsCanceled == true) { callback?.OnWriteCancelled(); return; }
-                output.Write(buffer, 0, read);
-            }
-            output.Flush();
+                using var input  = new Java.IO.FileInputStream(_path);
+                using var output = new Java.IO.FileOutputStream(destination!.FileDescriptor);
 
-            callback?.OnWriteFinished(new[] { PageRange.AllPages });
-        }
-        catch (Exception ex)
-        {
-            callback?.OnWriteFailed(ex.Message);
-        }
+                var buffer = new byte[16 * 1024];
+                int read;
+                while ((read = input.Read(buffer)) != -1)
+                {
+                    if (cancellationSignal?.IsCanceled == true) { callback?.OnWriteCancelled(); return; }
+                    output.Write(buffer, 0, read);
+                }
+                output.Flush();
+
+                callback?.OnWriteFinished(new[] { PageRange.AllPages });
+            }
+            catch (Exception ex)
+            {
+                callback?.OnWriteFailed(ex.Message);
+            }
+        });
     }
 }
