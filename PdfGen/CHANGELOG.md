@@ -31,6 +31,11 @@ O formato segue Keep a Changelog e o versionamento e semantico.
   em vez de um retangulo por fatia (padding e cada linha de texto). Um bloco
   partido entre paginas fecha e reabre os cantos na quebra; gradientes passam a
   cobrir o bloco inteiro em vez de se repetir por linha.
+- `AlignRight()`/`AlignCenter()` do contêiner agora alinham o número de página,
+  como em `page.Footer().AlignRight().PageNumber("Página {0} de {1}")`. O
+  `PageNumberElement` reportava no `Measure` a largura disponível em vez da do
+  texto, então o número ficava sempre à esquerda. O alinhamento do próprio
+  texto (`.PageNumber(...).AlignRight()`) não muda.
 
 ### Alterado
 - Streams de conteudo de pagina agora sao comprimidos com `FlateDecode`.

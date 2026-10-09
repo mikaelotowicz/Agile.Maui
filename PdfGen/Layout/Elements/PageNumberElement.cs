@@ -25,10 +25,16 @@ public sealed class PageNumberElement : Element
 
     string CurrentText() => string.Format(_format, _context.PageNumber, _context.TotalPages);
 
+    // Reporta a largura do texto (como o TextElement), não a disponível: senão um AlignRight/
+    // AlignCenter do contêiner recebe a área inteira e o número fica à esquerda. O motor refaz
+    // Arrange (e com ele o Measure do AlignElement) por página já com PageNumber/TotalPages finais,
+    // então a medida é a do texto exato daquela página e o alinhamento fica rente à borda.
     public override PdfSize Measure(PdfSize available)
     {
         float width = _style.MeasureWidth(CurrentText());
-        return new PdfSize(available.IsWidthConstrained ? available.Width : width, _style.LineSpacing);
+        if (available.IsWidthConstrained)
+            width = MathF.Min(width, available.Width);
+        return new PdfSize(width, _style.LineSpacing);
     }
 
     public override void Render(IRenderContext context)
