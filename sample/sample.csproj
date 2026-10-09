@@ -120,11 +120,6 @@
 	  <MauiAsset Include="Resources\Images\InteligenciaArtificial.pdf" LogicalName="InteligenciaArtificial.pdf" />
 	</ItemGroup>
 
-	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.71" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.9" />
-	</ItemGroup>
-
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
 		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-preview.7.26406.9" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0-preview.7.26381.103" />

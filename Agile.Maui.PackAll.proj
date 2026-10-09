@@ -3,8 +3,6 @@
 	<PropertyGroup>
 		<Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
 		<PackageOutputPath Condition="'$(PackageOutputPath)' == ''">$(MSBuildThisFileDirectory)nupkgs</PackageOutputPath>
-		<StablePackageVersion>1.0.6</StablePackageVersion>
-		<PreviewPackageVersion>1.0.6-preview.1</PreviewPackageVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -16,14 +14,24 @@
 		<PackProject Include="VirtualizedCollectionView\VirtualizedCollectionView.csproj" />
 	</ItemGroup>
 
-	<Target Name="PackStable">
-		<MakeDir Directories="$(PackageOutputPath)" />
-		<Exec Command='dotnet pack "%(PackProject.FullPath)" -c "$(Configuration)" -o "$(PackageOutputPath)" /p:AgilePackageChannel=Stable /p:Version=$(StablePackageVersion) /p:PackageVersion=$(StablePackageVersion)' />
+	<!-- Cada csproj define a própria versão (Stable/Preview via AgilePackageChannel); o PackAll
+	     não sobrescreve Version/PackageVersion para não achatar versões distintas (ex.: PdfGen). -->
+
+	<!-- Só o Windows produz todos os TFMs (android + ios/maccatalyst + windows); empacotar em outro
+	     SO geraria pacotes incompletos com o mesmo número de versão. -->
+	<Target Name="EnsureWindowsPack">
+		<Error Condition="!$([MSBuild]::IsOSPlatform('windows'))"
+			Text="Empacote no Windows: em outro SO os TFMs de iOS/MacCatalyst/Windows ficam de fora e o pacote sai incompleto com o mesmo número de versão." />
 	</Target>
 
-	<Target Name="PackPreview">
+	<Target Name="PackStable" DependsOnTargets="EnsureWindowsPack">
 		<MakeDir Directories="$(PackageOutputPath)" />
-		<Exec Command='dotnet pack "%(PackProject.FullPath)" -c "$(Configuration)" -o "$(PackageOutputPath)" /p:AgilePackageChannel=Preview /p:Version=$(PreviewPackageVersion) /p:PackageVersion=$(PreviewPackageVersion)' />
+		<Exec Command='dotnet pack "%(PackProject.FullPath)" -c "$(Configuration)" -o "$(PackageOutputPath)" /p:AgilePackageChannel=Stable' />
+	</Target>
+
+	<Target Name="PackPreview" DependsOnTargets="EnsureWindowsPack">
+		<MakeDir Directories="$(PackageOutputPath)" />
+		<Exec Command='dotnet pack "%(PackProject.FullPath)" -c "$(Configuration)" -o "$(PackageOutputPath)" /p:AgilePackageChannel=Preview' />
 	</Target>
 
 	<Target Name="Pack" DependsOnTargets="PackStable;PackPreview">

@@ -8,7 +8,12 @@
     <Project Path="VirtualizedCollectionView/VirtualizedCollectionView.csproj" Id="ccf7a027-41d4-4a6a-a08a-53631fce3dc4" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="ChipGroup.Tests/ChipGroup.Tests.csproj" />
+    <Project Path="GalleryView.Tests/GalleryView.Tests.csproj" />
+    <Project Path="PDFViewer.Tests/PDFViewer.Tests.csproj" />
     <Project Path="PdfGen.Tests/PdfGen.Tests.csproj" />
+    <Project Path="SignaturePad.Tests/SignaturePad.Tests.csproj" />
+    <Project Path="VirtualizedCollectionView.Tests/VirtualizedCollectionView.Tests.csproj" />
   </Folder>
   <Folder Name="/Samples/">
     <Project Path="PdfGen.Sample/PdfGen.Sample.csproj" />

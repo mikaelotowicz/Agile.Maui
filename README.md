@@ -55,8 +55,8 @@ Each module can be installed separately, so the app consumes only what it uses.
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 for the stable packages (`1.0.4`).
-- .NET MAUI / .NET 11.0 preview for the preview packages (`1.0.4-preview.1`).
+- .NET MAUI / .NET 10.0 for the stable packages.
+- .NET MAUI / .NET 11.0 preview for the `-preview.1` packages.
 - Android, iOS, macOS Catalyst, or Windows.
 - Registration of the visual MAUI control packages used in `MauiProgram.cs`. `Agile.Maui.PdfGen` is a generator library and does not require handler registration.
 
@@ -72,15 +72,15 @@ Each module can be installed separately, so the app consumes only what it uses.
 | `SignaturePad` | `Agile.Maui.SignaturePad` | `SignaturePad` | [docs/SignaturePad.md](docs/SignaturePad.md) |
 | `sample` | sample application | demos of all components | [docs/Sample.md](docs/Sample.md) |
 
-`Controls_old` is a legacy copy of the old monolithic project and is not part of the
-active solution.
+The `Controls/` folder contains only leftover build artifacts (`bin`/`obj`) from the old
+monolithic project and is not part of the active solution.
 
 ## Installation
 
 Install only the packages your application actually uses:
 
 ```powershell
-dotnet add package Agile.Maui.Gallery --version 1.0.4
+dotnet add package Agile.Maui.Gallery --version 1.0.6
 dotnet add package Agile.Maui.Pdf --version 1.0.4
 dotnet add package Agile.Maui.PdfGen --version 1.1.0
 dotnet add package Agile.Maui.VirtualizedCollection --version 1.0.4
@@ -91,7 +91,7 @@ dotnet add package Agile.Maui.SignaturePad --version 1.0.4
 For .NET 11 preview projects, use the preview package channel:
 
 ```powershell
-dotnet add package Agile.Maui.Gallery --version 1.0.4-preview.1
+dotnet add package Agile.Maui.Gallery --version 1.0.6-preview.1
 dotnet add package Agile.Maui.Pdf --version 1.0.4-preview.1
 dotnet add package Agile.Maui.PdfGen --version 1.1.0-preview.1
 dotnet add package Agile.Maui.VirtualizedCollection --version 1.0.4-preview.1
@@ -202,10 +202,12 @@ Generate the stable .NET 10 packages and the .NET 11 preview packages with one c
 dotnet pack Agile.Maui.PackAll.proj -c Release
 ```
 
-Packages are written to `nupkgs/` at the repository root. The command produces:
+Packages are written to `nupkgs/` at the repository root. Each project defines its own
+version (currently `1.0.4` for most components, `1.0.6` for `Agile.Maui.Gallery` and
+`1.1.0` for `Agile.Maui.PdfGen`). The command produces:
 
-- `1.0.4`: stable packages for .NET 10 projects.
-- `1.0.4-preview.1`: preview packages for .NET 10 and .NET 11 preview projects.
+- stable packages for .NET 10 projects.
+- `-preview.1` packages for .NET 10 and .NET 11 preview projects.
 
 ## Additional documentation
 
