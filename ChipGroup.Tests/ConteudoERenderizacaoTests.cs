@@ -72,6 +72,14 @@ public class RebuildConteudoTests
     }
 
     [Fact]
+    public void Chips_tem_alvo_de_toque_minimo_de_44()
+    {
+        var group = new ChipGroup { ItemsSource = new[] { "um", "dois" } };
+
+        Assert.All(GetChips(group), chip => Assert.Equal(44, chip.MinimumHeightRequest));
+    }
+
+    [Fact]
     public void Chip_desabilitado_fica_translucido_e_sem_gesto_de_toque()
     {
         var group = new ChipGroup

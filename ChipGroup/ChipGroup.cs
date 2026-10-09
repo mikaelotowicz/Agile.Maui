@@ -463,6 +463,9 @@ public sealed class ChipGroup : ContentView
             Content = row,
             Opacity = enabled ? 1 : 0.45,
             WidthRequest = ChipWidth > 0 ? ChipWidth : -1,
+            // Alvo de toque mínimo: 44pt (Apple HIG). O Material pede 48dp, mas 44 preserva
+            // melhor o visual compacto atual dos chips.
+            MinimumHeightRequest = 44,
         };
 
         if (Elevation > 0)
