@@ -261,6 +261,17 @@ internal sealed class ThumbGalleryView : UIView
         SetNeedsLayout();
     }
 
+    // Como no Android, a galeria ocupa o espaço oferecido. Sem isto o UIView devolve o tamanho atual
+    // (zero na primeira medida) e o MAUI a deixa no MinimumHeightRequest: com AspectFit, a foto
+    // deitada ficava limitada pela altura e sobrava faixa dos lados. O MAUI já limita a oferta pelo
+    // MaximumHeightRequest; oferta infinita mantém o tamanho atual.
+    public override CGSize SizeThatFits(CGSize size)
+    {
+        var largura = nfloat.IsInfinity(size.Width) ? Bounds.Width : size.Width;
+        var altura = nfloat.IsInfinity(size.Height) ? Bounds.Height : size.Height;
+        return new CGSize(largura, altura);
+    }
+
     public override void LayoutSubviews()
     {
         base.LayoutSubviews();

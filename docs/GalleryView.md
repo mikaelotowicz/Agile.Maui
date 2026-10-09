@@ -148,6 +148,10 @@ zoom on the platforms that support this flow.
 | `ImageFailedCommand` | `ICommand?` | `null` | Command when an image fails. |
 | `ThumbMaxPx` | `int` | `720` | Thumbnail decode limit. Minimum: `64`. |
 
+Without `HeightRequest`, the gallery takes all the height offered by its parent,
+capped by `MaximumHeightRequest`, on Android, iOS and macOS Catalyst. Before `1.1.0`, iOS and
+macOS Catalyst stayed at `MinimumHeightRequest` while Android took the maximum.
+
 ### Events
 
 | Event | Args | When it fires |
