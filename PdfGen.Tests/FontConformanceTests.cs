@@ -269,9 +269,27 @@ public class FontConformanceTests
             doc.Page(page => page.Content().Text("😀").Font(font));
         }).GeneratePdf();
 
-        // U+1F600 em UTF-16BE = D83D DE00 no bfchar do CMap ToUnicode (não comprimido).
-        string raw = PdfMiniParser.AsLatin1(pdf);
-        Assert.Contains("beginbfchar", raw);
-        Assert.Contains("D83DDE00", raw);
+        // U+1F600 em UTF-16BE = D83D DE00 no bfchar do CMap ToUnicode (descomprimido).
+        string cmap = PdfMiniParser.ToUnicode(pdf);
+        Assert.Contains("beginbfchar", cmap);
+        Assert.Contains("D83DDE00", cmap);
+    }
+
+    [Fact]
+    public void ToUnicode_e_comprimido_com_flatedecode()
+    {
+        if (Data.Value.pdf is not byte[] pdf)
+            return;
+
+        // O CMap não está mais em texto puro no arquivo…
+        Assert.DoesNotContain("begincmap", PdfMiniParser.AsLatin1(pdf));
+
+        // …mas descomprime para um CMap ToUnicode completo.
+        string cmap = PdfMiniParser.ToUnicode(pdf);
+        Assert.StartsWith("/CIDInit", cmap);
+        Assert.Contains("begincmap", cmap);
+        Assert.Contains("beginbfchar", cmap);
+        Assert.Contains("endbfchar", cmap);
+        Assert.Contains("endcmap", cmap);
     }
 }

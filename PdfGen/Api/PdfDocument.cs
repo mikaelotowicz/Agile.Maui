@@ -52,9 +52,9 @@ public sealed class PdfDocument
     /// <summary>
     /// Gera o PDF usando o renderer nativo da plataforma corrente (Android/iOS/Mac); nas demais,
     /// recai no escritor gerenciado. Prefira este método em app MAUI para aproveitar as fontes e
-    /// o suporte a PNG do sistema. Atenção: nos renderers nativos, fontes embutidas
-    /// (<c>.Font(EmbeddedFont)</c>) caem para a fonte do sistema e gradientes para a cor sólida
-    /// da primeira parada — para fidelidade total a esses recursos, use <see cref="GeneratePdf()"/>.
+    /// o suporte a PNG do sistema. Fontes embutidas (<c>.Font(EmbeddedFont)</c>) são respeitadas
+    /// também nos renderers nativos. Atenção: gradientes caem para a cor sólida da primeira
+    /// parada nos nativos — para fidelidade total a gradientes, use <see cref="GeneratePdf()"/>.
     /// </summary>
     public byte[] GeneratePdfNative() => Render(PlatformRenderer.Create());
 

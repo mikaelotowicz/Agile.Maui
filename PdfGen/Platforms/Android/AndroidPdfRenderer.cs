@@ -11,12 +11,18 @@ namespace Agile.Maui.PdfGen.Platforms.Android;
 /// <summary>
 /// Renderer nativo do Android baseado em <see cref="PdfDocument"/> + <see cref="Canvas"/>.
 /// O Canvas usa origem no topo-esquerda com Y para baixo — igual ao motor de layout — sem flip.
+/// Fontes embutidas (<see cref="EmbeddedFont"/>) são usadas via Typeface; bitmaps e typefaces
+/// são cacheados por documento e liberados no EndDocument.
 /// </summary>
 public sealed class AndroidPdfRenderer : IPdfRenderer
 {
     PdfDocument? _doc;
     PdfDocument.Page? _page;
-    System.IDisposable? _current;
+
+    // Caches por documento: imagem repetida em N páginas decodifica uma vez só.
+    readonly Dictionary<Rendering.PdfImage, Bitmap> _bitmaps = new();
+    readonly Dictionary<EmbeddedFont, Typeface?> _typefaces = new();
+    readonly List<string> _tempFontFiles = new();
 
     public void BeginDocument() => _doc = new PdfDocument();
 
@@ -25,17 +31,13 @@ public sealed class AndroidPdfRenderer : IPdfRenderer
         var info = new PdfDocument.PageInfo.Builder(
             (int)MathF.Round(size.Width), (int)MathF.Round(size.Height), 1).Create();
         _page = _doc!.StartPage(info);
-        var context = new AndroidRenderContext(_page!.Canvas!);
-        _current = context;
-        return context;
+        return new AndroidRenderContext(_page!.Canvas!, this);
     }
 
     public void EndPage()
     {
         if (_page is not null)
         {
-            _current?.Dispose();
-            _current = null;
             _doc!.FinishPage(_page);
             _page = null;
         }
@@ -47,18 +49,83 @@ public sealed class AndroidPdfRenderer : IPdfRenderer
         _doc!.WriteTo(ms);
         _doc.Close();
         _doc = null;
+        ReleaseCaches();
         return ms.ToArray();
+    }
+
+    void ReleaseCaches()
+    {
+        foreach (Bitmap bitmap in _bitmaps.Values)
+        {
+            if (!bitmap.IsRecycled)
+                bitmap.Recycle();
+            bitmap.Dispose();
+        }
+        _bitmaps.Clear();
+
+        foreach (Typeface? typeface in _typefaces.Values)
+            typeface?.Dispose();
+        _typefaces.Clear();
+
+        foreach (string path in _tempFontFiles)
+        {
+            try { System.IO.File.Delete(path); }
+            catch { /* temp no cache do app: o sistema limpa se a exclusão falhar */ }
+        }
+        _tempFontFiles.Clear();
+    }
+
+    /// <summary>Bitmap da imagem, decodificado uma única vez por documento.</summary>
+    internal Bitmap? GetBitmap(Rendering.PdfImage image)
+    {
+        if (_bitmaps.TryGetValue(image, out Bitmap? cached))
+            return cached;
+
+        Bitmap? bmp = BitmapFactory.DecodeByteArray(image.Data, 0, image.Data.Length);
+        if (bmp is not null)
+            _bitmaps[image] = bmp;
+        return bmp;
+    }
+
+    /// <summary>
+    /// Typeface da fonte embutida, criado uma vez por documento. No minSdk 24 não há API de
+    /// Typeface a partir de bytes em memória: grava no temp do app (cache) e usa CreateFromFile;
+    /// os arquivos são apagados no EndDocument. Falha fica cacheada como null e o texto recai
+    /// na fonte do sistema.
+    /// </summary>
+    internal Typeface? GetEmbeddedTypeface(EmbeddedFont font)
+    {
+        if (_typefaces.TryGetValue(font, out Typeface? cached))
+            return cached;
+
+        Typeface? typeface = null;
+        try
+        {
+            string path = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"agile-pdfgen-{System.Guid.NewGuid():N}.ttf");
+            System.IO.File.WriteAllBytes(path, font.FontData);
+            _tempFontFiles.Add(path);
+            typeface = Typeface.CreateFromFile(path);
+        }
+        catch
+        {
+            typeface = null;
+        }
+
+        _typefaces[font] = typeface;
+        return typeface;
     }
 }
 
-file sealed class AndroidRenderContext : IRenderContext, System.IDisposable
+file sealed class AndroidRenderContext : IRenderContext
 {
     readonly Canvas _canvas;
-    readonly Dictionary<Rendering.PdfImage, Bitmap> _bitmaps = new();
+    readonly AndroidPdfRenderer _renderer;
 
-    public AndroidRenderContext(Canvas canvas)
+    public AndroidRenderContext(Canvas canvas, AndroidPdfRenderer renderer)
     {
         _canvas = canvas;
+        _renderer = renderer;
     }
 
     static Paint NewPaint() => new(PaintFlags.AntiAlias);
@@ -90,19 +157,20 @@ file sealed class AndroidRenderContext : IRenderContext, System.IDisposable
         using Paint paint = NewPaint();
         paint.Color = ToColor(style.Color);
         paint.TextSize = style.FontSize;
-        paint.SetTypeface(ToTypeface(style));
+
+        // Fonte embutida real quando disponível; senão, família do sistema.
+        Typeface? embedded = style.Embedded is EmbeddedFont font ? _renderer.GetEmbeddedTypeface(font) : null;
+        paint.SetTypeface(embedded ?? ToTypeface(style));
+
+        // DrawText posiciona pelo Y da baseline — mesma convenção do Td do escritor gerenciado.
         _canvas.DrawText(text, baselineOrigin.X, baselineOrigin.Y, paint);
     }
 
     public void DrawImage(Rendering.PdfImage image, PdfRect destination)
     {
-        if (!_bitmaps.TryGetValue(image, out Bitmap? bmp))
-        {
-            bmp = BitmapFactory.DecodeByteArray(image.Data, 0, image.Data.Length);
-            if (bmp is null)
-                return;
-            _bitmaps[image] = bmp;
-        }
+        Bitmap? bmp = _renderer.GetBitmap(image);
+        if (bmp is null)
+            return;
 
         var src = new Rect(0, 0, bmp.Width, bmp.Height);
         var dst = new RectF(destination.Left, destination.Top, destination.Right, destination.Bottom);
@@ -151,16 +219,5 @@ file sealed class AndroidRenderContext : IRenderContext, System.IDisposable
 
     public void ClipRectangle(PdfRect rect) =>
         _canvas.ClipRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
-
-    public void Dispose()
-    {
-        foreach (Bitmap bitmap in _bitmaps.Values)
-        {
-            if (!bitmap.IsRecycled)
-                bitmap.Recycle();
-            bitmap.Dispose();
-        }
-        _bitmaps.Clear();
-    }
 }
 #endif

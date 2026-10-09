@@ -380,10 +380,10 @@ public sealed class ManagedPdfRenderer : IPdfRenderer
                 "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> " +
                 $"/FontDescriptor {ef.DescriptorObjId} 0 R /CIDToGIDMap /Identity /DW 1000 /W [{BuildWidths(ef)}] >>\nendobj\n");
 
-            // CMap ToUnicode (para copiar/colar e busca).
-            byte[] toUni = Encoding.ASCII.GetBytes(BuildToUnicode(ef));
+            // CMap ToUnicode (para copiar/colar e busca), comprimido com FlateDecode.
+            byte[] toUni = Deflate(Encoding.ASCII.GetBytes(BuildToUnicode(ef)));
             offsets[ef.ToUnicodeObjId] = ms.Length;
-            WriteAscii(ms, $"{ef.ToUnicodeObjId} 0 obj\n<< /Length {toUni.Length} >>\nstream\n");
+            WriteAscii(ms, $"{ef.ToUnicodeObjId} 0 obj\n<< /Filter /FlateDecode /Length {toUni.Length} >>\nstream\n");
             WriteBytes(ms, toUni);
             WriteAscii(ms, "\nendstream\nendobj\n");
 

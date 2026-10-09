@@ -108,9 +108,31 @@ internal static class PdfMiniParser
         {
             if (!dict.Contains("/Filter /FlateDecode") || dict.Contains("/Subtype") || dict.Contains("/Length1"))
                 continue;
-            result.Add(AsLatin1(Inflate(pdf, dataStart, length)));
+            string content = AsLatin1(Inflate(pdf, dataStart, length));
+            if (content.StartsWith("/CIDInit", System.StringComparison.Ordinal))
+                continue;   // CMap ToUnicode (também FlateDecode), não é conteúdo de página
+            result.Add(content);
         }
         return result;
+    }
+
+    /// <summary>CMap ToUnicode descomprimido, localizado pela referência /ToUnicode do Type0.</summary>
+    public static string ToUnicode(byte[] pdf)
+    {
+        string text = AsLatin1(pdf);
+        Match reference = Regex.Match(text, @"/ToUnicode (\d+) 0 R");
+        if (!reference.Success)
+            throw new InvalidDataException("/ToUnicode não referenciado por nenhuma fonte.");
+
+        int objPos = text.IndexOf($"{reference.Groups[1].Value} 0 obj", System.StringComparison.Ordinal);
+        int streamPos = text.IndexOf("stream\n", objPos, System.StringComparison.Ordinal);
+        int dictStart = text.LastIndexOf("<<", streamPos, System.StringComparison.Ordinal);
+        string dict = text.Substring(dictStart, streamPos - dictStart);
+        int length = int.Parse(Regex.Match(dict, @"/Length (\d+)(?![0-9])").Groups[1].Value);
+
+        return dict.Contains("/Filter /FlateDecode")
+            ? AsLatin1(Inflate(pdf, streamPos + 7, length))
+            : text.Substring(streamPos + 7, length);
     }
 
     public static string AllContent(byte[] pdf) => string.Join("\n", ContentStreams(pdf));
