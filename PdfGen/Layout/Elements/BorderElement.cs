@@ -35,8 +35,8 @@ public sealed class BorderElement : SingleChildElement, IFlowContainer
     {
         if (Child is IFlowContainer flow)
         {
-            foreach (FlowItem item in flow.Flatten(width))
-                yield return FlowDecorators.Decorate(item, width, child => new BorderElement(child, _thickness, _color, _cornerRadius));
+            foreach (FlowItem item in FlowDecorators.Decorate(flow, width, new BorderElement(null, _thickness, _color, _cornerRadius), drawOverContent: true))
+                yield return item;
         }
         else if (Child is not null)
         {

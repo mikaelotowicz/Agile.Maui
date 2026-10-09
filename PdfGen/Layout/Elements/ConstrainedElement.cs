@@ -38,7 +38,7 @@ public sealed class ConstrainedElement : SingleChildElement, IFlowContainer
         if (Child is IFlowContainer flow)
         {
             foreach (FlowItem item in flow.Flatten(effectiveWidth))
-                yield return item.Width > 0f ? item : new FlowItem(item.Element, item.Height, item.Kind, item.GroupId, item.LeftInset, effectiveWidth);
+                yield return item.Width > 0f ? item : item.WithWidth(effectiveWidth);
         }
         else if (Child is not null)
         {

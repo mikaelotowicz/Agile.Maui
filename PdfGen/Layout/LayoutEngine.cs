@@ -100,6 +100,7 @@ public static class LayoutEngine
         output.Add(current);
 
         float y = contentTop;
+        var openRuns = new List<DecorationRun>();
         var activeHeaders = new List<FlowItem>();
         int activeGroupId = 0;
 
@@ -126,6 +127,8 @@ public static class LayoutEngine
 
             if (!fits && pageHasContent)
             {
+                // Decorações abertas terminam nesta página e reabrem (com cantos novos) na próxima.
+                CloseRuns(current, openRuns, 0);
                 current = NewPage(page, headerBounds, footerBounds);
                 output.Add(current);
                 y = contentTop;
@@ -135,14 +138,87 @@ public static class LayoutEngine
                 {
                     foreach (FlowItem hdr in activeHeaders)
                     {
-                        current.Items.Add(new PlacedItem(hdr.Element, ItemBounds(hdr, contentLeft, y, contentWidth)));
+                        Place(current, openRuns, hdr, ItemBounds(hdr, contentLeft, y, contentWidth), contentLeft);
                         y += hdr.Height;
                     }
                 }
             }
 
-            current.Items.Add(new PlacedItem(item.Element, ItemBounds(item, contentLeft, y, contentWidth)));
+            Place(current, openRuns, item, ItemBounds(item, contentLeft, y, contentWidth), contentLeft);
             y += item.Height;
+        }
+
+        CloseRuns(current, openRuns, 0);
+    }
+
+    /// <summary>Trecho contíguo de uma decoração na página corrente, ainda aberto.</summary>
+    sealed class DecorationRun
+    {
+        public required FlowDecoration Decoration;
+        /// <summary>Índice reservado em Items para fundos (pintados antes do conteúdo); -1 para bordas.</summary>
+        public required int PlaceholderIndex;
+        public required float Left;
+        public required float Width;
+        public required float Top;
+        public float Bottom;
+    }
+
+    /// <summary>
+    /// Posiciona um item, abrindo e fechando os trechos de decoração conforme a cadeia de decorações
+    /// do item. Cada decoração é desenhada uma única vez por página sobre a união das fatias contíguas.
+    /// </summary>
+    static void Place(PlannedPage page, List<DecorationRun> open, FlowItem item, PdfRect bounds, float contentLeft)
+    {
+        IReadOnlyList<FlowDecorationFrame>? chain = item.Decorations;
+        int count = chain?.Count ?? 0;
+
+        int common = 0;
+        while (common < open.Count && common < count && ReferenceEquals(open[common].Decoration, chain![common].Decoration))
+            common++;
+
+        CloseRuns(page, open, common);
+
+        for (int i = common; i < count; i++)
+        {
+            FlowDecorationFrame frame = chain![i];
+            int placeholder = -1;
+            if (!frame.Decoration.DrawOverContent)
+            {
+                placeholder = page.Items.Count;
+                page.Items.Add(new PlacedItem(frame.Decoration.Element, default));
+            }
+
+            open.Add(new DecorationRun
+            {
+                Decoration = frame.Decoration,
+                PlaceholderIndex = placeholder,
+                Left = contentLeft + frame.LeftInset,
+                Width = frame.Width,
+                Top = bounds.Top,
+            });
+        }
+
+        page.Items.Add(new PlacedItem(item.Element, bounds));
+
+        foreach (DecorationRun run in open)
+            run.Bottom = bounds.Bottom;
+    }
+
+    /// <summary>Fecha os trechos abertos a partir de <paramref name="keep"/>, do mais interno ao mais externo.</summary>
+    static void CloseRuns(PlannedPage page, List<DecorationRun> open, int keep)
+    {
+        for (int i = open.Count - 1; i >= keep; i--)
+        {
+            DecorationRun run = open[i];
+            var rect = new PdfRect(run.Left, run.Top, run.Width, MathF.Max(0f, run.Bottom - run.Top));
+            var placed = new PlacedItem(run.Decoration.Element, rect);
+
+            if (run.PlaceholderIndex >= 0)
+                page.Items[run.PlaceholderIndex] = placed;
+            else
+                page.Items.Add(placed);
+
+            open.RemoveAt(i);
         }
     }
 

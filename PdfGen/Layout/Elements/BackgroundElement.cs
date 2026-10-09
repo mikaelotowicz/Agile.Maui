@@ -26,8 +26,8 @@ public sealed class BackgroundElement : SingleChildElement, IFlowContainer
     {
         if (Child is IFlowContainer flow)
         {
-            foreach (FlowItem item in flow.Flatten(width))
-                yield return FlowDecorators.Decorate(item, width, child => new BackgroundElement(child, _color, _cornerRadius));
+            foreach (FlowItem item in FlowDecorators.Decorate(flow, width, new BackgroundElement(null, _color, _cornerRadius), drawOverContent: false))
+                yield return item;
         }
         else if (Child is not null)
         {

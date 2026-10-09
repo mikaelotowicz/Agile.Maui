@@ -25,8 +25,8 @@ public sealed class GradientBackgroundElement : SingleChildElement, IFlowContain
     {
         if (Child is IFlowContainer flow)
         {
-            foreach (FlowItem item in flow.Flatten(width))
-                yield return FlowDecorators.Decorate(item, width, child => new GradientBackgroundElement(child, _brush, _cornerRadius));
+            foreach (FlowItem item in FlowDecorators.Decorate(flow, width, new GradientBackgroundElement(null, _brush, _cornerRadius), drawOverContent: false))
+                yield return item;
         }
         else if (Child is not null)
         {
@@ -67,8 +67,8 @@ public sealed class GradientBorderElement : SingleChildElement, IFlowContainer
     {
         if (Child is IFlowContainer flow)
         {
-            foreach (FlowItem item in flow.Flatten(width))
-                yield return FlowDecorators.Decorate(item, width, child => new GradientBorderElement(child, _thickness, _brush, _cornerRadius));
+            foreach (FlowItem item in FlowDecorators.Decorate(flow, width, new GradientBorderElement(null, _thickness, _brush, _cornerRadius), drawOverContent: true))
+                yield return item;
         }
         else if (Child is not null)
         {

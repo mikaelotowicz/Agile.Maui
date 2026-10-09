@@ -25,12 +25,18 @@ O formato segue Keep a Changelog e o versionamento e semantico.
   nunca libera um `Typeface` de `CreateFromFile`: cada `GeneratePdfNative()` com
   fonte embutida vazava ~60 KB de heap nativo e mantinha mapeado o `.ttf`
   temporário já apagado.
+- `Background`/`Border` (e variantes com gradiente) com `cornerRadius` sobre
+  conteudo paginavel, como `.Background(cor, 8f).Padding(12).Text(...)`, agora
+  desenham um unico retangulo arredondado por pagina sobre as fatias contiguas,
+  em vez de um retangulo por fatia (padding e cada linha de texto). Um bloco
+  partido entre paginas fecha e reabre os cantos na quebra; gradientes passam a
+  cobrir o bloco inteiro em vez de se repetir por linha.
 
 ### Alterado
 - Streams de conteudo de pagina agora sao comprimidos com `FlateDecode`.
 - Wrappers decorativos (`Background`, `Border` e variantes com gradiente)
-  permitem paginacao do conteudo interno e aplicam a decoracao por fragmento de
-  fluxo.
+  permitem paginacao do conteudo interno; a decoracao e desenhada uma vez por
+  pagina sobre o trecho contiguo (`FlowItem.Decorations`).
 - `PdfGen.Sample` agora gera uma proposta comercial premium de uma pagina, usa
   `agile.png` como imagem real e remove a geracao manual de PNG em runtime.
 - Testes de fonte embutida agora procuram fontes TrueType comuns em Windows,
