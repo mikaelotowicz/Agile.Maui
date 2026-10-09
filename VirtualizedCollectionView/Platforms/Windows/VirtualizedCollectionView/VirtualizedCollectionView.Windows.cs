@@ -194,31 +194,43 @@ public partial class VirtualizedCollectionView
     public void ScrollTo(int index, bool animated = true) =>
         _cv.ScrollTo(index, animate: animated);
 
-    public void ScrollToStart(bool animated = true)
+    public void ScrollToStart(bool animated = true) =>
+        ScrollToStart(animated, ScrollToStartRouting.Resolve(HasScrollTarget(), afterDataRefresh: false));
+
+    private void ScrollToStart(bool animated, ScrollToStartRoute route)
     {
-        if (_dragScrollViewer is not null)
+        switch (route)
         {
-            _dragScrollViewer.ChangeView(0, 0, null, disableAnimation: !animated);
-            return;
+            case ScrollToStartRoute.PlatformScroller when _dragScrollViewer is not null:
+                _dragScrollViewer.ChangeView(0, 0, null, disableAnimation: !animated);
+                break;
+            case ScrollToStartRoute.PlatformScroller:
+                _ = _dragScrollView!.ScrollTo(0, 0);
+                break;
+            case ScrollToStartRoute.ItemsViewScrollTo:
+                _cv.ScrollTo(0, animate: animated);
+                break;
         }
+    }
 
-        if (_dragScrollView is not null)
-        {
-            _ = _dragScrollView.ScrollTo(0, 0);
-            return;
-        }
-
-        _cv.ScrollTo(0, animate: animated);
+    // Lista que nasceu oculta (IsVisible=False) não tem o template interno expandido no Loaded,
+    // então o FindScrollTarget de lá não acha o scroller: tenta de novo antes de rolar.
+    private bool HasScrollTarget()
+    {
+        if (_dragScrollViewer is null && _dragScrollView is null && _dragView is not null)
+            FindScrollTarget(_dragView);
+        return _dragScrollViewer is not null || _dragScrollView is not null;
     }
 
     private void ScrollToStartAfterDataRefresh()
     {
-        // Adiado via dispatcher: a coleção pode ter sido esvaziada até o callback rodar,
-        // e ScrollTo(0) numa fonte vazia fica por conta do CollectionView do MAUI.
+        // Adiado via dispatcher: a coleção pode ter sido esvaziada até o callback rodar.
+        // Nunca cai no ItemsView.ScrollTo (ver ScrollToStartRouting): logo após um lote grande
+        // ele trava a UI no handler Items2 do MAUI 11.
         void Scroll()
         {
             if (CountItems(ItemsSource) > 0)
-                ScrollToStart(false);
+                ScrollToStart(false, ScrollToStartRouting.Resolve(HasScrollTarget(), afterDataRefresh: true));
         }
 
         if (_cv.Handler?.PlatformView is FrameworkElement fe)
