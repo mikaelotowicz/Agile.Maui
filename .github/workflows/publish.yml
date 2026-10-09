@@ -101,4 +101,4 @@ jobs:
           if (-not $env:NUGET_API_KEY) {
             throw "Configure o Trusted Publishing (secret NUGET_USER + política no nuget.org) ou o secret NUGET_API_KEY."
           }
-          dotnet nuget push "nupkgs-ci\*.nupkg" --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicates
+          dotnet nuget push "nupkgs-ci\*.nupkg" --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
