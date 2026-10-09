@@ -166,6 +166,12 @@ page only at about 100%. `CurrentPage` is re-clamped when `PageCount` changes.
 | `ThumbnailBarTitleText` | `string` | `Pages` |
 | `PrintJobName` | `string` | `Document` |
 
+The area behind the pages (the spacing between them and the margin around a
+page that does not fill the view) is light gray `#EDEDEF` on Android, iOS and
+macOS Catalyst — the same tone as the `PdfReaderView` loading screen — and is
+not configurable. Before `1.1.0` it was `#C2C6C9` on Android and dark `#525659`
+on iOS and macOS Catalyst.
+
 ### Thumbnails
 
 | Property | Type | Default | Description |

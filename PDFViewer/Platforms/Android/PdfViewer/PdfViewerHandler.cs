@@ -1629,9 +1629,11 @@ public sealed class PdfContainerView : global::Android.Widget.FrameLayout,
     /// <summary>Overlay da barra de miniaturas (drawer). Quando presente e visível, é layoutado em tela cheia.</summary>
     internal AView? ThumbOverlay;
 
-    // Cinza de leitor do "deck" (atrás das páginas). O espaçamento entre folhas mostra esta cor.
+    // Cinza claro do "deck" atrás das páginas: o mesmo #EDEDEF do PdfBackdrop do PdfReaderView
+    // (fundo do carregamento) e do handler iOS. As folhas não têm sombra aqui: o espaçamento entre
+    // elas, nesta cor, é o que as separa.
     internal static readonly global::Android.Graphics.Color ReaderBg =
-        global::Android.Graphics.Color.Rgb(0xC2, 0xC6, 0xC9);
+        global::Android.Graphics.Color.Rgb(0xED, 0xED, 0xEF);
 
     private readonly ScaleGestureDetector     _sgd;
     private readonly GestureDetector          _gd;

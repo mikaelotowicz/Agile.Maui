@@ -521,9 +521,9 @@ public sealed class PdfViewerHandler
 
 public sealed class PdfNativeView : UIView
 {
-    // Cinza de leitor do "deck" atrás das páginas (estilo Adobe/Edge), igual às demais
-    // plataformas (#525659). As folhas brancas do PDF se destacam sobre este fundo.
-    private static readonly UIColor ReaderBg = UIColor.FromRGB((byte)0x52, (byte)0x56, (byte)0x59);
+    // Cinza claro do "deck" atrás das páginas: o mesmo #EDEDEF do PdfBackdrop do PdfReaderView
+    // (fundo do carregamento) e do handler Android. As folhas se separam pelo vão do DisplaysPageBreaks.
+    private static readonly UIColor ReaderBg = UIColor.FromRGB((byte)0xED, (byte)0xED, (byte)0xEF);
 
     private const float ThumbBarWidth = 84f;
 
