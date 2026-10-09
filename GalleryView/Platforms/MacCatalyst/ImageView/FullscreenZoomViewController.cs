@@ -199,6 +199,9 @@ public sealed class FullscreenZoomViewController
         _loadCts = new CancellationTokenSource();
         var token = _loadCts.Token;
         var maxPixelSize = GetFullscreenMaxPixelSize();
+        // Lido aqui, na main thread: depois do ConfigureAwait(false) o acesso ao UIKit lança
+        // UIKitThreadAccessException em Debug, e o catch trocava a foto pelo placeholder.
+        var screenScale = UIScreen.MainScreen.Scale;
         var cacheKey = AppleImageCache.Key(url, maxPixelSize);
 
         try
@@ -226,7 +229,7 @@ public sealed class FullscreenZoomViewController
                 return;
             }
 
-            var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
+            var image = AppleImageCache.Decode(result.Data, maxPixelSize, screenScale);
             if (image is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>

@@ -310,6 +310,9 @@ public sealed class FullscreenGalleryViewController : UIViewController
     private async Task LoadFromUrlAsync(int index, string url, CancellationToken token)
     {
         var maxPixelSize = GetPageMaxPixelSize(index);
+        // Lido aqui, na main thread: depois do ConfigureAwait(false) o acesso ao UIKit lança
+        // UIKitThreadAccessException em Debug, e o catch trocava a foto pelo placeholder.
+        var screenScale = UIScreen.MainScreen.Scale;
         var cacheKey = AppleImageCache.Key(url, maxPixelSize);
         try
         {
@@ -336,7 +339,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
                 return;
             }
 
-            var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
+            var image = AppleImageCache.Decode(result.Data, maxPixelSize, screenScale);
             if (image is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
