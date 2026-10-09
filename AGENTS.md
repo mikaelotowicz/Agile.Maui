@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project Overview
 
-**Agile.Maui** é uma biblioteca de componentes .NET MAUI (v1.0.1) que fornece `ImageView` (zoom/fullscreen), `GalleryView` e `VirtualizedCollectionView` (lista virtualizada de alto desempenho), targeting Android, iOS, macOS Catalyst e Windows via single-project multi-targeting.
+**Agile.Maui** é uma biblioteca **modular** de componentes .NET MAUI: cada componente vive em seu próprio projeto/pacote com versão própria definida no respectivo `.csproj` (todos compartilham o namespace `Agile.Maui`), targeting Android, iOS, macOS Catalyst e Windows. Componentes: `ImageView`/`GalleryView` (`Agile.Maui.Gallery`), `PdfViewer`/`PdfReaderView` (`Agile.Maui.Pdf`), `VirtualizedCollectionView` (`Agile.Maui.VirtualizedCollection`), `ChipGroup` (`Agile.Maui.ChipGroup`), `SignaturePad` (`Agile.Maui.SignaturePad`) e o gerador de PDF `Agile.Maui.PdfGen`.
 
 ## Build Commands
 
