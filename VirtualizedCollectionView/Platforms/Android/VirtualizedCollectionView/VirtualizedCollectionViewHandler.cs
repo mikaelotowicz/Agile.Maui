@@ -1834,6 +1834,7 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
     {
         bool isNew = _cache.Get(position, -1) == -1;
         _cache.Put(position, heightPx);
+        _estimateGeneration++;   // estimativa desta posição (e a média) mudou → prefix-sum inválido
         if (isNew && heightPx > 0)
         {
             _measuredCount++;
@@ -1867,6 +1868,7 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
             if (_cache.KeyAt(i) >= position)
                 _cache.RemoveAt(i);
         _cachedScrollRange = -1;
+        _estimateGeneration++;
     }
 
     // Remove as alturas cacheadas de um intervalo [start, start+count) — usado no Replace,
@@ -1880,6 +1882,7 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
                 _cache.RemoveAt(i);
         }
         _cachedScrollRange = -1;
+        _estimateGeneration++;
     }
 
     public void InvalidateCache()
@@ -1888,6 +1891,7 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
         _avgHeight         = 0;
         _measuredCount     = 0;
         _cachedScrollRange = -1;
+        _estimateGeneration++;
     }
 
     private int _lastLayoutWidth;
@@ -1905,14 +1909,41 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
         _lastLayoutWidth = width;
     }
 
+    // Prefix-sum incremental das alturas estimadas. O offset é pedido a cada frame de
+    // scroll e o loop original fazia uma chamada JNI (SparseIntArray.Get) por posição —
+    // O(firstPos) por frame. Enquanto _estimateGeneration não muda, GetEstimatedHeight é
+    // determinística por posição, então ajustar a soma pelo delta de firstPos (1-2 por
+    // frame) produz exatamente o mesmo valor do loop completo.
+    private int  _estimateGeneration;
+    private int  _sumGeneration = -1;
+    private int  _sumFirstPos;
+    private long _sumValue;
+
+    private int SumEstimatedUpTo(int firstPos)
+    {
+        if (firstPos <= 0) return 0;   // inclui GetPosition == NoPosition (-1)
+
+        if (_sumGeneration != _estimateGeneration)
+        {
+            _sumGeneration = _estimateGeneration;
+            _sumFirstPos   = 0;
+            _sumValue      = 0;
+        }
+
+        while (_sumFirstPos < firstPos)
+            _sumValue += GetEstimatedHeight(_sumFirstPos++);
+        while (_sumFirstPos > firstPos)
+            _sumValue -= GetEstimatedHeight(--_sumFirstPos);
+
+        return (int)Math.Min(_sumValue, int.MaxValue);
+    }
+
     public override int ComputeVerticalScrollOffset(RecyclerView.State state)
     {
         if (ChildCount == 0) return 0;
         var first    = GetChildAt(0)!;
         int firstPos = GetPosition(first);
-        int offset   = -GetDecoratedTop(first);
-        for (int i = 0; i < firstPos; i++)
-            offset += GetEstimatedHeight(i);
+        int offset   = -GetDecoratedTop(first) + SumEstimatedUpTo(firstPos);
         return Math.Max(0, offset);
     }
 

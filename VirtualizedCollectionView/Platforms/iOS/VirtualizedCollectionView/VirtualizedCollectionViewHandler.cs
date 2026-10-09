@@ -594,6 +594,13 @@ public sealed class VirtualizedCollectionViewHandler
             return;
         }
 
+        // Gate já disparado e rolando rumo ao fim: lastVisible só cresce, então a posição
+        // continua dentro da zona por definição e o código abaixo retornaria sem efeito —
+        // pula a consulta a IndexPathsForVisibleItems (aloca um array por evento de scroll).
+        // Sair da zona exige rolar para trás (towardEnd falso), que segue caindo no check.
+        if (_remainingThresholdInsideZone && _lastScrollWasTowardEnd)
+            return;
+
         var visiblePaths = PlatformView.IndexPathsForVisibleItems;
         if (visiblePaths.Length == 0) return;
 
