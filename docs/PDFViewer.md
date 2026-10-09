@@ -264,7 +264,7 @@ It also exposes:
 | `ViewerControl` | `PdfViewer` | Access to the base control for advanced scenarios. |
 | `ToolbarColor` | `Color` | Top bar color. |
 | `BottomBarColor` | `Color` | Bottom bar color. |
-| `IconColor` | `Color` | Icon color. |
+| `IconColor` | `Color` | Icon color on the toolbar and bottom bar. The search pill and the fullscreen button have a fixed white surface and keep a fixed dark icon color. |
 | `CaptionColor` | `Color` | Color of titles and counters. |
 | `LoadingText` | `string` | Loading text. |
 | `SearchPlaceholder` | `string` | Search placeholder. |
@@ -278,7 +278,7 @@ It also exposes:
 | `ShowFullscreenToggle` | `bool` | Shows a floating button over the PDF to enter or exit internal fullscreen mode. |
 | `FullscreenTogglePlacement` | `PdfReaderFullscreenTogglePlacement` | Floating fullscreen button placement. `Top` or `Bottom`. |
 | `ShowToolbar` | `bool` | Shows the top bar. |
-| `ShowSearch` | `bool` | Shows the search button. |
+| `ShowSearch` | `bool` | Shows the search button. On Android, the system Back button closes an open search before leaving the page. |
 | `ShowPrint` | `bool` | Shows the print button. |
 | `ShowShare` | `bool` | Shows the share button. |
 | `ShowOrientationToggle` | `bool` | Shows the vertical/horizontal toggle. |

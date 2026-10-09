@@ -201,7 +201,8 @@
                 </Grid.GestureRecognizers>
             </Grid>
 
-            <!--  Barra de busca (overlay sobre a toolbar)  -->
+            <!--  Barra de busca (overlay sobre a toolbar). Fundo fixo PdfSurface: os ícones usam PdfIcon, não
+                  IconColor, que acompanha a toolbar e pode ser branco (ficariam invisíveis).  -->
             <Border
                 x:Name="SearchBar"
                 Grid.ColumnSpan="2"
@@ -210,8 +211,9 @@
                 BackgroundColor="{StaticResource PdfSurface}"
                 IsVisible="False"
                 Stroke="{StaticResource PdfOutlineBrush}"
-                StrokeShape="RoundRectangle 10"
+                StrokeShape="RoundRectangle 20"
                 StrokeThickness="1">
+                <!--  Pílula: raio 20 = metade da altura (toolbar 56 − margens 8+8).  -->
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="2">
                     <Image
                         Grid.Column="0"
@@ -259,7 +261,7 @@
                                     FontFamily="AgilePdfIcons"
                                     Glyph="{x:Static agile:PdfReaderIcons.Up}"
                                     Size="20"
-                                    Color="{Binding IconColor, Source={x:Reference Root}}" />
+                                    Color="{StaticResource PdfIcon}" />
                             </Image.Source>
                         </Image>
                     </Border>
@@ -276,7 +278,7 @@
                                     FontFamily="AgilePdfIcons"
                                     Glyph="{x:Static agile:PdfReaderIcons.Down}"
                                     Size="20"
-                                    Color="{Binding IconColor, Source={x:Reference Root}}" />
+                                    Color="{StaticResource PdfIcon}" />
                             </Image.Source>
                         </Image>
                     </Border>
@@ -293,7 +295,7 @@
                                     FontFamily="AgilePdfIcons"
                                     Glyph="{x:Static agile:PdfReaderIcons.Close}"
                                     Size="20"
-                                    Color="{Binding IconColor, Source={x:Reference Root}}" />
+                                    Color="{StaticResource PdfIcon}" />
                             </Image.Source>
                         </Image>
                     </Border>
@@ -382,7 +384,7 @@
                     FontSize="22"
                     HorizontalTextAlignment="Center"
                     Text="{x:Static agile:PdfReaderIcons.Fullscreen}"
-                    TextColor="{Binding IconColor, Source={x:Reference Root}}"
+                    TextColor="{StaticResource PdfIcon}"
                     VerticalTextAlignment="Center" />
             </Border>
         </Grid>

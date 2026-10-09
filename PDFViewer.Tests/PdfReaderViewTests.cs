@@ -426,3 +426,82 @@ public class PdfReaderViewEventosTests
         Assert.Equal(0.3, Elemento<Border>(r, "SearchPrevBtn").Opacity, 3);
     }
 }
+
+// Regressão (E2E no app, 09/10): com a toolbar colorida o app define IconColor branco. Os botões da barra de
+// busca e o de tela cheia ficam sobre fundo branco fixo e seguiam o IconColor — ícones invisíveis.
+public class PdfReaderViewIconesSobreSuperficieTests
+{
+    private static readonly Color CorDeIconeDaSuperficie = Color.FromArgb("#44444A");
+
+    [Theory]
+    [InlineData("SearchPrevBtn")]
+    [InlineData("SearchNextBtn")]
+    [InlineData("SearchCloseBtn")]
+    public void Botoes_da_barra_de_busca_nao_seguem_o_IconColor_da_toolbar(string nome)
+    {
+        var r = new PdfReaderView { IconColor = Colors.White };
+
+        var botao = r.FindByName<Border>(nome);
+        Assert.NotNull(botao);
+        var icone = Assert.IsType<FontImageSource>(Assert.IsType<Image>(botao!.Content).Source);
+
+        Assert.Equal(CorDeIconeDaSuperficie, icone.Color);
+    }
+
+    [Fact]
+    public void Glifo_do_botao_de_tela_cheia_nao_segue_o_IconColor_da_toolbar()
+    {
+        var r = new PdfReaderView { IconColor = Colors.White };
+
+        var glifo = r.FindByName<Label>("FullscreenToggleGlyph");
+        Assert.NotNull(glifo);
+
+        Assert.Equal(CorDeIconeDaSuperficie, glifo!.TextColor);
+    }
+}
+
+// Pedido do E2E no app (09/10): o Voltar do sistema com a busca aberta saía da página; e a barra de busca
+// passou a ser uma pílula.
+public class PdfReaderViewBarraDeBuscaTests
+{
+    [Fact]
+    public void Voltar_com_a_busca_aberta_fecha_a_busca_e_consome_o_Voltar()
+    {
+        var r = new PdfReaderView();
+        r.OpenSearch();
+
+        Assert.True(r.HandleBackPressed());
+        Assert.False(r.FindByName<Border>("SearchBar")!.IsVisible);
+    }
+
+    [Fact]
+    public void Voltar_sem_busca_aberta_nao_e_consumido()
+    {
+        var r = new PdfReaderView();
+
+        Assert.False(r.HandleBackPressed());
+    }
+
+    [Fact]
+    public void Segundo_Voltar_depois_de_fechar_a_busca_segue_para_a_pagina()
+    {
+        var r = new PdfReaderView();
+        r.OpenSearch();
+        r.HandleBackPressed();
+
+        Assert.False(r.HandleBackPressed());
+    }
+
+    [Fact]
+    public void Barra_de_busca_tem_formato_de_pilula()
+    {
+        var r = new PdfReaderView();
+        var toolbar = r.FindByName<Grid>("ToolbarHost")!;
+        var barra = r.FindByName<Border>("SearchBar")!;
+
+        var altura = toolbar.HeightRequest - barra.Margin.Top - barra.Margin.Bottom;
+        var forma = Assert.IsType<Microsoft.Maui.Controls.Shapes.RoundRectangle>(barra.StrokeShape);
+
+        Assert.Equal(new CornerRadius(altura / 2), forma.CornerRadius);
+    }
+}

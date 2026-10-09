@@ -32,7 +32,10 @@ public partial class PdfReaderView : ContentView
 
         ApplySearchBarLayout();
         ToolbarHost.SizeChanged += (_, _) => ApplySearchBarLayout();
+        SearchEntry.HandlerChanged += (_, _) => RemoveSearchEntryNativeBorder();
         Loaded += (_, _) => UpdateNavigationButton();
+        // Leitor fora da tela com a busca aberta: fecha a busca para soltar o Voltar do sistema (Android).
+        Unloaded += (_, _) => { if (_searchOpen) CollapseSearch(); };
 
         // Atualiza o caption de zoom também quando o zoom muda por GESTO (pinch/double-tap) dentro
         // do PdfViewer — não só pelos botões +/−.
@@ -708,15 +711,51 @@ public partial class PdfReaderView : ContentView
     private void OnSearchToggleClicked(object? sender, EventArgs e)
     {
         if (_searchOpen) { CollapseSearch(); return; }
+        OpenSearch();
+    }
+
+    internal void OpenSearch()
+    {
         _searchOpen = true;
         SearchBar.IsVisible = true;
         SearchToolbarDismissOverlay.IsVisible = true;
         SearchDismissOverlay.IsVisible = true;
         SearchEntry.Focus();
+        OnSearchOpenChanged(true);
+    }
+
+    /// <summary>Voltar do sistema: com a busca aberta, fecha a busca em vez de sair da página.</summary>
+    internal bool HandleBackPressed()
+    {
+        if (!_searchOpen) return false;
+        CollapseSearch();
+        return true;
+    }
+
+    // Android: registra/solta o callback do Voltar enquanto a busca está aberta.
+    partial void OnSearchOpenChanged(bool open);
+
+    // A pílula da busca já é a borda: tira o sublinhado (Android) e a moldura (iOS/Mac/Windows) do campo nativo.
+    private void RemoveSearchEntryNativeBorder()
+    {
+#if ANDROID
+        if (SearchEntry.Handler?.PlatformView is Android.Widget.EditText editText)
+        {
+            editText.Background = null;
+            editText.SetPadding(editText.PaddingLeft, 0, editText.PaddingRight, 0);
+        }
+#elif IOS || MACCATALYST
+        if (SearchEntry.Handler?.PlatformView is UIKit.UITextField textField)
+            textField.BorderStyle = UIKit.UITextBorderStyle.None;
+#elif WINDOWS
+        if (SearchEntry.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.TextBox textBox)
+            textBox.BorderThickness = new Microsoft.UI.Xaml.Thickness(0);
+#endif
     }
 
     private void CollapseSearch()
     {
+        OnSearchOpenChanged(false);
         _searchOpen = false;
         _suppressSearchTextChanged = true;
         _searchDebounceCts?.Cancel(); _searchDebounceCts?.Dispose(); _searchDebounceCts = null;
