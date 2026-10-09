@@ -1,0 +1,54 @@
+# Testes de host a cada push/PR: as 6 suítes xunit rodam no TFM neutro (net10.0),
+# mas o restore avalia todos os TFMs das libs — por isso o runner Windows (único SO
+# que produz android + ios/maccatalyst + windows) e o workload MAUI instalado.
+name: Testes
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Testes de host
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Os TFMs net11.0 exigem SDK .NET 11 (prerelease enquanto não há GA).
+      - name: Instalar .NET SDK 11 (prerelease)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
+      - name: Instalar workload MAUI
+        run: dotnet workload install maui
+
+      - name: ChipGroup
+        run: dotnet test ChipGroup.Tests -c Release --nologo
+
+      - name: GalleryView
+        run: dotnet test GalleryView.Tests -c Release --nologo
+
+      - name: PDFViewer
+        run: dotnet test PDFViewer.Tests -c Release --nologo
+
+      - name: SignaturePad
+        run: dotnet test SignaturePad.Tests -c Release --nologo
+
+      - name: VirtualizedCollectionView
+        run: dotnet test VirtualizedCollectionView.Tests -c Release --nologo
+
+      - name: PdfGen
+        run: dotnet test PdfGen.Tests -c Release --nologo

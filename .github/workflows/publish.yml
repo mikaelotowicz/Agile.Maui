@@ -1,0 +1,89 @@
+# Empacota os 6 componentes (Agile.Maui.PackAll.proj) e publica no nuget.org.
+#
+# Disparo:
+#   - tag v* (ex.: v1.0.7)  → canal Stable
+#   - manual (Actions → Publicar no NuGet → Run workflow) → escolhe canal e dry-run
+#
+# Pré-requisitos (uma vez, no nuget.org + GitHub):
+#   - Criar uma API key no nuget.org com escopo de push para os pacotes Agile.Maui.*
+#     e salvá-la no repositório como secret NUGET_API_KEY.
+#     (Alternativa mais segura, sem chave de longa duração: Trusted Publishing do
+#     nuget.org via OIDC — registre este repo/workflow como publicador confiável e
+#     troque o passo de push pela action NuGet/login para obter um token temporário.)
+#   - A primeira publicação de cada ID (ou a reserva do prefixo Agile.Maui.*) deve
+#     ser feita pela conta dona dos pacotes.
+#
+# O push usa --skip-duplicates: versões já publicadas são ignoradas, então só os
+# pacotes cuja versão (definida em cada .csproj) mudou sobem de fato. Os símbolos
+# (.snupkg) sobem automaticamente junto de cada .nupkg.
+name: Publicar no NuGet
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Canal de pacote (AgilePackageChannel)
+        type: choice
+        options: [Stable, Preview]
+        default: Stable
+      dry_run:
+        description: Só empacotar e anexar os .nupkg como artifact (sem publicar)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publicar:
+    name: Pack + publish (${{ inputs.channel || 'Stable' }})
+    runs-on: windows-latest # único SO que produz todos os TFMs; o PackAll falha nos demais
+    timeout-minutes: 90
+    env:
+      CHANNEL: ${{ inputs.channel || 'Stable' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar .NET SDK 11 (prerelease)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
+      - name: Instalar workload MAUI
+        run: dotnet workload install maui
+
+      # Gate de qualidade: nada é publicado com teste vermelho.
+      - name: Testes
+        run: |
+          dotnet test ChipGroup.Tests -c Release --nologo
+          dotnet test GalleryView.Tests -c Release --nologo
+          dotnet test PDFViewer.Tests -c Release --nologo
+          dotnet test SignaturePad.Tests -c Release --nologo
+          dotnet test VirtualizedCollectionView.Tests -c Release --nologo
+          dotnet test PdfGen.Tests -c Release --nologo
+
+      - name: Pack (${{ env.CHANNEL }})
+        run: dotnet msbuild Agile.Maui.PackAll.proj -t:Pack${{ env.CHANNEL }} "-p:PackageOutputPath=${{ github.workspace }}\nupkgs-ci"
+
+      - name: Anexar pacotes ao run
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs-${{ env.CHANNEL }}
+          path: |
+            nupkgs-ci/*.nupkg
+            nupkgs-ci/*.snupkg
+          if-no-files-found: error
+
+      - name: Publicar no nuget.org
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if (-not $env:NUGET_API_KEY) {
+            throw "Secret NUGET_API_KEY não configurado no repositório (Settings → Secrets and variables → Actions)."
+          }
+          dotnet nuget push "nupkgs-ci\*.nupkg" --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicates
