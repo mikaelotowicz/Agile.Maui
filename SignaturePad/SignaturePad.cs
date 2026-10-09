@@ -38,6 +38,9 @@ public sealed class SignaturePad : GraphicsView
     {
         _drawable = new SignaturePadDrawable(this);
         Drawable = _drawable;
+        // Default "paper" background so the default black ink stays visible on dark
+        // themes; consumers can override it, including with Colors.Transparent.
+        BackgroundColor = Colors.White;
         // Touch capture is native, including pressure where available, and is injected through
         // internal OnTouchDown/Move/Up methods connected by UseAgileSignaturePad. GraphicsView
         // interaction events are therefore not used.
@@ -82,7 +85,11 @@ public sealed class SignaturePad : GraphicsView
 
     public static readonly BindableProperty IsEmptyProperty = IsEmptyPropertyKey.BindableProperty;
 
-    /// <summary>On-screen stroke color. Default is black; on dark themes set a contrasting color or give the pad a light background.</summary>
+    /// <summary>
+    /// On-screen stroke color. Default is black, drawn over the pad's default white
+    /// "paper" <c>BackgroundColor</c>; override either one (including a transparent
+    /// background) when theming, keeping ink and background contrasting in dark mode.
+    /// </summary>
     public Color StrokeColor { get => (Color)GetValue(StrokeColorProperty); set => SetValue(StrokeColorProperty, value); }
 
     /// <summary>Minimum stroke width in DIP, usually reached by fast movement. Default is 1.</summary>
@@ -350,6 +357,12 @@ public sealed class SignaturePad : GraphicsView
 
     internal bool HasActiveStroke => _current != null;
 
+    /// <summary>In-progress stroke, excluded from path caching while it still grows.</summary>
+    internal RenderStroke? ActiveStrokeForRender => _current;
+
+    // Reused by AllStrokesForRender to avoid allocating a list per rendered frame.
+    private List<RenderStroke>? _renderBuffer;
+
     internal IReadOnlyList<RenderStroke> AllStrokesForRender
     {
         get
@@ -357,14 +370,18 @@ public sealed class SignaturePad : GraphicsView
             if (_current == null)
                 return _strokes;
 
-            var list = new List<RenderStroke>(_strokes.Count + 1);
-            list.AddRange(_strokes);
-            list.Add(_current);
-            return list;
+            var buffer = _renderBuffer ??= new List<RenderStroke>();
+            buffer.Clear();
+            buffer.AddRange(_strokes);
+            buffer.Add(_current);
+            return buffer;
         }
     }
 
-    /// <param name="timestampMs">Event time in ms using the platform's arbitrary base; normalized internally.</param>
+    /// <summary>
+    /// Starts a stroke. <paramref name="timestampMs"/> is the event time in ms using
+    /// the platform's arbitrary base; it is normalized internally.
+    /// </summary>
     internal void OnTouchDown(float xDip, float yDip, float pressure, bool pressureSupported, double timestampMs)
     {
         if (!_sessionStarted)
@@ -381,13 +398,22 @@ public sealed class SignaturePad : GraphicsView
         Invalidate();
     }
 
-    internal void OnTouchMove(float xDip, float yDip, float pressure, bool pressureSupported, double timestampMs)
+    internal void OnTouchMove(float xDip, float yDip, float pressure, bool pressureSupported, double timestampMs) =>
+        OnTouchMove(xDip, yDip, pressure, pressureSupported, timestampMs, invalidate: true);
+
+    /// <summary>
+    /// Adds a move sample. <paramref name="invalidate"/> false lets interop replay
+    /// coalesced/historical samples and redraw once per native event.
+    /// </summary>
+    internal void OnTouchMove(float xDip, float yDip, float pressure, bool pressureSupported, double timestampMs,
+        bool invalidate)
     {
         if (_current == null)
             return;
 
         AddSample(xDip, yDip, pressure, pressureSupported, timestampMs);
-        Invalidate();
+        if (invalidate)
+            Invalidate();
     }
 
     internal void OnTouchUp(float xDip, float yDip, float pressure, bool pressureSupported, double timestampMs)

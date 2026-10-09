@@ -229,6 +229,54 @@ public class DrawableTests
     }
 
     [Fact]
+    public void Strokes_concluidos_reutilizam_os_paths_do_cache_entre_redraws()
+    {
+        var strokes = new[] { Stroke(Colors.Black, (0, 0, 2f), (10, 5, 2f), (20, 0, 2f), (30, 5, 2f)) };
+
+        var canvas1 = new FakeCanvas();
+        SignaturePadDrawable.DrawStrokes(canvas1, strokes, null);
+        var canvas2 = new FakeCanvas();
+        SignaturePadDrawable.DrawStrokes(canvas2, strokes, null);
+
+        Assert.Equal(2, canvas1.CaminhosDesenhados.Count);
+        Assert.Equal(2, canvas2.CaminhosDesenhados.Count);
+        for (var i = 0; i < canvas1.CaminhosDesenhados.Count; i++)
+            Assert.Same(canvas1.CaminhosDesenhados[i].Caminho, canvas2.CaminhosDesenhados[i].Caminho);
+    }
+
+    [Fact]
+    public void Stroke_ativo_nao_entra_no_cache_e_o_cache_final_usa_a_geometria_completa()
+    {
+        var pad = new SignaturePad();
+        pad.OnTouchDown(0, 0, 0f, false, 0);
+        pad.OnTouchMove(10, 5, 0f, false, 10);
+        pad.OnTouchMove(20, 0, 0f, false, 20); // ativo com 3 pontos => 1 quad
+
+        var drawable = (SignaturePadDrawable)pad.Drawable;
+
+        var ativo1 = new FakeCanvas();
+        drawable.Draw(ativo1, new RectF(0, 0, 300, 150));
+        var ativo2 = new FakeCanvas();
+        drawable.Draw(ativo2, new RectF(0, 0, 300, 150));
+
+        // Enquanto cresce, o stroke é reconstruído a cada frame (sem cache).
+        Assert.Single(ativo1.CaminhosDesenhados);
+        Assert.NotSame(ativo1.CaminhosDesenhados[0].Caminho, ativo2.CaminhosDesenhados[0].Caminho);
+
+        pad.OnTouchUp(30, 5, 0f, false, 30); // completa com 4 pontos => 2 quads
+
+        var depois1 = new FakeCanvas();
+        drawable.Draw(depois1, new RectF(0, 0, 300, 150));
+        var depois2 = new FakeCanvas();
+        drawable.Draw(depois2, new RectF(0, 0, 300, 150));
+
+        // O cache é construído com a geometria final e reutilizado nos redraws.
+        Assert.Equal(2, depois1.CaminhosDesenhados.Count);
+        Assert.Same(depois1.CaminhosDesenhados[0].Caminho, depois2.CaminhosDesenhados[0].Caminho);
+        Assert.Same(depois1.CaminhosDesenhados[1].Caminho, depois2.CaminhosDesenhados[1].Caminho);
+    }
+
+    [Fact]
     public void Draw_desenha_o_stroke_ativo_junto_com_os_completados()
     {
         var pad = new SignaturePad();

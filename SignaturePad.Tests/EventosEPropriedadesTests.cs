@@ -111,6 +111,8 @@ public class EventosEPropriedadesTests
         var pad = new SignaturePad();
 
         Assert.Equal(Colors.Black, pad.StrokeColor);
+        // Fundo "papel" default para a tinta preta continuar visível em temas escuros.
+        Assert.Equal(Colors.White, pad.BackgroundColor);
         Assert.Equal(1.0, pad.MinStrokeWidth);
         Assert.Equal(3.5, pad.MaxStrokeWidth);
         Assert.Equal(0.7, pad.VelocityFilterWeight);

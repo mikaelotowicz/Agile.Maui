@@ -16,6 +16,14 @@ internal sealed class RenderStroke
     public List<float> Widths { get; } = new();
     public Color Color { get; }
 
+    /// <summary>
+    /// Cached middle-section geometry (one quadratic path per intermediate sample),
+    /// built lazily once the stroke is completed. Completed strokes are never mutated,
+    /// so the cache stays valid across redraws, Undo/Redo and export; a concurrent
+    /// build during export is a benign last-write-wins race over this reference.
+    /// </summary>
+    public List<(PathF Path, float Width)>? MidSegments { get; set; }
+
     public SignatureStroke ToPublic() => new(Points.ToArray(), Color);
 }
 
@@ -40,23 +48,31 @@ internal sealed class SignaturePadDrawable : IDrawable
 
     /// <summary>Draws only strokes, without guides. Also used for image export.</summary>
     public void DrawStrokes(ICanvas canvas, Color? strokeColorOverride) =>
-        DrawStrokes(canvas, _owner.AllStrokesForRender, strokeColorOverride);
+        DrawStrokes(canvas, _owner.AllStrokesForRender, strokeColorOverride, _owner.ActiveStrokeForRender);
 
     /// <summary>
     /// Draws a stroke list without guides. Static so export can run on a background
     /// thread from an immutable snapshot without touching control state.
     /// </summary>
-    public static void DrawStrokes(ICanvas canvas, IReadOnlyList<RenderStroke> strokes, Color? strokeColorOverride)
+    public static void DrawStrokes(ICanvas canvas, IReadOnlyList<RenderStroke> strokes, Color? strokeColorOverride) =>
+        DrawStrokes(canvas, strokes, strokeColorOverride, activeStroke: null);
+
+    private static void DrawStrokes(ICanvas canvas, IReadOnlyList<RenderStroke> strokes,
+        Color? strokeColorOverride, RenderStroke? activeStroke)
     {
         canvas.StrokeLineCap = LineCap.Round;
         canvas.StrokeLineJoin = LineJoin.Round;
         canvas.Antialias = true;
 
         for (var i = 0; i < strokes.Count; i++)
-            DrawStroke(canvas, strokes[i], strokeColorOverride);
+        {
+            // The in-progress stroke still grows, so only completed strokes may cache.
+            var useCache = !ReferenceEquals(strokes[i], activeStroke);
+            DrawStroke(canvas, strokes[i], strokeColorOverride, useCache);
+        }
     }
 
-    private static void DrawStroke(ICanvas canvas, RenderStroke stroke, Color? overrideColor)
+    private static void DrawStroke(ICanvas canvas, RenderStroke stroke, Color? overrideColor, bool useCache)
     {
         var pts = stroke.Points;
         var widths = stroke.Widths;
@@ -88,6 +104,33 @@ internal sealed class SignaturePadDrawable : IDrawable
         canvas.DrawLine(pts[0].X, pts[0].Y, firstMid.X, firstMid.Y);
 
         // Middle section: quadratic curve from mid(i-1,i) to pts[i] to mid(i,i+1).
+        // Completed strokes build these paths once and reuse them on every redraw.
+        var segments = stroke.MidSegments;
+        if (segments == null)
+        {
+            segments = BuildMidSegments(pts, widths);
+            if (useCache)
+                stroke.MidSegments = segments;
+        }
+
+        for (var i = 0; i < segments.Count; i++)
+        {
+            canvas.StrokeSize = segments[i].Width;
+            canvas.DrawPath(segments[i].Path);
+        }
+
+        // Final cap: last segment midpoint to the last point.
+        var lastMid = Mid(pts[n - 2], pts[n - 1]);
+        canvas.StrokeSize = Math.Max(widths[n - 1], 0.5f);
+        canvas.DrawLine(lastMid.X, lastMid.Y, pts[n - 1].X, pts[n - 1].Y);
+    }
+
+    private static List<(PathF Path, float Width)> BuildMidSegments(
+        List<SignaturePoint> pts, List<float> widths)
+    {
+        var n = pts.Count;
+        var segments = new List<(PathF Path, float Width)>(n - 2);
+
         for (var i = 1; i < n - 1; i++)
         {
             var m1 = Mid(pts[i - 1], pts[i]);
@@ -97,14 +140,10 @@ internal sealed class SignaturePadDrawable : IDrawable
             path.MoveTo(m1.X, m1.Y);
             path.QuadTo(pts[i].X, pts[i].Y, m2.X, m2.Y);
 
-            canvas.StrokeSize = Math.Max(widths[i], 0.5f);
-            canvas.DrawPath(path);
+            segments.Add((path, Math.Max(widths[i], 0.5f)));
         }
 
-        // Final cap: last segment midpoint to the last point.
-        var lastMid = Mid(pts[n - 2], pts[n - 1]);
-        canvas.StrokeSize = Math.Max(widths[n - 1], 0.5f);
-        canvas.DrawLine(lastMid.X, lastMid.Y, pts[n - 1].X, pts[n - 1].Y);
+        return segments;
     }
 
     private void DrawGuides(ICanvas canvas, RectF rect)

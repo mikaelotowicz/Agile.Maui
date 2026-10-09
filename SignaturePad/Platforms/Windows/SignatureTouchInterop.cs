@@ -107,7 +107,8 @@ internal static class SignatureTouchInterop
             case Phase.Move:
                 // Replay intermediate points coalesced between PointerMoved events so
                 // high-frequency pen input is captured faithfully instead of dropping the
-                // in-between samples. Mirrors the historical-point replay on Android.
+                // in-between samples. Mirrors the historical-point replay on Android,
+                // invalidating only once per native event.
                 // GetIntermediatePoints returns newest-first, so iterate in reverse for
                 // chronological order; it includes the current point.
                 var intermediates = e.GetIntermediatePoints(view);
@@ -124,8 +125,11 @@ internal static class SignatureTouchInterop
                             (float)ip.Position.Y,
                             ip.Properties.Pressure,
                             supported,
-                            ip.Timestamp / 1000.0);
+                            ip.Timestamp / 1000.0,
+                            invalidate: false);
                     }
+
+                    state.Pad.Invalidate();
                 }
                 else
                 {

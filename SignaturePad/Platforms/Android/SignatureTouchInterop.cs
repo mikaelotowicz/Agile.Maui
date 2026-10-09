@@ -80,14 +80,16 @@ internal sealed class SignatureTouchListener : Java.Lang.Object, AView.IOnTouchL
                 if (index < 0)
                     return true;
 
-                // Replay historical batched points for more faithful strokes.
+                // Replay historical batched points for more faithful strokes, deferring
+                // the redraw so the whole native event invalidates only once (the final
+                // Emit below draws the current point and triggers it).
                 var supported = IsStylus(e, index);
                 for (var h = 0; h < e.HistorySize; h++)
                 {
                     var hx = e.GetHistoricalX(index, h) / _density;
                     var hy = e.GetHistoricalY(index, h) / _density;
                     var hp = e.GetHistoricalPressure(index, h);
-                    _pad.OnTouchMove(hx, hy, hp, supported, e.GetHistoricalEventTime(h));
+                    _pad.OnTouchMove(hx, hy, hp, supported, e.GetHistoricalEventTime(h), invalidate: false);
                 }
                 Emit(e, index, _pad.OnTouchMove);
                 return true;

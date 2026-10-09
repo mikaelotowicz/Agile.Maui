@@ -73,12 +73,14 @@ internal sealed class SignatureGestureRecognizer : UIGestureRecognizer
 
         // Replay coalesced touches so high-frequency input (Apple Pencil reports at
         // 120-240 Hz, while TouchesMoved fires at ~60 Hz) is captured faithfully instead
-        // of dropping the in-between samples. Mirrors the historical-point replay on Android.
+        // of dropping the in-between samples. Mirrors the historical-point replay on
+        // Android, invalidating only once per native event.
         var coalesced = evt.GetCoalescedTouches(touch);
         if (coalesced is { Length: > 0 })
         {
             foreach (var ct in coalesced)
-                Emit(ct, _pad.OnTouchMove);
+                EmitMoveSample(ct);
+            _pad.Invalidate();
         }
         else
         {
@@ -126,6 +128,19 @@ internal sealed class SignatureGestureRecognizer : UIGestureRecognizer
         }
 
         return null;
+    }
+
+    /// <summary>Move sample that defers the redraw to the end of the native event.</summary>
+    private void EmitMoveSample(UITouch touch)
+    {
+        CGPoint p = touch.LocationInView(View);
+
+        var maxForce = touch.MaximumPossibleForce;
+        var supported = maxForce > 0 || touch.Type == UITouchType.Stylus;
+        var pressure = maxForce > 0 ? (float)(touch.Force / maxForce) : 0f;
+
+        _pad.OnTouchMove((float)p.X, (float)p.Y, pressure, supported, touch.Timestamp * 1000.0,
+            invalidate: false);
     }
 
     private void Emit(UITouch touch, Action<float, float, float, bool, double> sink)
