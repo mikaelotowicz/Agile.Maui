@@ -1,0 +1,9 @@
+<Project>
+  <!-- Fonte de ícones do PdfReaderView. Um MauiFont declarado na biblioteca não viaja no .nupkg: este
+       .targets (buildTransitive) declara o mesmo MauiFont no app consumidor, que o processa como as
+       fontes dele (Android assets, iOS UIAppFonts, Windows saída do app). UseAgilePdfViewer() registra
+       o arquivo com o alias AgilePdfIcons. -->
+  <ItemGroup>
+    <MauiFont Include="$(MSBuildThisFileDirectory)Fonts\AgilePdfIcons.ttf" />
+  </ItemGroup>
+</Project>

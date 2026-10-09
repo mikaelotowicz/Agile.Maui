@@ -1,13 +1,16 @@
 namespace Agile.Maui;
 
 /// <summary>
-/// Glifos (Material Design Icons) usados pelo <see cref="PdfReaderView"/>. A fonte é empacotada na
-/// biblioteca como <c>AgilePdfIcons</c> e registrada por <c>builder.UseAgilePdfViewer()</c>.
+/// Glifos (Material Design Icons) usados pelo <see cref="PdfReaderView"/>. A fonte vai no pacote como
+/// <c>AgilePdfIcons</c> (MauiFont injetado no app) e é registrada por <c>builder.UseAgilePdfViewer()</c>.
 /// </summary>
 public static class PdfReaderIcons
 {
     /// <summary>Nome (alias) da fonte registrada pela biblioteca.</summary>
     public const string FontFamily = "AgilePdfIcons";
+
+    /// <summary>Arquivo da fonte (MauiFont no app consumidor).</summary>
+    internal const string FontFile = "AgilePdfIcons.ttf";
 
     public const string Menu      = "\U000f035c";   // menu
     public const string Back      = "\U000f004d";   // arrow-left

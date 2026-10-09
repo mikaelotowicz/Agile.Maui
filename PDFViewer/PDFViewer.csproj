@@ -57,9 +57,16 @@
 		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-preview.7.26406.9" />
 	</ItemGroup>
 
-	<!-- Fonte de ícones do PdfReaderView (Material Design Icons), empacotada e registrada por UseAgilePdfViewer(). -->
+	<!-- Fonte de ícones do PdfReaderView (Material Design Icons), registrada por UseAgilePdfViewer().
+	     MauiFont numa biblioteca só chega ao app via ProjectReference: o .ttf não ia para o .nupkg e quem
+	     instalava pelo NuGet ficava com os ícones em branco. O pacote leva o .ttf e um .targets em
+	     buildTransitive que declara o mesmo MauiFont no app consumidor. (Fonte embutida no assembly
+	     não serve: o MAUI não a carrega em app Windows unpackaged.) -->
 	<ItemGroup>
 		<MauiFont Include="Resources\Fonts\AgilePdfIcons.ttf" />
+		<None Remove="Resources\Fonts\AgilePdfIcons.ttf;buildTransitive\Agile.Maui.Pdf.targets" />
+		<None Include="Resources\Fonts\AgilePdfIcons.ttf" Pack="true" PackagePath="buildTransitive\Fonts\" Visible="false" />
+		<None Include="buildTransitive\Agile.Maui.Pdf.targets" Pack="true" PackagePath="buildTransitive\" />
 	</ItemGroup>
 
 	<!-- Motor de rasterização + camada de texto PDF no Windows: PDFium (mesmo do Edge/Chrome) via

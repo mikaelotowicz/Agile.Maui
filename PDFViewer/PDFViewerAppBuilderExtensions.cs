@@ -22,9 +22,9 @@ public static class PDFViewerAppBuilderExtensions
     /// </summary>
     public static MauiAppBuilder UseAgilePdfViewer(this MauiAppBuilder builder)
     {
-        // Fonte de ícones do PdfReaderView (empacotada na lib). Alias próprio p/ não colidir com
-        // fontes do app consumidor.
-        builder.ConfigureFonts(fonts => fonts.AddFont("AgilePdfIcons.ttf", "AgilePdfIcons"));
+        // Fonte de ícones do PdfReaderView: MauiFont do app (via ProjectReference ou pelo .targets em
+        // buildTransitive do pacote). Alias próprio p/ não colidir com fontes do app consumidor.
+        builder.ConfigureFonts(fonts => fonts.AddFont(PdfReaderIcons.FontFile, PdfReaderIcons.FontFamily));
 
         builder.ConfigureMauiHandlers(handlers =>
         {
