@@ -517,6 +517,11 @@ Viewer.LinkTapped += async (sender, e) =>
 - The `PdfReaderView` uses the WinUI sharing API bound to the current window's HWND.
 - Confirm that there is an active MAUI window and that the document came from a valid file, URL or `PdfStream`.
 
+### Toolbar icons are blank
+
+- The `PdfReaderView` icons come from the `AgilePdfIcons` font registered by `builder.UseAgilePdfViewer()`; make sure it is called in `MauiProgram.cs`.
+- Since `1.1.0` the package ships the font and declares it as a `MauiFont` in the app through `buildTransitive`. With older versions installed from NuGet the icons render blank; update the package.
+
 ## Local build
 
 ```powershell

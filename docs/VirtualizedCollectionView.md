@@ -197,7 +197,7 @@ fixed height on Windows, set `HeightRequest` within the `DataTemplate` itself.
 |---|---|
 | Android | `RecyclerView`, `LinearLayoutManager`, `GridLayoutManager`, and `CachingLinearLayoutManager` for dynamic height. View holders discarded by the recycled-view pool are tracked by weak reference and can be collected. |
 | iOS/MacCatalyst | `UICollectionView` with `UICollectionViewCompositionalLayout`; `PreferredLayoutAttributesFitting` measures MAUI views. Cells hold the collection view by weak reference, so closing the page releases the list, cells, and views. |
-| Windows | `ContentView` hosting a MAUI `CollectionView`, with mouse drag-to-scroll and inertia. |
+| Windows | `ContentView` hosting a MAUI `CollectionView`, with mouse drag-to-scroll and inertia. The automatic scroll back to the first item (empty → non-empty) only moves the native scroller offset, never `ItemsView.ScrollTo`, which can freeze the UI on MAUI 11 right after a large batch. |
 
 ## Example with inline template
 
