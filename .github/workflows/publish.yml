@@ -84,9 +84,10 @@ jobs:
           if-no-files-found: error
 
       # Trusted Publishing: troca o token OIDC do job por uma API key temporária (1 h),
-      # logo antes do push para não expirar. Roda só quando o secret NUGET_USER existe.
+      # logo antes do push para não expirar. Roda sempre que o secret NUGET_USER existe —
+      # inclusive em dry-run, para o pipeline de autenticação ser exercitado sem publicar.
       - name: NuGet login (Trusted Publishing)
-        if: ${{ env.NUGET_USER != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        if: ${{ env.NUGET_USER != '' }}
         id: login
         uses: NuGet/login@v1
         with:
