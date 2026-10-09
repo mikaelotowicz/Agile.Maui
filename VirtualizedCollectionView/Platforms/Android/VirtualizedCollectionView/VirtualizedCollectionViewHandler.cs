@@ -1146,6 +1146,12 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         mauiView.HorizontalOptions = LayoutOptions.Fill;
 
         var nativeView = mauiView.ToPlatform(_mauiContext);
+        // Header/Footer passado como View é do consumidor e sobrevive ao holder: Span/ItemHeightRequest
+        // trocados antes do reload adiado recriam o LayoutManager, que descarta o holder antigo com a
+        // view nativa ainda presa ao host dele — o AddView abaixo lançaria IllegalStateException.
+        if (nativeView.Parent is ViewGroup hostAnterior)
+            hostAnterior.RemoveView(nativeView);
+
         AView itemRoot;
         if (_coerceWidth)
         {
