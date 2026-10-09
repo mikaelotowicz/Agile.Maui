@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace Agile.Maui;
 
 internal sealed class SignatureJsonDocument
@@ -29,4 +32,17 @@ internal sealed class SignatureJsonPoint
     public float Pressure { get; set; }
 
     public bool PressureSupported { get; set; }
+}
+
+/// <summary>
+/// Source-generated System.Text.Json contract. Reflection-based serialization is
+/// disabled by default in trimmed/AOT published apps (always the case on
+/// iOS/MacCatalyst), so the signature JSON APIs must not depend on it.
+/// </summary>
+[JsonSerializable(typeof(SignatureJsonDocument))]
+internal partial class SignatureJsonContext : JsonSerializerContext
+{
+    /// <summary>Shared context variant that writes indented JSON.</summary>
+    public static SignatureJsonContext Indented { get; } =
+        new(new JsonSerializerOptions { WriteIndented = true });
 }

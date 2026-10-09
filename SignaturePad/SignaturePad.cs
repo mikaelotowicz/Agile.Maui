@@ -26,6 +26,9 @@ public sealed class SignaturePad : GraphicsView
     private double _sessionStartMs;
     private bool _sessionStarted;
 
+    // Base timestamp so strokes drawn after LoadStrokes continue the loaded timeline.
+    private double _timeBaseMs;
+
     // Velocity state for the current stroke.
     private float _lastX, _lastY;
     private double _lastMs;
@@ -79,7 +82,7 @@ public sealed class SignaturePad : GraphicsView
 
     public static readonly BindableProperty IsEmptyProperty = IsEmptyPropertyKey.BindableProperty;
 
-    /// <summary>On-screen stroke color. Default is black.</summary>
+    /// <summary>On-screen stroke color. Default is black; on dark themes set a contrasting color or give the pad a light background.</summary>
     public Color StrokeColor { get => (Color)GetValue(StrokeColorProperty); set => SetValue(StrokeColorProperty, value); }
 
     /// <summary>Minimum stroke width in DIP, usually reached by fast movement. Default is 1.</summary>
@@ -88,7 +91,7 @@ public sealed class SignaturePad : GraphicsView
     /// <summary>Maximum stroke width in DIP, usually reached by slow movement or high pressure. Default is 3.5.</summary>
     public double MaxStrokeWidth { get => (double)GetValue(MaxStrokeWidthProperty); set => SetValue(MaxStrokeWidthProperty, value); }
 
-    /// <summary>Exponential velocity smoothing weight from 0 to 1. Higher values are smoother. Default is 0.7.</summary>
+    /// <summary>Exponential velocity smoothing weight from 0 to 1. Higher values favor the instantaneous velocity (less smoothing); lower values smooth more. Default is 0.7.</summary>
     public double VelocityFilterWeight { get => (double)GetValue(VelocityFilterWeightProperty); set => SetValue(VelocityFilterWeightProperty, value); }
 
     /// <summary>Shows the signature guide line ("X ____") while the pad is empty.</summary>
@@ -126,6 +129,7 @@ public sealed class SignaturePad : GraphicsView
         _redo.Clear();
         _current = null;
         _sessionStarted = false;
+        _timeBaseMs = 0;
         IsEmpty = true;
         Invalidate();
         Cleared?.Invoke(this, EventArgs.Empty);
@@ -163,7 +167,8 @@ public sealed class SignaturePad : GraphicsView
         for (var i = 0; i < _strokes.Count; i++)
             strokes[i] = _strokes[i].ToPublic();
 
-        return new SignatureData(strokes, new Size(Width, Height));
+        // Width/Height are -1 before layout; never store a negative canvas size.
+        return new SignatureData(strokes, new Size(Math.Max(Width, 0), Math.Max(Height, 0)));
     }
 
     /// <summary>Returns only the completed strokes.</summary>
@@ -201,7 +206,10 @@ public sealed class SignaturePad : GraphicsView
             }).ToList()
         };
 
-        return JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = indented });
+        // Source-generated contract: reflection-based System.Text.Json is disabled by
+        // default in trimmed/AOT published apps (always the case on iOS/MacCatalyst).
+        var context = indented ? SignatureJsonContext.Indented : SignatureJsonContext.Default;
+        return JsonSerializer.Serialize(dto, context.SignatureJsonDocument);
     }
 
     /// <summary>
@@ -213,11 +221,15 @@ public sealed class SignaturePad : GraphicsView
         if (string.IsNullOrWhiteSpace(json))
             throw new ArgumentException("Signature JSON cannot be empty.", nameof(json));
 
-        var dto = JsonSerializer.Deserialize<SignatureJsonDocument>(json)
+        var dto = JsonSerializer.Deserialize(json, SignatureJsonContext.Default.SignatureJsonDocument)
             ?? throw new InvalidOperationException("Invalid signature JSON.");
 
         if (dto.Version != 1)
             throw new NotSupportedException($"Unsupported signature JSON version: {dto.Version}.");
+
+        // Explicit nulls in the payload would otherwise surface as NullReferenceException.
+        if (dto.Strokes is null || dto.Strokes.Any(s => s?.Points is null || s.Points.Any(p => p is null)))
+            throw new InvalidOperationException("Invalid signature JSON.");
 
         var strokes = dto.Strokes.Select(stroke =>
             new SignatureStroke(
@@ -239,6 +251,7 @@ public sealed class SignaturePad : GraphicsView
         _redo.Clear();
         _current = null;
         _sessionStarted = false;
+        _timeBaseMs = 0;
 
         foreach (var s in strokes)
         {
@@ -249,6 +262,7 @@ public sealed class SignaturePad : GraphicsView
                 render.Points.Add(p);
                 render.Widths.Add(ComputeWidth(p.X, p.Y, p.TimestampMs, p.Pressure, p.PressureSupported));
                 _lastX = p.X; _lastY = p.Y; _lastMs = p.TimestampMs;
+                _timeBaseMs = Math.Max(_timeBaseMs, p.TimestampMs);
             }
             if (render.Points.Count > 0)
                 _strokes.Add(render);
@@ -284,6 +298,11 @@ public sealed class SignaturePad : GraphicsView
         // WriteToStream/Image.Save, so use Win2D directly through CanvasRenderTarget.
         return Platforms.Windows.SignatureImageExporter.ExportAsync(
             snapshot, bounds, scale, background, strokeOverride, isJpeg, jpegQuality);
+#elif !(ANDROID || IOS || MACCATALYST)
+        // Neutral TFM (host/unit tests): PlatformBitmapExportService only exists on
+        // platform TFMs, so image export is unavailable here.
+        return Task.FromException<Stream>(new PlatformNotSupportedException(
+            "Signature image export requires a platform target (Android, iOS, Mac Catalyst or Windows)."));
 #else
         // Render and encode off the UI thread to avoid blocking touch/UI responsiveness.
         return Task.Run<Stream>(() =>
@@ -293,6 +312,11 @@ public sealed class SignaturePad : GraphicsView
 
             using var context = new PlatformBitmapExportService().CreateContext(pxW, pxH, scale);
             var canvas = context.Canvas;
+
+            // PlatformBitmapExportContext only stores displayScale; it never scales the
+            // drawing coordinates (confirmed in the MAUI Graphics source), so apply the
+            // export scale manually or the content fills only a corner of the bitmap.
+            canvas.Scale(scale, scale);
 
             if (background is { } bg)
             {
@@ -345,7 +369,8 @@ public sealed class SignaturePad : GraphicsView
     {
         if (!_sessionStarted)
         {
-            _sessionStartMs = timestampMs;
+            // Offset by the loaded timeline so timestamps stay monotonic after LoadStrokes.
+            _sessionStartMs = timestampMs - _timeBaseMs;
             _sessionStarted = true;
         }
 

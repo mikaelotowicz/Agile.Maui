@@ -12,26 +12,67 @@ namespace Agile.Maui.Platforms.Windows;
 /// </summary>
 internal static class SignatureTouchInterop
 {
-    private static readonly ConditionalWeakTable<UIElement, SignaturePad> Attached = new();
+    // Avoid attaching the handlers more than once for the same platform view.
+    // There is no explicit teardown: the mapper has no disconnect counterpart and
+    // the subscriptions die with the platform view.
+    private static readonly ConditionalWeakTable<UIElement, PointerState> Attached = new();
 
     public static void Attach(UIElement platformView, SignaturePad pad)
     {
-        if (Attached.TryGetValue(platformView, out _))
+        if (Attached.TryGetValue(platformView, out var existing))
+        {
+            // Handler reuse (e.g. CollectionView recycling) can reconnect the same
+            // platform view to a new SignaturePad; retarget instead of keeping the old one.
+            existing.Pad = pad;
             return;
+        }
 
-        Attached.Add(platformView, pad);
+        var state = new PointerState(pad);
+        Attached.Add(platformView, state);
 
-        platformView.PointerPressed += (s, e) => Handle(platformView, pad, e, Phase.Down);
-        platformView.PointerMoved += (s, e) => Handle(platformView, pad, e, Phase.Move);
-        platformView.PointerReleased += (s, e) => Handle(platformView, pad, e, Phase.Up);
-        platformView.PointerCanceled += (s, e) => pad.OnTouchCancel();
-        platformView.PointerCaptureLost += (s, e) => pad.OnTouchCancel();
+        platformView.PointerPressed += (s, e) => Handle(platformView, state, e, Phase.Down);
+        platformView.PointerMoved += (s, e) => Handle(platformView, state, e, Phase.Move);
+        platformView.PointerReleased += (s, e) => Handle(platformView, state, e, Phase.Up);
+        platformView.PointerCanceled += (s, e) => state.Cancel(e.Pointer.PointerId);
+        platformView.PointerCaptureLost += (s, e) => state.Cancel(e.Pointer.PointerId);
     }
 
     private enum Phase { Down, Move, Up }
 
-    private static void Handle(UIElement view, SignaturePad pad, PointerRoutedEventArgs e, Phase phase)
+    // Mutable holder so handler reuse can retarget the pad, plus single-pointer tracking.
+    private sealed class PointerState
     {
+        public PointerState(SignaturePad pad) => Pad = pad;
+
+        public SignaturePad Pad { get; set; }
+
+        public uint? ActivePointerId { get; set; }
+
+        public void Cancel(uint pointerId)
+        {
+            if (ActivePointerId != pointerId)
+                return;
+
+            ActivePointerId = null;
+            Pad.OnTouchCancel();
+        }
+    }
+
+    private static void Handle(UIElement view, PointerState state, PointerRoutedEventArgs e, Phase phase)
+    {
+        // Strokes follow a single pointer: a second finger or resting palm would
+        // otherwise reset the stroke or interleave its coordinates.
+        var pointerId = e.Pointer.PointerId;
+        if (phase == Phase.Down)
+        {
+            if (state.ActivePointerId != null)
+                return;
+        }
+        else if (state.ActivePointerId != pointerId)
+        {
+            return;
+        }
+
         var point = e.GetCurrentPoint(view);
 
         // Process Move only while a button/contact is active to avoid mouse/pen hover.
@@ -47,8 +88,21 @@ internal static class SignatureTouchInterop
         switch (phase)
         {
             case Phase.Down:
+                // Draw only with primary contact: ignore right/middle mouse buttons,
+                // the pen barrel button and the inverted pen/eraser.
+                var props = point.Properties;
+                if (props.IsRightButtonPressed || props.IsMiddleButtonPressed
+                    || props.IsBarrelButtonPressed || props.IsEraser)
+                    return;
+
+                // Touch panning runs via direct manipulation, so an ancestor ScrollViewer
+                // would take the pointer mid-stroke (PointerCaptureLost); opt out first.
+                if (e.Pointer.PointerDeviceType == PointerDeviceType.Touch)
+                    view.CancelDirectManipulations();
+
                 view.CapturePointer(e.Pointer);
-                pad.OnTouchDown(x, y, pressure, supported, timestampMs);
+                state.ActivePointerId = pointerId;
+                state.Pad.OnTouchDown(x, y, pressure, supported, timestampMs);
                 break;
             case Phase.Move:
                 // Replay intermediate points coalesced between PointerMoved events so
@@ -65,7 +119,7 @@ internal static class SignatureTouchInterop
                         if (!ip.IsInContact)
                             continue;
 
-                        pad.OnTouchMove(
+                        state.Pad.OnTouchMove(
                             (float)ip.Position.X,
                             (float)ip.Position.Y,
                             ip.Properties.Pressure,
@@ -75,11 +129,14 @@ internal static class SignatureTouchInterop
                 }
                 else
                 {
-                    pad.OnTouchMove(x, y, pressure, supported, timestampMs);
+                    state.Pad.OnTouchMove(x, y, pressure, supported, timestampMs);
                 }
                 break;
             case Phase.Up:
-                pad.OnTouchUp(x, y, pressure, supported, timestampMs);
+                // Clear the id before releasing capture so the resulting
+                // PointerCaptureLost does not cancel the just-committed stroke.
+                state.ActivePointerId = null;
+                state.Pad.OnTouchUp(x, y, pressure, supported, timestampMs);
                 view.ReleasePointerCapture(e.Pointer);
                 break;
         }

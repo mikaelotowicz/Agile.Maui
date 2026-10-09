@@ -11,12 +11,20 @@ namespace Agile.Maui.Platforms.Android;
 internal static class SignatureTouchInterop
 {
     // Avoid attaching the listener more than once for the same platform view.
+    // There is no explicit teardown: the mapper has no disconnect counterpart, the
+    // listener dies with the platform view, and MAUI's handler disconnect severs
+    // pad->handler so the peer graph stays collectable.
     private static readonly ConditionalWeakTable<AView, SignatureTouchListener> Attached = new();
 
     public static void Attach(AView platformView, SignaturePad pad)
     {
-        if (Attached.TryGetValue(platformView, out _))
+        if (Attached.TryGetValue(platformView, out var existing))
+        {
+            // Handler reuse (e.g. CollectionView recycling) can reconnect the same
+            // platform view to a new SignaturePad; retarget instead of keeping the old one.
+            existing.SetPad(pad);
             return;
+        }
 
         var listener = new SignatureTouchListener(pad, platformView);
         Attached.Add(platformView, listener);
@@ -28,8 +36,14 @@ internal static class SignatureTouchInterop
 // on Windows because Android JCW does not accept angle brackets in generated names.
 internal sealed class SignatureTouchListener : Java.Lang.Object, AView.IOnTouchListener
 {
-    private readonly SignaturePad _pad;
+    private const int InvalidPointerId = -1;
+
+    private SignaturePad _pad;
     private readonly float _density;
+
+    // Strokes follow a single pointer; indices are resolved from this id because
+    // pointer indices are reshuffled when another pointer goes down or up.
+    private int _activePointerId = InvalidPointerId;
 
     public SignatureTouchListener(SignaturePad pad, AView view)
     {
@@ -39,12 +53,12 @@ internal sealed class SignatureTouchListener : Java.Lang.Object, AView.IOnTouchL
             _density = 1f;
     }
 
+    public void SetPad(SignaturePad pad) => _pad = pad;
+
     public bool OnTouch(AView? v, MotionEvent? e)
     {
         if (e is null)
             return false;
-
-        var supported = e.GetToolType(0) is MotionEventToolType.Stylus or MotionEventToolType.Eraser;
 
         switch (e.ActionMasked)
         {
@@ -52,27 +66,54 @@ internal sealed class SignatureTouchListener : Java.Lang.Object, AView.IOnTouchL
                 // Prevent ancestors such as ScrollView or CollectionView from intercepting
                 // the gesture and stealing Move events.
                 v?.Parent?.RequestDisallowInterceptTouchEvent(true);
-                Emit(e, supported, _pad.OnTouchDown);
+                _activePointerId = e.GetPointerId(0);
+                Emit(e, 0, _pad.OnTouchDown);
+                return true;
+
+            case MotionEventActions.PointerDown:
+                // Extra pointers (second finger, resting palm) never join the stroke.
                 return true;
 
             case MotionEventActions.Move:
+            {
+                var index = e.FindPointerIndex(_activePointerId);
+                if (index < 0)
+                    return true;
+
                 // Replay historical batched points for more faithful strokes.
+                var supported = IsStylus(e, index);
                 for (var h = 0; h < e.HistorySize; h++)
                 {
-                    var hx = e.GetHistoricalX(h) / _density;
-                    var hy = e.GetHistoricalY(h) / _density;
-                    var hp = e.GetHistoricalPressure(h);
+                    var hx = e.GetHistoricalX(index, h) / _density;
+                    var hy = e.GetHistoricalY(index, h) / _density;
+                    var hp = e.GetHistoricalPressure(index, h);
                     _pad.OnTouchMove(hx, hy, hp, supported, e.GetHistoricalEventTime(h));
                 }
-                Emit(e, supported, _pad.OnTouchMove);
+                Emit(e, index, _pad.OnTouchMove);
+                return true;
+            }
+
+            case MotionEventActions.PointerUp:
+                // Finish the stroke when the tracked pointer lifts even if others remain.
+                if (e.GetPointerId(e.ActionIndex) == _activePointerId)
+                {
+                    Emit(e, e.ActionIndex, _pad.OnTouchUp);
+                    _activePointerId = InvalidPointerId;
+                }
                 return true;
 
             case MotionEventActions.Up:
-                Emit(e, supported, _pad.OnTouchUp);
+            {
+                var index = e.FindPointerIndex(_activePointerId);
+                if (index >= 0)
+                    Emit(e, index, _pad.OnTouchUp);
+                _activePointerId = InvalidPointerId;
                 v?.Parent?.RequestDisallowInterceptTouchEvent(false);
                 return true;
+            }
 
             case MotionEventActions.Cancel:
+                _activePointerId = InvalidPointerId;
                 _pad.OnTouchCancel();
                 v?.Parent?.RequestDisallowInterceptTouchEvent(false);
                 return true;
@@ -81,11 +122,14 @@ internal sealed class SignatureTouchListener : Java.Lang.Object, AView.IOnTouchL
         return false;
     }
 
-    private void Emit(MotionEvent e, bool supported,
+    private void Emit(MotionEvent e, int pointerIndex,
         Action<float, float, float, bool, double> sink)
     {
-        var x = e.GetX() / _density;
-        var y = e.GetY() / _density;
-        sink(x, y, e.GetPressure(0), supported, e.EventTime);
+        var x = e.GetX(pointerIndex) / _density;
+        var y = e.GetY(pointerIndex) / _density;
+        sink(x, y, e.GetPressure(pointerIndex), IsStylus(e, pointerIndex), e.EventTime);
     }
+
+    private static bool IsStylus(MotionEvent e, int pointerIndex) =>
+        e.GetToolType(pointerIndex) is MotionEventToolType.Stylus or MotionEventToolType.Eraser;
 }
