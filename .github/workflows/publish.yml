@@ -4,12 +4,15 @@
 #   - tag v* (ex.: v1.0.7)  → canal Stable
 #   - manual (Actions → Publicar no NuGet → Run workflow) → escolhe canal e dry-run
 #
-# Pré-requisitos (uma vez, no nuget.org + GitHub):
-#   - Criar uma API key no nuget.org com escopo de push para os pacotes Agile.Maui.*
-#     e salvá-la no repositório como secret NUGET_API_KEY.
-#     (Alternativa mais segura, sem chave de longa duração: Trusted Publishing do
-#     nuget.org via OIDC — registre este repo/workflow como publicador confiável e
-#     troque o passo de push pela action NuGet/login para obter um token temporário.)
+# Autenticação (uma vez, no nuget.org + GitHub) — dois caminhos, o workflow usa o que existir:
+#   A) Trusted Publishing (recomendado, sem chave de longa duração): no nuget.org,
+#      menu do usuário → Trusted Publishing → nova política com Repository Owner
+#      "mikaelotowicz", Repository "Agile.Maui", Workflow File "publish.yml" (só o
+#      nome do arquivo) e Environment vazio; no GitHub, criar o secret NUGET_USER
+#      com o seu USERNAME do nuget.org (não o e-mail). A action NuGet/login troca o
+#      token OIDC do job por uma API key temporária de 1 hora.
+#   B) Clássico: API key do nuget.org com escopo de push para Agile.Maui.*, salva
+#      como secret NUGET_API_KEY.
 #   - A primeira publicação de cada ID (ou a reserva do prefixo Agile.Maui.*) deve
 #     ser feita pela conta dona dos pacotes.
 #
@@ -35,6 +38,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # OIDC para o Trusted Publishing do nuget.org (inócuo quando não usado)
 
 jobs:
   publicar:
@@ -43,6 +47,7 @@ jobs:
     timeout-minutes: 90
     env:
       CHANNEL: ${{ inputs.channel || 'Stable' }}
+      NUGET_USER: ${{ secrets.NUGET_USER }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,12 +83,21 @@ jobs:
             nupkgs-ci/*.snupkg
           if-no-files-found: error
 
+      # Trusted Publishing: troca o token OIDC do job por uma API key temporária (1 h),
+      # logo antes do push para não expirar. Roda só quando o secret NUGET_USER existe.
+      - name: NuGet login (Trusted Publishing)
+        if: ${{ env.NUGET_USER != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ env.NUGET_USER }}
+
       - name: Publicar no nuget.org
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY || secrets.NUGET_API_KEY }}
         run: |
           if (-not $env:NUGET_API_KEY) {
-            throw "Secret NUGET_API_KEY não configurado no repositório (Settings → Secrets and variables → Actions)."
+            throw "Configure o Trusted Publishing (secret NUGET_USER + política no nuget.org) ou o secret NUGET_API_KEY."
           }
           dotnet nuget push "nupkgs-ci\*.nupkg" --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicates
