@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="ChipGroup.Tests/ChipGroup.Tests.csproj" />
+    <Project Path="DeviceTests/DeviceTests.csproj" />
     <Project Path="GalleryView.Tests/GalleryView.Tests.csproj" />
     <Project Path="PDFViewer.Tests/PDFViewer.Tests.csproj" />
     <Project Path="PdfGen.Tests/PdfGen.Tests.csproj" />

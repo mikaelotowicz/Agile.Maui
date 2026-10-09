@@ -64,6 +64,8 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="Agile.Maui.SignaturePad.Tests" />
+		<!-- Device tests injetam toques pelas APIs internas OnTouchDown/Move/Up. -->
+		<InternalsVisibleTo Include="Agile.Maui.DeviceTests" />
 	</ItemGroup>
 
 	<ItemGroup>
