@@ -101,10 +101,13 @@ public partial class VirtualizedCollectionView
     private void SyncItemsSource()
     {
         UnsubscribeItemsSourceCollection();
+        var previousCount = _observedItemsSourceCount;
         _cv.ItemsSource = ItemsSource;
         _observedItemsSourceCount = CountItems(ItemsSource);
         SubscribeItemsSourceCollection(ItemsSource);
-        if (_observedItemsSourceCount > 0)
+        // Só na transição vazio→não-vazio, como no Android/iOS — reatribuir a fonte num
+        // refresh não deve perder a posição de scroll.
+        if (previousCount == 0 && _observedItemsSourceCount > 0)
             ScrollToStartAfterDataRefresh();
     }
 
@@ -210,7 +213,13 @@ public partial class VirtualizedCollectionView
 
     private void ScrollToStartAfterDataRefresh()
     {
-        void Scroll() => ScrollToStart(false);
+        // Adiado via dispatcher: a coleção pode ter sido esvaziada até o callback rodar,
+        // e ScrollTo(0) numa fonte vazia fica por conta do CollectionView do MAUI.
+        void Scroll()
+        {
+            if (CountItems(ItemsSource) > 0)
+                ScrollToStart(false);
+        }
 
         if (_cv.Handler?.PlatformView is FrameworkElement fe)
         {

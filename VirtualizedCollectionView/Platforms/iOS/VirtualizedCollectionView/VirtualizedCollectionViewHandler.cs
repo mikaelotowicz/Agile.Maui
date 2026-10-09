@@ -13,6 +13,7 @@ using System.Collections.Specialized;
 using CoreGraphics;
 using Foundation;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Dispatching;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 using UIKit;
@@ -66,9 +67,15 @@ public sealed class VirtualizedCollectionViewHandler
     private INotifyCollectionChanged? _collectionChangedSource;
     private UIView?                   _emptyNativeView;
     // Coalescing de CollectionChanged: acumula eventos rápidos (ex: 500 × Items.Add)
-    // em um único PerformBatchUpdates, evitando 500 dispatches individuais ao UIKit.
+    // em um único ciclo de flush. A fila é mutada em qualquer thread (a bg thread do
+    // consumidor dispara CollectionChanged) e drenada na main — por isso o lock.
     private readonly List<NotifyCollectionChangedEventArgs> _pendingChanges = [];
+    private readonly object _pendingLock = new();
     private bool _flushScheduled;
+    // Dispatcher da UI capturado no connect: Dispatch SEMPRE enfileira, ao contrário de
+    // MainThread.BeginInvokeOnMainThread, que executa inline na main thread (e por isso
+    // nunca coalesceria os mappers do connect nem os eventos da coleção).
+    private IDispatcher? _uiDispatcher;
     private bool _remainingThresholdInsideZone;
     private bool _remainingThresholdPending;
     private bool _hasLastScrollOffset;
@@ -102,6 +109,7 @@ public sealed class VirtualizedCollectionViewHandler
     protected override void ConnectHandler(UICollectionView platformView)
     {
         base.ConnectHandler(platformView);
+        _uiDispatcher = VirtualView.Dispatcher;
         // Prefetching agressivo cria células extras fora da tela antes de serem necessárias,
         // multiplicando a memória consumida por cada MAUI View no pool de reuse.
         platformView.PrefetchingEnabled = false;
@@ -128,9 +136,12 @@ public sealed class VirtualizedCollectionViewHandler
     protected override void DisconnectHandler(UICollectionView platformView)
     {
         UnsubscribeCollection();
-        _flushScheduled  = false;
         _reloadScheduled = false;
-        _pendingChanges.Clear();
+        lock (_pendingLock)
+        {
+            _flushScheduled = false;
+            _pendingChanges.Clear();
+        }
         platformView.Delegate   = null!;
         _delegate               = null;
         _dataSource?.Dispose();
@@ -145,10 +156,11 @@ public sealed class VirtualizedCollectionViewHandler
     // no connect) resultem em um único ReloadItems() — evita ReloadData() duplo no UIKit.
     private void ScheduleReload()
     {
-        if (_reloadScheduled) return;
+        if (_reloadScheduled || _uiDispatcher is null) return;
         _reloadScheduled = true;
-        MainThread.BeginInvokeOnMainThread(() =>
+        _uiDispatcher.Dispatch(() =>
         {
+            if (!_reloadScheduled) return;   // disconnect cancelou
             _reloadScheduled = false;
             ReloadItems();
         });
@@ -300,7 +312,9 @@ public sealed class VirtualizedCollectionViewHandler
 
     private void ReloadItems()
     {
-        if (PlatformView is null || MauiContext is null) return;
+        // Enfileirado: pode rodar depois de o handler ser desligado — o getter tipado
+        // PlatformView LANÇA nesse caso; a leitura pela interface devolve null.
+        if (((IElementHandler)this).PlatformView is not UICollectionView cv || MauiContext is null) return;
         ResetRemainingThresholdGate();
 
         // Recarga total ressincroniza a partir do snapshot atual da fonte, que já reflete
@@ -308,8 +322,11 @@ public sealed class VirtualizedCollectionViewHandler
         // redundante — reaplicá-lo duplicaria itens (clássico: Reset seguido de Add no mesmo
         // ciclo, pois o evento Add é enfileirado APÓS o Reset limpar a fila). Descarta a fila
         // ao recarregar para manter a contagem em sincronia com a UICollectionView.
-        _pendingChanges.Clear();
-        _flushScheduled = false;
+        lock (_pendingLock)
+        {
+            _pendingChanges.Clear();
+            _flushScheduled = false;
+        }
         var previousDataItemCount = _dataSource?.Items.Count ?? 0;
 
         UnsubscribeCollection();
@@ -332,10 +349,20 @@ public sealed class VirtualizedCollectionViewHandler
             ReportFirstMeasure = VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst
                 ? OnFirstCellMeasured
                 : null,
+            // Container passado ao DataTemplateSelector.SelectTemplate.
+            Owner = VirtualView,
         };
 
-        PlatformView.DataSource = _dataSource;
-        PlatformView.ReloadData();
+        // MeasureFirst: template/fonte novos exigem re-medir o 1º item — sem zerar aqui,
+        // a altura Absolute medida do template ANTIGO ficava fixada para o template novo.
+        if (VirtualView.ItemSizingStrategy == ItemSizingStrategy.MeasureFirst && _measureFirstHeight > 0)
+        {
+            _measureFirstHeight = 0;
+            cv.SetCollectionViewLayout(BuildCompositionalLayout(), animated: false);
+        }
+
+        cv.DataSource = _dataSource;
+        cv.ReloadData();
 
         SubscribeCollection(VirtualView.ItemsSource);
         UpdateEmptyVisibility(items.Count == 0);
@@ -363,34 +390,52 @@ public sealed class VirtualizedCollectionViewHandler
 
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (_dataSource is null || PlatformView is null) return;
+        if (_dataSource is null) return;
 
         // Reset precisa de snapshot completo — descarta qualquer fila pendente.
         if (e.Action == NotifyCollectionChangedAction.Reset)
         {
-            _pendingChanges.Clear();
-            _flushScheduled = false;
-            MainThread.BeginInvokeOnMainThread(ReloadItems);
+            lock (_pendingLock)
+            {
+                _pendingChanges.Clear();
+                _flushScheduled = false;
+            }
+            _uiDispatcher?.Dispatch(ReloadItems);
             return;
         }
 
         // Acumula o evento; agenda flush apenas uma vez por ciclo de run loop.
-        // Isso coalesce 500 × Add (de foreach Items.Add) em um único PerformBatchUpdates.
-        _pendingChanges.Add(e);
-        if (!_flushScheduled)
+        // Isso coalesce 500 × Add (de foreach Items.Add) em um único ciclo de flush.
+        bool schedule = false;
+        lock (_pendingLock)
         {
-            _flushScheduled = true;
-            MainThread.BeginInvokeOnMainThread(FlushPendingChanges);
+            _pendingChanges.Add(e);
+            if (!_flushScheduled && _uiDispatcher is not null)
+            {
+                _flushScheduled = true;
+                schedule = true;
+            }
         }
+        if (schedule)
+            _uiDispatcher!.Dispatch(FlushPendingChanges);
     }
 
     private void FlushPendingChanges()
     {
-        _flushScheduled = false;
-        if (_dataSource is null || PlatformView is null || _pendingChanges.Count == 0) return;
+        NotifyCollectionChangedEventArgs[] pending;
+        lock (_pendingLock)
+        {
+            _flushScheduled = false;
+            if (_pendingChanges.Count == 0) return;
+            pending = [.. _pendingChanges];
+            _pendingChanges.Clear();
+        }
 
-        var pending = _pendingChanges.ToArray(); // snapshot local
-        _pendingChanges.Clear();
+        // Enfileirado: pode rodar depois do disconnect — o getter tipado lança (ver acima).
+        if (_dataSource is null ||
+            ((IElementHandler)this).PlatformView is not UICollectionView cv)
+            return;
+
         var previousDataItemCount = _dataSource.Items.Count;
 
         // Lote grande ou misto (Add + Remove, Move, etc.) → snapshot fresco é mais seguro.
@@ -408,31 +453,33 @@ public sealed class VirtualizedCollectionViewHandler
             return;
         }
 
-        // Lote pequeno e uniforme: aplica todos em um único PerformBatchUpdates.
-        var shouldScrollToStart = previousDataItemCount == 0;
-        PlatformView.PerformBatchUpdates(() =>
+        // Um PerformBatchUpdates POR EVENTO (semântica sequencial, como no Android): cada
+        // batch aplica os índices contra o estado corrente. Vários eventos num único batch
+        // misturariam as coordenadas do UIKit — deletes usam índices PRÉ-update e inserts,
+        // PÓS-update — e 2 × Remove(0) (ou 2 × Insert(0)) viraria path duplicado →
+        // NSInternalInconsistencyException.
+        foreach (var e in pending)
         {
-            foreach (var e in pending)
+            cv.PerformBatchUpdates(() =>
             {
                 _dataSource.ApplyCollectionChange(e);
                 switch (e.Action)
                 {
                     case NotifyCollectionChangedAction.Add when e.NewItems is not null:
-                        PlatformView.InsertItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count, ItemsSection));
+                        cv.InsertItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count, ItemsSection));
                         break;
                     case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
-                        PlatformView.DeleteItems(IndexPaths(e.OldStartingIndex, e.OldItems.Count, ItemsSection));
+                        cv.DeleteItems(IndexPaths(e.OldStartingIndex, e.OldItems.Count, ItemsSection));
                         break;
                     case NotifyCollectionChangedAction.Replace when e.NewItems is not null:
-                        PlatformView.ReloadItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count, ItemsSection));
+                        cv.ReloadItems(IndexPaths(e.NewStartingIndex, e.NewItems.Count, ItemsSection));
                         break;
                 }
-            }
-        }, _ =>
-        {
-            if (shouldScrollToStart && _dataSource?.Items.Count > 0)
-                ScrollToStartAfterDataRefresh();
-        });
+            }, static _ => { });
+        }
+
+        if (previousDataItemCount == 0 && _dataSource.Items.Count > 0)
+            ScrollToStartAfterDataRefresh();
 
         ResetRemainingThresholdGate();
         UpdateEmptyVisibility(_dataSource.Items.Count == 0);
@@ -440,8 +487,7 @@ public sealed class VirtualizedCollectionViewHandler
 
     private void ScrollToStartAfterDataRefresh()
     {
-        var collectionView = PlatformView;
-        if (collectionView is null) return;
+        if (((IElementHandler)this).PlatformView is not UICollectionView collectionView) return;
 
         void ScrollToStart()
         {
@@ -597,8 +643,9 @@ public sealed class VirtualizedCollectionViewHandler
 
     private void UpdateEmptyVisibility(bool isEmpty)
     {
-        if (PlatformView is null) return;
-        PlatformView.BackgroundView = isEmpty ? _emptyNativeView : null;
+        // Alcançável a partir do flush enfileirado — o getter tipado lança pós-disconnect.
+        if (((IElementHandler)this).PlatformView is not UICollectionView cv) return;
+        cv.BackgroundView = isEmpty ? _emptyNativeView : null;
     }
 
     private UIView? BuildEmptyNativeView()
@@ -677,7 +724,10 @@ internal sealed class VrMauiCell : UICollectionViewCell
 {
     private View?             _mauiView;
     private UIView?           _nativeView;
-    private UICollectionView? _collectionView;
+    // Fraca: célula → collection view forte fecharia um ciclo nativo↔gerenciado (a CV nativa
+    // retém as células; sem GC bridge no iOS, o ciclo nunca é coletado e a lista inteira +
+    // células + views MAUI vazam a cada página fechada).
+    private WeakReference<UICollectionView>? _collectionView;
     private DataTemplate?     _template;
     private View?             _directView;
     private bool              _usesGeneratedLabel;
@@ -691,7 +741,10 @@ internal sealed class VrMauiCell : UICollectionViewCell
     public void Bind(object? item, DataTemplate? template, IMauiContext context, UICollectionView collectionView,
         Action<nfloat>? reportFirstMeasure = null)
     {
-        _collectionView     = collectionView;
+        if (_collectionView is null)
+            _collectionView = new WeakReference<UICollectionView>(collectionView);
+        else
+            _collectionView.SetTarget(collectionView);
         _reportFirstMeasure = reportFirstMeasure;
         var directView = template is null ? item as View : null;
 
@@ -832,7 +885,8 @@ internal sealed class VrMauiCell : UICollectionViewCell
         {
             _measureInvalidated = false;
             // UIKit chamará PreferredLayoutAttributesFitting → nova altura → resize animado.
-            _collectionView?.CollectionViewLayout.InvalidateLayout();
+            if (_collectionView?.TryGetTarget(out var cv) == true)
+                cv.CollectionViewLayout.InvalidateLayout();
         }
     }
 
@@ -841,6 +895,7 @@ internal sealed class VrMauiCell : UICollectionViewCell
         base.PrepareForReuse();
         _measureInvalidated = false;
         _layoutStabilized   = false;
+        _reportFirstMeasure = null;   // não reter o handler enquanto a célula espera no pool
     }
 
     // Self-sizing via CompositionalLayout (CreateEstimated): o UIKit chama este método
@@ -865,6 +920,7 @@ internal sealed class VrMauiCell : UICollectionViewCell
         // MeasureFirst: reporta a altura medida; o handler fixa essa altura para todos
         // e reconstrói o layout como Absolute (chamadas seguintes são ignoradas no handler).
         _reportFirstMeasure?.Invoke((nfloat)height);
+        _reportFirstMeasure = null;   // cada célula reporta uma vez; evita reter o handler
 
         // Célula medida pelo UIKit: a partir daqui pode reagir a MeasureInvalidated
         // (ex: expander abre/fecha) sem risco de loop no setup inicial.
@@ -919,6 +975,9 @@ internal sealed class VrDataSource : UICollectionViewDataSource
     // Callback opcional: a 1ª célula medida reporta a altura (modo MeasureFirst).
     internal Action<nfloat>? ReportFirstMeasure;
 
+    // Container passado ao DataTemplateSelector.SelectTemplate.
+    internal VirtualizedCollectionView? Owner;
+
     public List<object> Items { get; private set; }
 
     public VrDataSource(
@@ -967,11 +1026,20 @@ internal sealed class VrDataSource : UICollectionViewDataSource
         }
         else if ((uint)indexPath.Item < (uint)Items.Count)
         {
-            cell.Bind(Items[(int)indexPath.Item], _template, _mauiContext, collectionView, ReportFirstMeasure);
+            var item = Items[(int)indexPath.Item];
+            cell.Bind(item, ResolveItemTemplate(item), _mauiContext, collectionView, ReportFirstMeasure);
         }
 
         return cell;
     }
+
+    // DataTemplateSelector: CreateContent direto num selector lança no MAUI — resolve por
+    // item antes. Sem pool por template: reuso entre templates diferentes recria a view no
+    // Bind (custo aceito). Selector que devolve null degrada para o Label gerado.
+    private DataTemplate? ResolveItemTemplate(object? item) =>
+        _template is DataTemplateSelector selector
+            ? selector.SelectTemplate(item, Owner)
+            : _template;
 
     public void ApplyCollectionChange(NotifyCollectionChangedEventArgs e)
     {

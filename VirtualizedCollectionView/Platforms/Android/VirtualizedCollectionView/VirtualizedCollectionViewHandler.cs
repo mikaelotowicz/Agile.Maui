@@ -13,6 +13,7 @@ using Android.Views;
 using AndroidX.RecyclerView.Widget;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Dispatching;
 using Microsoft.Maui.Handlers;
 using Microsoft.Maui.Platform;
 
@@ -67,11 +68,18 @@ public sealed class VirtualizedCollectionViewHandler
     private bool                        _remainingThresholdInsideZone;
     private bool                        _remainingThresholdPending;
     private bool                        _lastScrollWasTowardEnd;
+    // A fila é mutada em qualquer thread (a bg thread do consumidor dispara
+    // CollectionChanged) e drenada na main — por isso o lock.
     private readonly List<PendingCollectionChange> _pendingChanges = [];
+    private readonly object             _pendingLock = new();
     private bool                        _flushScheduled;
     // Coalescing de ItemsSource + ItemTemplate + ItemHeight: todos disparam no connect
     // via mapper — sem isso o adapter seria recriado até 3× antes do primeiro render.
     private bool                        _reloadScheduled;
+    // Dispatcher da UI capturado no connect: Dispatch SEMPRE enfileira, ao contrário de
+    // MainThread.BeginInvokeOnMainThread, que executa inline na main thread (e por isso
+    // nunca coalesceria os mappers do connect nem os eventos da coleção).
+    private IDispatcher?                _uiDispatcher;
 
     private sealed class PendingCollectionChange
     {
@@ -89,6 +97,7 @@ public sealed class VirtualizedCollectionViewHandler
     protected override void ConnectHandler(VrContainerView platformView)
     {
         base.ConnectHandler(platformView);
+        _uiDispatcher = VirtualView.Dispatcher;
         // MapWidth/MapHeight do ViewMapper base definem WrapContent quando Width/Height = -1.
         // Forçar MatchParent aqui garante que o container sempre preenche o espaço alocado
         // pelo MAUI e que FrameLayout.onMeasure passe EXACTLY para os filhos.
@@ -125,8 +134,11 @@ public sealed class VirtualizedCollectionViewHandler
 
         UnsubscribeCollection();
         _reloadScheduled = false;
-        _flushScheduled  = false;
-        _pendingChanges.Clear();
+        lock (_pendingLock)
+        {
+            _flushScheduled = false;
+            _pendingChanges.Clear();
+        }
 
         // Desanexar do RecyclerView ANTES de Dispose: SetAdapter(null) recicla as views
         // e ainda invoca callbacks no adapter/listener registrados — Dispose precoce mata
@@ -150,10 +162,11 @@ public sealed class VirtualizedCollectionViewHandler
     // resultem em um único ReloadItems() — evita recriar o adapter até 3× no connect.
     private void ScheduleReload()
     {
-        if (_reloadScheduled) return;
+        if (_reloadScheduled || _uiDispatcher is null) return;
         _reloadScheduled = true;
-        MainThread.BeginInvokeOnMainThread(() =>
+        _uiDispatcher.Dispatch(() =>
         {
+            if (!_reloadScheduled) return;   // disconnect cancelou
             _reloadScheduled = false;
             ReloadItems();
         });
@@ -389,20 +402,26 @@ public sealed class VirtualizedCollectionViewHandler
 
     private void ReloadItems()
     {
-        if (PlatformView is null || MauiContext is null) return;
+        // Enfileirado: pode rodar depois de o handler ser desligado — o getter tipado
+        // PlatformView LANÇA nesse caso; a leitura pela interface devolve null.
+        if (((IElementHandler)this).PlatformView is not VrContainerView platformView || MauiContext is null) return;
         ResetRemainingThresholdGate();
-        _pendingChanges.Clear();
-        _flushScheduled = false;
+        lock (_pendingLock)
+        {
+            _pendingChanges.Clear();
+            _flushScheduled = false;
+        }
         var previousDataItemCount = _adapter?.DataItemCount ?? 0;
 
         var template = VirtualView.ItemTemplate;
         if (template is null)
         {
+            // Desanexar ANTES do Dispose — mesma ordem crítica do DisconnectHandler.
+            platformView.Rv.SetAdapter(null);
             _adapter?.Dispose();
             _adapter = null;
-            PlatformView.Rv.SetAdapter(null);
             UnsubscribeCollection();
-            PlatformView.UpdateEmptyVisibility(true);
+            platformView.UpdateEmptyVisibility(true);
             return;
         }
 
@@ -420,7 +439,7 @@ public sealed class VirtualizedCollectionViewHandler
         if (_adapter is null ||
             !_adapter.CanReuse(template, header, headerTemplate, footer, footerTemplate))
         {
-            _adapter?.Dispose();
+            var oldAdapter = _adapter;
             _adapter = new VrAdapter(
                 items,
                 template,
@@ -431,11 +450,16 @@ public sealed class VirtualizedCollectionViewHandler
                 header,
                 headerTemplate,
                 footer,
-                footerTemplate);
+                footerTemplate,
+                VirtualView);
             if (_cachingLm is not null)
                 _adapter.SetCachingLayoutManager(_cachingLm);
             ApplySpanSizeLookup();
-            PlatformView.Rv.SetAdapter(_adapter);
+            // SetAdapter(novo) desanexa e recicla as views do adapter antigo, que ainda
+            // recebe callbacks nesse processo — o Dispose dele só depois (mesma ordem
+            // crítica do DisconnectHandler).
+            platformView.Rv.SetAdapter(_adapter);
+            oldAdapter?.Dispose();
         }
         else
         {
@@ -448,7 +472,7 @@ public sealed class VirtualizedCollectionViewHandler
         _spacingDecoration?.SetAdapter(_adapter);
 
         SubscribeCollection(VirtualView.ItemsSource);
-        PlatformView.UpdateEmptyVisibility(_adapter.DataItemCount == 0);
+        platformView.UpdateEmptyVisibility(_adapter.DataItemCount == 0);
         if (previousDataItemCount == 0 && _adapter.DataItemCount > 0)
             ScrollToStartAfterDataRefresh();
     }
@@ -476,38 +500,56 @@ public sealed class VirtualizedCollectionViewHandler
         if (_adapter is null) return;
 
         var action = e.Action;
-        if (action is not (NotifyCollectionChangedAction.Add
-                       or NotifyCollectionChangedAction.Remove
-                       or NotifyCollectionChangedAction.Replace
-                       or NotifyCollectionChangedAction.Move))
+        bool schedule = false;
+        lock (_pendingLock)
         {
-            _pendingChanges.Clear();
+            if (action is not (NotifyCollectionChangedAction.Add
+                           or NotifyCollectionChangedAction.Remove
+                           or NotifyCollectionChangedAction.Replace
+                           or NotifyCollectionChangedAction.Move))
+            {
+                _pendingChanges.Clear();
+            }
+
+            _pendingChanges.Add(new PendingCollectionChange
+            {
+                Action           = action,
+                NewStartingIndex = e.NewStartingIndex,
+                OldStartingIndex = e.OldStartingIndex,
+                NewItems         = action is NotifyCollectionChangedAction.Add
+                                          or NotifyCollectionChangedAction.Replace
+                    ? e.NewItems is not null ? CopyItems(e.NewItems) : null
+                    : null,
+                OldItemsCount    = e.OldItems?.Count ?? 0,
+            });
+
+            if (!_flushScheduled && _uiDispatcher is not null)
+            {
+                _flushScheduled = true;
+                schedule = true;
+            }
         }
 
-        _pendingChanges.Add(new PendingCollectionChange
-        {
-            Action           = action,
-            NewStartingIndex = e.NewStartingIndex,
-            OldStartingIndex = e.OldStartingIndex,
-            NewItems         = action is NotifyCollectionChangedAction.Add
-                                      or NotifyCollectionChangedAction.Replace
-                ? e.NewItems is not null ? CopyItems(e.NewItems) : null
-                : null,
-            OldItemsCount    = e.OldItems?.Count ?? 0,
-        });
-
-        if (_flushScheduled) return;
-        _flushScheduled = true;
-        MainThread.BeginInvokeOnMainThread(FlushPendingChanges);
+        if (schedule)
+            _uiDispatcher!.Dispatch(FlushPendingChanges);
     }
 
     private void FlushPendingChanges()
     {
-        _flushScheduled = false;
-        if (_adapter is null || PlatformView is null || _pendingChanges.Count == 0) return;
+        PendingCollectionChange[] pending;
+        lock (_pendingLock)
+        {
+            _flushScheduled = false;
+            if (_pendingChanges.Count == 0) return;
+            pending = [.. _pendingChanges];
+            _pendingChanges.Clear();
+        }
 
-        var pending = _pendingChanges.ToArray();
-        _pendingChanges.Clear();
+        // Enfileirado: pode rodar depois do disconnect — o getter tipado lança (ver acima).
+        if (_adapter is null ||
+            ((IElementHandler)this).PlatformView is not VrContainerView platformView)
+            return;
+
         var previousDataItemCount = _adapter.DataItemCount;
 
         var firstAction = pending[0].Action;
@@ -550,14 +592,15 @@ public sealed class VirtualizedCollectionViewHandler
         }
 
         ResetRemainingThresholdGate();
-        PlatformView.UpdateEmptyVisibility(_adapter.DataItemCount == 0);
+        platformView.UpdateEmptyVisibility(_adapter.DataItemCount == 0);
         if (previousDataItemCount == 0 && _adapter.DataItemCount > 0)
             ScrollToStartAfterDataRefresh();
     }
 
     private void ScrollToStartAfterDataRefresh()
     {
-        var rv = PlatformView?.Rv;
+        // Alcançável a partir de callbacks enfileirados — o getter tipado lança pós-disconnect.
+        var rv = (((IElementHandler)this).PlatformView as VrContainerView)?.Rv;
         if (rv is null) return;
 
         rv.StopScroll();
@@ -939,6 +982,8 @@ internal sealed class VrAdapter : RecyclerView.Adapter
     private          DataTemplate?       _headerTemplate;
     private          object?             _footer;
     private          DataTemplate?       _footerTemplate;
+    // Container passado ao DataTemplateSelector.SelectTemplate.
+    private readonly VirtualizedCollectionView? _owner;
 
     public DataTemplate Template    => _template;
     public int          ItemHeightPx => _itemHeightPx;
@@ -981,7 +1026,8 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         object? header,
         DataTemplate? headerTemplate,
         object? footer,
-        DataTemplate? footerTemplate)
+        DataTemplate? footerTemplate,
+        VirtualizedCollectionView? owner = null)
     {
         _items        = items;
         _template     = template;
@@ -993,6 +1039,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         _headerTemplate = headerTemplate;
         _footer       = footer;
         _footerTemplate = footerTemplate;
+        _owner        = owner;
     }
 
     public VrAdapter(IntPtr handle, JniHandleOwnership transfer)
@@ -1055,7 +1102,11 @@ internal sealed class VrAdapter : RecyclerView.Adapter
         if (viewType == FooterViewType)
             return CreateStructuralViewHolder(_footer, _footerTemplate);
 
-        var mauiView = CreateMauiView(null, _template);
+        // DataTemplateSelector: o template real depende do item (CreateContent direto num
+        // selector lança no MAUI) — o conteúdo nasce no primeiro bind, onde o item é conhecido
+        // (ResolvedTemplate null força a recriação em BindItem).
+        var initialTemplate = _template is DataTemplateSelector ? null : _template;
+        var mauiView = CreateMauiView(null, initialTemplate);
 
         mauiView.HorizontalOptions = LayoutOptions.Fill;
 
@@ -1084,7 +1135,7 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             itemRoot = host;
         }
 
-        var holder = new VrViewHolder(itemRoot, mauiView);
+        var holder = new VrViewHolder(itemRoot, mauiView) { ResolvedTemplate = initialTemplate };
         lock (_allHolders) _allHolders.AddOrUpdate(holder, null);
         return holder;
     }
@@ -1147,8 +1198,48 @@ internal sealed class VrAdapter : RecyclerView.Adapter
             return;
 
         var item = _items[itemIndex];
+
+        if (_template is DataTemplateSelector)
+        {
+            // Sem pool por template: reuso entre templates diferentes recria a view no bind
+            // (custo aceito). Selector que devolve null degrada para o Label gerado.
+            var resolved = ResolveItemTemplate(item);
+            if (!ReferenceEquals(holder.ResolvedTemplate, resolved))
+                RebuildHolderContent(holder, resolved);
+        }
+
         if (!ReferenceEquals(holder.MauiView.BindingContext, item))
             holder.MauiView.BindingContext = item;
+    }
+
+    private DataTemplate? ResolveItemTemplate(object? item) =>
+        _template is DataTemplateSelector selector
+            ? selector.SelectTemplate(item, _owner)
+            : _template;
+
+    // Substitui o conteúdo MAUI do holder quando o template resolvido muda no reuso.
+    private void RebuildHolderContent(VrViewHolder holder, DataTemplate? resolved)
+    {
+        holder.CancelHeavyBind();
+
+        var oldView = holder.MauiView;
+        oldView.BindingContext = null;
+        oldView.Handler?.DisconnectHandler();
+
+        var mauiView = CreateMauiView(null, resolved);
+        mauiView.HorizontalOptions = LayoutOptions.Fill;
+        var nativeView = mauiView.ToPlatform(_mauiContext);
+
+        if (holder.ItemView is VrItemHost host)
+        {
+            host.RemoveAllViews();
+            host.SetMauiView(mauiView);
+            host.AddView(nativeView, new global::Android.Widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+        }
+
+        holder.SetMauiView(mauiView);
+        holder.ResolvedTemplate = resolved;
     }
 
     public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
@@ -1418,13 +1509,16 @@ internal sealed class VrAdapter : RecyclerView.Adapter
 [Register("agile/maui/virtualizedcollectionview/VrItemHost")]
 internal sealed class VrItemHost : global::Android.Widget.FrameLayout
 {
-    private readonly MauiView? _mauiView;
+    private MauiView? _mauiView;
 
     public VrItemHost(Context context, MauiView mauiView) : base(context)
     {
         _mauiView = mauiView;
         SetClipChildren(false);
     }
+
+    // DataTemplateSelector: o conteúdo do host é trocado no rebind.
+    internal void SetMauiView(MauiView? view) => _mauiView = view;
 
     public VrItemHost(IntPtr handle, JniHandleOwnership transfer)
         : base(handle, transfer) { }
@@ -1514,9 +1608,13 @@ internal sealed class VrItemHost : global::Android.Widget.FrameLayout
 [Register("agile/maui/virtualizedcollectionview/VrViewHolder")]
 internal sealed class VrViewHolder : RecyclerView.ViewHolder
 {
-    public MauiView MauiView { get; }
+    public MauiView MauiView { get; private set; }
     public bool IsStructural { get; }
+    // Template resolvido para o conteúdo atual (DataTemplateSelector); null até o 1º bind.
+    internal DataTemplate? ResolvedTemplate;
     private int _bindGeneration;
+
+    internal void SetMauiView(MauiView view) => MauiView = view;
 
     // MeasureFirst: observador de layout + callback pendente da medição da altura.
     private LayoutObserver? _measureListener;
@@ -1671,8 +1769,35 @@ internal sealed class VrRecyclerListener : Java.Lang.Object, RecyclerView.IRecyc
             if (vh.IsStructural)
                 return;
 
-            if (_context is not null && vh.ItemView is global::Android.Widget.ImageView)
-                Glide.With(_context).Clear(vh.ItemView);
+            if (_context is null)
+                return;
+
+            // O ItemView é o VrItemHost (FrameLayout): as ImageViews vivem DENTRO do template,
+            // então a limpeza varre os descendentes. Zerar o BindingContext antes é obrigatório:
+            // holder do pool pode voltar para o MESMO item e o bind pula contexto idêntico —
+            // sem isso a imagem limpa nunca seria recarregada (célula em branco).
+            if (vh.MauiView is not null)
+                vh.MauiView.BindingContext = null;
+            ClearGlideTargets(vh.ItemView, depth: 0);
+        }
+    }
+
+    private void ClearGlideTargets(AView view, int depth)
+    {
+        if (view is global::Android.Widget.ImageView)
+        {
+            Glide.With(_context!).Clear(view);
+            return;
+        }
+
+        if (depth >= 10 || view is not ViewGroup group)
+            return;
+
+        for (int i = 0; i < group.ChildCount; i++)
+        {
+            var child = group.GetChildAt(i);
+            if (child is not null)
+                ClearGlideTargets(child, depth + 1);
         }
     }
 }
@@ -1763,6 +1888,21 @@ internal sealed class CachingLinearLayoutManager : LinearLayoutManager
         _avgHeight         = 0;
         _measuredCount     = 0;
         _cachedScrollRange = -1;
+    }
+
+    private int _lastLayoutWidth;
+
+    // Rotação/resize: larguras novas mudam as alturas reais. Sem invalidar, o skip-if-cached
+    // do adapter (HasCachedHeight) congelaria as estimativas de scroll nas alturas antigas.
+    public override void OnLayoutCompleted(RecyclerView.State? state)
+    {
+        base.OnLayoutCompleted(state);
+        var width = Width;
+        if (width <= 0)
+            return;
+        if (_lastLayoutWidth > 0 && width != _lastLayoutWidth)
+            InvalidateCache();
+        _lastLayoutWidth = width;
     }
 
     public override int ComputeVerticalScrollOffset(RecyclerView.State state)
