@@ -23,6 +23,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
 
     public ImageViewHandler() : base(Mapper) { }
 
+    private bool _applyingPlaceholder;
+
     protected override NativeImage CreatePlatformView() => new();
 
     protected override void ConnectHandler(NativeImage platformView)
@@ -49,11 +51,13 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
 
         if (string.IsNullOrWhiteSpace(VirtualView.Source))
         {
-            ApplyPlaceholder();
+            if (!ApplyPlaceholder())
+                PlatformView.Source = null; // célula reciclada não fica com a foto anterior
             VirtualView.SetIsLoading(false);
             return;
         }
 
+        _applyingPlaceholder = false;
         VirtualView.SetIsLoading(true);
 
         if (ImageSourceResolver.IsRemote(VirtualView.Source, VirtualView.LegacyIsUrl))
@@ -62,7 +66,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
                 PlatformView.Source = CreateBitmap(uri);
             else
             {
-                ApplyPlaceholder();
+                if (!ApplyPlaceholder())
+                    PlatformView.Source = null;
                 VirtualView?.RaiseImageFailed();
             }
         }
@@ -89,10 +94,11 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
     private BitmapImage CreateBitmap(Uri uri)
     {
         var maxPx = Math.Max(64, VirtualView.DecodeMaxPx);
+        // Só a largura: definir DecodePixelWidth e DecodePixelHeight juntos descarta a proporção
+        // e distorce a imagem decodificada.
         return new BitmapImage
         {
             DecodePixelWidth = maxPx,
-            DecodePixelHeight = maxPx,
             UriSource = uri
         };
     }
@@ -105,17 +111,33 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, NativeImage>
             : Microsoft.UI.Xaml.Media.Stretch.Uniform;
     }
 
-    private void ApplyPlaceholder()
+    private bool ApplyPlaceholder()
     {
-        if (string.IsNullOrWhiteSpace(VirtualView.Placeholder)) return;
+        if (string.IsNullOrWhiteSpace(VirtualView.Placeholder)) return false;
+        // Marca para o ImageFailed do próprio placeholder não reaplicá-lo (loop infinito).
+        _applyingPlaceholder = true;
         PlatformView.Source = CreateLocalBitmap(VirtualView.Placeholder);
+        return true;
     }
 
     private void OnImageOpened(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-        => VirtualView?.RaiseImageLoaded();
+    {
+        if (_applyingPlaceholder)
+        {
+            _applyingPlaceholder = false;
+            return; // placeholder aberto não é a imagem solicitada
+        }
+        VirtualView?.RaiseImageLoaded();
+    }
 
     private void OnImageFailed(object sender, Microsoft.UI.Xaml.ExceptionRoutedEventArgs e)
     {
+        if (_applyingPlaceholder)
+        {
+            // Falha do próprio placeholder: não reaplica nem reemite o evento.
+            _applyingPlaceholder = false;
+            return;
+        }
         ApplyPlaceholder();
         VirtualView?.RaiseImageFailed();
     }

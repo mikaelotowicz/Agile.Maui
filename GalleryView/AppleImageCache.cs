@@ -10,14 +10,18 @@ internal static class AppleImageCache
 {
     private static readonly NSCache s_cache = new()
     {
-        CountLimit = 180
+        CountLimit = 180,
+        // Custo em bytes: só por contagem, 180 imagens grandes (fullscreen até 4096px) somariam GBs.
+        TotalCostLimit = 96 * 1024 * 1024,
     };
 
     public static UIImage? Get(string key) => s_cache.ObjectForKey((NSString)key) as UIImage;
 
     public static void Set(string key, UIImage image)
     {
-        s_cache.SetObjectForKey(image, (NSString)key);
+        var scale = image.CurrentScale > 0 ? image.CurrentScale : 1;
+        var cost  = (nuint)(image.Size.Width * scale * image.Size.Height * scale * 4);
+        s_cache.SetCost(image, (NSString)key, cost);
     }
 
     public static string Key(string source, int maxPixelSize) => $"{maxPixelSize}:{source}";

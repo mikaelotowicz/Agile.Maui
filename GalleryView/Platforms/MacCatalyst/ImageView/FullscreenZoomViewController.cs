@@ -212,20 +212,27 @@ public sealed class FullscreenZoomViewController
                 return;
             }
 
-            var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url));
+            // ConfigureAwait(false): o decode abaixo não roda na main thread.
+            var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url)).ConfigureAwait(false);
 
             if (token.IsCancellationRequested) return;
 
             if (result.Data is null)
             {
-                await MainThread.InvokeOnMainThreadAsync(ApplyPlaceholder);
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested) ApplyPlaceholder();
+                });
                 return;
             }
 
             var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
             if (image is null)
             {
-                await MainThread.InvokeOnMainThreadAsync(ApplyPlaceholder);
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested) ApplyPlaceholder();
+                });
                 return;
             }
 
@@ -243,7 +250,10 @@ public sealed class FullscreenZoomViewController
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[FullscreenZoomViewController] Load error: {ex.Message}");
-            await MainThread.InvokeOnMainThreadAsync(ApplyPlaceholder);
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (!token.IsCancellationRequested) ApplyPlaceholder();
+            });
         }
     }
 

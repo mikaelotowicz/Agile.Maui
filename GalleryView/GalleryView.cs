@@ -50,7 +50,7 @@ public class GalleryView : View
             validateValue: (_, v) => (int)v >= 64);
 
     // Com AspectFit, onde a foto fica quando sobra altura na página: no topo, a sobra vai toda para
-    // baixo; embaixo, toda para cima. Android e iOS; nas outras plataformas fica centrada.
+    // baixo; embaixo, toda para cima. Android, iOS e Mac Catalyst; no Windows fica centrada.
     public static readonly BindableProperty VerticalImageAlignmentProperty =
         BindableProperty.Create(nameof(VerticalImageAlignment), typeof(ImageAlignment), typeof(GalleryView),
             ImageAlignment.Center);

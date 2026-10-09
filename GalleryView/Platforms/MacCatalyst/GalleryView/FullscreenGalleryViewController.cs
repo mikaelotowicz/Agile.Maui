@@ -188,6 +188,9 @@ public sealed class FullscreenGalleryViewController : UIViewController
             _spinners[i]        = spinner;
 
             // Double-tap gesture on zoom scroll view
+            // Capture loop index into a local to avoid closure capturing the
+            // loop variable which would result in all handlers using the
+            // final value (and causing IndexOutOfRangeException).
             int pageIndex = i;
             var doubleTap = new UITapGestureRecognizer(r => OnDoubleTap(r, pageIndex))
                 { NumberOfTapsRequired = 2 };
@@ -252,6 +255,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
     internal void LoadVisiblePages(int page)
     {
         UnloadOffscreenPages(page);
+        // Load current page and neighbors
         for (int i = Math.Max(0, page - 1); i <= Math.Min(_pageCount - 1, page + 1); i++)
             LoadPage(i);
     }
@@ -278,7 +282,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
     private void LoadPage(int index)
     {
-        if (_imageViews![index].Image is not null) return;
+        if (_imageViews![index].Image is not null) return; // already loaded
 
         _pageCts![index]?.Cancel();
         _pageCts[index]?.Dispose();
@@ -319,20 +323,27 @@ public sealed class FullscreenGalleryViewController : UIViewController
                 return;
             }
 
-            var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url));
+            // ConfigureAwait(false): o decode abaixo não roda na main thread.
+            var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url)).ConfigureAwait(false);
 
             if (token.IsCancellationRequested) return;
 
             if (result.Data is null)
             {
-                await MainThread.InvokeOnMainThreadAsync(() => ApplyPagePlaceholder(index));
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested) ApplyPagePlaceholder(index);
+                });
                 return;
             }
 
             var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
             if (image is null)
             {
-                await MainThread.InvokeOnMainThreadAsync(() => ApplyPagePlaceholder(index));
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested) ApplyPagePlaceholder(index);
+                });
                 return;
             }
 
@@ -350,7 +361,10 @@ public sealed class FullscreenGalleryViewController : UIViewController
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[FullscreenGalleryViewController] Page {index} load error: {ex.Message}");
-            await MainThread.InvokeOnMainThreadAsync(() => ApplyPagePlaceholder(index));
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (!token.IsCancellationRequested) ApplyPagePlaceholder(index);
+            });
         }
     }
 
@@ -403,8 +417,8 @@ public sealed class FullscreenGalleryViewController : UIViewController
         sv.ContentSize = imgSize;
 
         var viewport = sv.Bounds.Size;
-        var scaleW   = viewport.Width  / imgSize.Width;
-        var scaleH   = viewport.Height / imgSize.Height;
+        var scaleW = viewport.Width / imgSize.Width;
+        var scaleH = viewport.Height / imgSize.Height;
         var minScale = (nfloat)Math.Min((double)scaleW, (double)scaleH);
         if (minScale <= 0) return false;
 
@@ -419,7 +433,6 @@ public sealed class FullscreenGalleryViewController : UIViewController
     {
         var iv = _imageViews![index];
         var sv = _zoomScrollViews![index];
-
         var imageFrame = iv.Frame;
         var offsetX = (nfloat)Math.Max((sv.Bounds.Width  - imageFrame.Width)  / 2, 0);
         var offsetY = (nfloat)Math.Max((sv.Bounds.Height - imageFrame.Height) / 2, 0);
@@ -460,6 +473,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
     internal void OnPageChanged(int page)
     {
+        page = Math.Clamp(page, 0, Math.Max(0, _pageCount - 1));
         _currentPage = page;
         UpdateIndicator(page);
         _onIndexChanged?.Invoke(page);
@@ -504,6 +518,7 @@ internal sealed class GalleryZoomScrollDelegate : NSObject, IUIScrollViewDelegat
     [Export("scrollViewDidZoom:")]
     public void DidZoom(UIScrollView scrollView)
     {
+        // Disable paging scroll when zoomed in
         _pageScrollView.ScrollEnabled = scrollView.ZoomScale <= scrollView.MinimumZoomScale * 1.01f;
 
         var imageFrame = _imageView.Frame;
@@ -528,8 +543,19 @@ internal sealed class GalleryPageScrollDelegate : NSObject, IUIScrollViewDelegat
 
     [Export("scrollViewDidEndDecelerating:")]
     public void DecelerationEnded(UIScrollView scrollView)
+        => Notify(scrollView);
+
+    // Soltar exatamente na fronteira da página não gera fase de deceleração.
+    [Export("scrollViewDidEndDragging:willDecelerate:")]
+    public void DraggingEnded(UIScrollView scrollView, bool willDecelerate)
     {
-        var page = (int)(scrollView.ContentOffset.X / scrollView.Bounds.Width + 0.5);
-        _vc.OnPageChanged(page);
+        if (!willDecelerate) Notify(scrollView);
+    }
+
+    private void Notify(UIScrollView scrollView)
+    {
+        var w = scrollView.Bounds.Width;
+        if (w <= 0) return;
+        _vc.OnPageChanged((int)(scrollView.ContentOffset.X / w + 0.5));
     }
 }

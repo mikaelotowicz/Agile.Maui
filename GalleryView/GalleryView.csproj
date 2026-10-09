@@ -19,10 +19,11 @@
 		<IncludeSymbols>true</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0-android</TargetFrameworks>
+		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
 		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
@@ -45,6 +46,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Agile.Maui.Gallery.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <None Include="..\agile.png">
 	    <Pack>True</Pack>
 	    <PackagePath>\</PackagePath>
@@ -60,8 +65,20 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-preview.7.26406.9" />
 	</ItemGroup>
 
+	<!-- Dependências Android usadas diretamente pelos handlers (Glide e DialogFragment). Referências
+	     explícitas para não depender só do grafo transitivo do MAUI; mesmas versões que cada
+	     linha do MAUI resolve (net10 → MAUI 10; net11 → MAUI 11 preview), senão NU1605. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' and $([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))">
+		<PackageReference Include="Xamarin.Android.Glide" Version="4.16.0.14" />
+		<PackageReference Include="Xamarin.AndroidX.Fragment" Version="1.8.8.1" />
+	</ItemGroup>
+
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' and $([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
+		<PackageReference Include="Xamarin.Android.Glide" Version="5.0.7.1" />
+		<PackageReference Include="Xamarin.AndroidX.Fragment" Version="1.8.9.3" />
+	</ItemGroup>
 
 </Project>

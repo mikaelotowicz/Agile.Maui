@@ -21,8 +21,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
 
     public ImageViewHandler() : base(Mapper) { }
 
-    // NSUrlSession.SharedSession usa a main queue como delegateQueue — callbacks na main thread.
-    // Session própria com NSOperationQueue background garante callbacks fora da main thread.
+    // Sessão própria com NSOperationQueue de background: os callbacks chegam fora da main thread
+    // e, junto com ConfigureAwait(false), o decode também não roda na main thread.
     private static readonly NSUrlSession _session = NSUrlSession.FromConfiguration(
         NSUrlSessionConfiguration.DefaultSessionConfiguration,
         null!,
@@ -185,6 +185,8 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
+                    // Re-checa na main: um novo LoadImage pode ter cancelado este entre o await e o dispatch.
+                    if (token.IsCancellationRequested) return;
                     ApplyPlaceholder();
                     VirtualView?.RaiseImageFailed();
                 });
@@ -196,6 +198,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
             {
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
+                    if (token.IsCancellationRequested) return;
                     ApplyPlaceholder();
                     VirtualView?.RaiseImageFailed();
                 });
@@ -220,6 +223,7 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
                 $"[ZoomImageViewHandler iOS] Load error: {ex.Message}");
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
+                if (token.IsCancellationRequested) return;
                 ApplyPlaceholder();
                 VirtualView?.RaiseImageFailed();
             });
@@ -228,8 +232,15 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
 
     private void ApplyPlaceholder()
     {
-        if (string.IsNullOrWhiteSpace(VirtualView.Placeholder)) return;
-        var ph = AppleImageCache.LoadLocal(VirtualView.Placeholder, VirtualView.DecodeMaxPx, UIScreen.MainScreen.Scale);
+        if (PlatformView is null) return;
+        var placeholder = VirtualView?.Placeholder;
+        if (string.IsNullOrWhiteSpace(placeholder))
+        {
+            // Sem placeholder: limpa para a foto anterior não ficar visível (célula reciclada).
+            PlatformView.Image = null;
+            return;
+        }
+        var ph = AppleImageCache.LoadLocal(placeholder, VirtualView!.DecodeMaxPx, UIScreen.MainScreen.Scale);
         if (ph is not null) PlatformView.Image = ph;
     }
 

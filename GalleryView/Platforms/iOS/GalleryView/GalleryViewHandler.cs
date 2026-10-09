@@ -172,8 +172,8 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
 
 internal sealed class ThumbGalleryView : UIView
 {
-    // Session própria com queue de background — decode fora da main thread.
-    // NSUrlSession.SharedSession usa a main queue e bloquearia a UI em imagens grandes.
+    // Sessão própria com queue de background: callbacks fora da main thread e, junto com
+    // ConfigureAwait(false), o decode de imagens grandes também não bloqueia a UI.
     private static readonly NSUrlSession _urlSession = NSUrlSession.FromConfiguration(
         NSUrlSessionConfiguration.DefaultSessionConfiguration,
         null!,
@@ -289,6 +289,18 @@ internal sealed class ThumbGalleryView : UIView
             _scrollView.SetContentOffset(new CGPoint(_pendingPage * w, 0), false);
             _ignoreScroll = false;
             _pendingPage  = -1;
+        }
+        else if (_pages.Count > 0)
+        {
+            // Rotação/resize não re-ancora o paging sozinho: o offset antigo cairia no meio de
+            // outra página. Re-ancora na página corrente.
+            var target = _currentPage * w;
+            if (Math.Abs((double)(_scrollView.ContentOffset.X - target)) > 0.5)
+            {
+                _ignoreScroll = true;
+                _scrollView.SetContentOffset(new CGPoint(target, 0), false);
+                _ignoreScroll = false;
+            }
         }
     }
 

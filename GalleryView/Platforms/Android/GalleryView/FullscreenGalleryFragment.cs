@@ -298,6 +298,11 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
         if (holder is GalleryPageViewHolder vh)
         {
             vh.BindToken++;
+            if (vh.LayoutChangeHandler is not null)
+            {
+                vh.ImageView.LayoutChange -= vh.LayoutChangeHandler;
+                vh.LayoutChangeHandler = null;
+            }
             try { Glide.With(vh.ImageView).Clear(vh.ImageView); } catch { }
             vh.ImageView.SetImageDrawable(null);
             vh.ImageView.SetOnTouchListener(null);
@@ -319,15 +324,29 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
         vh.ImageView.Visibility = ViewStates.Invisible; // oculta até a matrix estar correta
         vh.Progress.Visibility  = ViewStates.Visible;
 
-        var mediumScale = Math.Min(2.5f, _maxZoom * 0.55f);
         var zoomHandler = new ZoomTouchHandler(
             imageView:          vh.ImageView,
-            mediumScale:        mediumScale,
             maxScale:           _maxZoom,
             onDismiss:          () => { }, // no-op: gallery uses close button
             onZoomStateChanged: _onZoomStateChanged);
 
         vh.ImageView.SetOnTouchListener(zoomHandler);
+
+        if (vh.LayoutChangeHandler is not null)
+            vh.ImageView.LayoutChange -= vh.LayoutChangeHandler;
+        // Rotação com ConfigurationChanges redimensiona a página sem rebind: recalcula a matrix.
+        vh.LayoutChangeHandler = (_, lc) =>
+        {
+            if (vh.BindToken != token) return;
+            if ((lc.Right - lc.Left) == (lc.OldRight - lc.OldLeft) &&
+                (lc.Bottom - lc.Top) == (lc.OldBottom - lc.OldTop))
+                return;
+            vh.ImageView.Post(() =>
+            {
+                if (vh.BindToken == token) zoomHandler.InitMatrix();
+            });
+        };
+        vh.ImageView.LayoutChange += vh.LayoutChangeHandler;
 
         var context = vh.ImageView.Context!;
 
@@ -347,9 +366,12 @@ internal sealed class GalleryPagerAdapter : RecyclerView.Adapter
         void OnFail()
         {
             if (vh.BindToken != token) return;
-            MainThread.BeginInvokeOnMainThread(() =>
+            vh.ImageView.Post(() =>
             {
                 if (vh.BindToken != token) return;
+                // O placeholder (Error) também é desenhado com ScaleType.Matrix — sem InitMatrix
+                // apareceria no canto superior esquerdo, sem escala.
+                zoomHandler.InitMatrix();
                 vh.ImageView.Visibility = ViewStates.Visible;
                 vh.Progress.Visibility  = ViewStates.Gone;
             });
@@ -395,6 +417,7 @@ internal sealed class GalleryPageViewHolder : RecyclerView.ViewHolder
     public global::Android.Widget.ImageView ImageView  { get; }
     public AndroidProgressBar               Progress   { get; }
     internal int                            BindToken;
+    internal EventHandler<AndroidView.LayoutChangeEventArgs>? LayoutChangeHandler;
 
     public GalleryPageViewHolder(
         AndroidView                          root,

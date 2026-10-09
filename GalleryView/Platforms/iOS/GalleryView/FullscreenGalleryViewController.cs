@@ -322,20 +322,27 @@ public sealed class FullscreenGalleryViewController : UIViewController
                 return;
             }
 
-            var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url));
+            // ConfigureAwait(false): o decode abaixo não roda na main thread.
+            var result = await NSUrlSession.SharedSession.CreateDataTaskAsync(new NSUrl(url)).ConfigureAwait(false);
 
             if (token.IsCancellationRequested) return;
 
             if (result.Data is null)
             {
-                await MainThread.InvokeOnMainThreadAsync(() => ApplyPagePlaceholder(index));
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested) ApplyPagePlaceholder(index);
+                });
                 return;
             }
 
             var image = AppleImageCache.Decode(result.Data, maxPixelSize, UIScreen.MainScreen.Scale);
             if (image is null)
             {
-                await MainThread.InvokeOnMainThreadAsync(() => ApplyPagePlaceholder(index));
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (!token.IsCancellationRequested) ApplyPagePlaceholder(index);
+                });
                 return;
             }
 
@@ -353,7 +360,10 @@ public sealed class FullscreenGalleryViewController : UIViewController
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[FullscreenGalleryViewController] Page {index} load error: {ex.Message}");
-            await MainThread.InvokeOnMainThreadAsync(() => ApplyPagePlaceholder(index));
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (!token.IsCancellationRequested) ApplyPagePlaceholder(index);
+            });
         }
     }
 
@@ -462,6 +472,7 @@ public sealed class FullscreenGalleryViewController : UIViewController
 
     internal void OnPageChanged(int page)
     {
+        page = Math.Clamp(page, 0, Math.Max(0, _pageCount - 1));
         _currentPage = page;
         UpdateIndicator(page);
         _onIndexChanged?.Invoke(page);
@@ -531,8 +542,19 @@ internal sealed class GalleryPageScrollDelegate : NSObject, IUIScrollViewDelegat
 
     [Export("scrollViewDidEndDecelerating:")]
     public void DecelerationEnded(UIScrollView scrollView)
+        => Notify(scrollView);
+
+    // Soltar exatamente na fronteira da página não gera fase de deceleração.
+    [Export("scrollViewDidEndDragging:willDecelerate:")]
+    public void DraggingEnded(UIScrollView scrollView, bool willDecelerate)
     {
-        var page = (int)(scrollView.ContentOffset.X / scrollView.Bounds.Width + 0.5);
-        _vc.OnPageChanged(page);
+        if (!willDecelerate) Notify(scrollView);
+    }
+
+    private void Notify(UIScrollView scrollView)
+    {
+        var w = scrollView.Bounds.Width;
+        if (w <= 0) return;
+        _vc.OnPageChanged((int)(scrollView.ContentOffset.X / w + 0.5));
     }
 }

@@ -39,8 +39,6 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
     private ZoomTouchHandler?                 _zoomHandler;
     private ZoomKeyCallback?                  _keyCallback;
 
-    private float MediumScale => Math.Min(2.5f, _maxZoom * 0.55f);
-
     public FullscreenZoomDialogFragment(
         string  source,
         bool    isUrl,
@@ -102,12 +100,15 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
         AddCloseButton();
 
         _zoomHandler = new ZoomTouchHandler(
-            imageView:   _imageView,
-            mediumScale: MediumScale,
-            maxScale:    _maxZoom,
-            onDismiss:   DismissAllowingStateLoss);
+            imageView: _imageView,
+            maxScale:  _maxZoom,
+            onDismiss: DismissAllowingStateLoss);
 
         _imageView.SetOnTouchListener(_zoomHandler);
+
+        // Rotação com ConfigurationChanges não recria o fragment: a view muda de tamanho e a
+        // matrix precisa ser recalculada para as novas dimensões.
+        _imageView.LayoutChange += OnImageLayoutChange;
 
         LoadImage();
         return _root;
@@ -155,6 +156,7 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
     {
         if (_imageView is not null)
         {
+            _imageView.LayoutChange -= OnImageLayoutChange;
             _imageView.SetOnTouchListener(null);
             try { Glide.With(this).Clear(_imageView); }
             catch (Exception ex)
@@ -303,6 +305,14 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
         if (string.IsNullOrWhiteSpace(name)) return 0;
         return AndroidImageLoader.ResolveDrawable(RequireContext(), name);
     }
+
+    private void OnImageLayoutChange(object? sender, AndroidView.LayoutChangeEventArgs e)
+    {
+        if ((e.Right - e.Left) == (e.OldRight - e.OldLeft) &&
+            (e.Bottom - e.Top) == (e.OldBottom - e.OldTop))
+            return;
+        _imageView?.Post(() => _zoomHandler?.InitMatrix());
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -332,7 +342,6 @@ internal sealed class ZoomTouchHandler
     private readonly Action                           _onDismiss;
     private readonly Action<bool>?                    _onZoomStateChanged;
     private readonly Matrix                           _matrix = new();
-    private readonly float                            _mediumScale;
     private readonly float                            _maxScale;
 
     private float _minScale;
@@ -342,15 +351,17 @@ internal sealed class ZoomTouchHandler
 
     public float Scale => _currentScale;
 
+    // Imagem menor que a view pode ter fit acima do MaxZoom; sem o teto efetivo o clamp
+    // inverte (min > max) e Math.Clamp lança ArgumentException no pinch.
+    private float MaxScaleEffective => Math.Max(_maxScale, _minScale);
+
     public ZoomTouchHandler(
         global::Android.Widget.ImageView imageView,
-        float mediumScale,
         float maxScale,
         Action onDismiss,
         Action<bool>? onZoomStateChanged = null)
     {
         _imageView          = imageView;
-        _mediumScale        = mediumScale;
         _maxScale           = maxScale;
         _onDismiss          = onDismiss;
         _onZoomStateChanged = onZoomStateChanged;
@@ -424,6 +435,16 @@ internal sealed class ZoomTouchHandler
                 _lastX = e.GetX(0);
                 _lastY = e.GetY(0);
                 break;
+
+            case MotionEventActions.PointerUp:
+                // O dedo restante pode virar o índice 0: re-ancora para o pan não saltar ao sair do pinch.
+                var remainingIndex = e.ActionIndex == 0 ? 1 : 0;
+                if (remainingIndex < e.PointerCount)
+                {
+                    _lastX = e.GetX(remainingIndex);
+                    _lastY = e.GetY(remainingIndex);
+                }
+                break;
         }
 
         return true;
@@ -433,7 +454,7 @@ internal sealed class ZoomTouchHandler
 
     public bool OnScale(ScaleGestureDetector detector)
     {
-        var newScale  = Math.Clamp(_currentScale * detector.ScaleFactor, _minScale, _maxScale);
+        var newScale  = Math.Clamp(_currentScale * detector.ScaleFactor, _minScale, MaxScaleEffective);
         var delta     = newScale / _currentScale;
         _currentScale = newScale;
 
@@ -462,7 +483,12 @@ internal sealed class ZoomTouchHandler
         if (_currentScale > _minScale + 0.01f)
             AnimateToMatrix(BuildFitMatrix(), _minScale);
         else
-            AnimateToMatrix(BuildZoomedMatrix(_mediumScale, x, y), _mediumScale);
+        {
+            // Alvo relativo ao fit (como no iOS); um alvo absoluto encolheria imagens pequenas
+            // abaixo do fit em vez de ampliar.
+            var target = Math.Min(MaxScaleEffective, _minScale * 2.5f);
+            AnimateToMatrix(BuildZoomedMatrix(target, x, y), target);
+        }
     }
 
     // ── Logica de Matrix ─────────────────────────────────────────────────

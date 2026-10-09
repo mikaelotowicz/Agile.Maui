@@ -83,8 +83,23 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
         foreach (var source in images)
         {
             var img = new NativeImage { Stretch = stretch };
-            RoutedEventHandler openedHandler = (_, _) => VirtualView?.RaiseImageLoaded();
-            ExceptionRoutedEventHandler failedHandler = (_, _) => { ApplyPlaceholder(img); VirtualView?.RaiseImageFailed(); };
+            var applyingPlaceholder = false;
+            RoutedEventHandler openedHandler = (_, _) =>
+            {
+                if (applyingPlaceholder) { applyingPlaceholder = false; return; }
+                VirtualView?.RaiseImageLoaded();
+            };
+            ExceptionRoutedEventHandler failedHandler = (_, _) =>
+            {
+                if (applyingPlaceholder)
+                {
+                    // Falha do próprio placeholder: não reaplica nem reemite (loop infinito).
+                    applyingPlaceholder = false;
+                    return;
+                }
+                applyingPlaceholder = ApplyPlaceholder(img);
+                VirtualView?.RaiseImageFailed();
+            };
             img.ImageOpened += openedHandler;
             img.ImageFailed += failedHandler;
             _imageHandlerCleanup.Add(() =>
@@ -99,7 +114,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
                 if (Uri.TryCreate(source, UriKind.Absolute, out var uri))
                     img.Source = CreateBitmap(uri);
                 else
-                    ApplyPlaceholder(img);
+                    applyingPlaceholder = ApplyPlaceholder(img);
             }
             else
             {
@@ -213,10 +228,11 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
             (byte)(c.Green * 255),
             (byte)(c.Blue  * 255));
 
-    private void ApplyPlaceholder(NativeImage img)
+    private bool ApplyPlaceholder(NativeImage img)
     {
-        if (string.IsNullOrWhiteSpace(VirtualView?.Placeholder)) return;
+        if (string.IsNullOrWhiteSpace(VirtualView?.Placeholder)) return false;
         img.Source = CreateLocalBitmap(VirtualView.Placeholder);
+        return true;
     }
 
     private BitmapImage CreateLocalBitmap(string source)
@@ -234,10 +250,11 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryWinCont
     private BitmapImage CreateBitmap(Uri uri)
     {
         var maxPx = Math.Max(64, VirtualView?.ThumbMaxPx ?? 720);
+        // Só a largura: definir DecodePixelWidth e DecodePixelHeight juntos descarta a proporção
+        // e distorce a imagem decodificada.
         return new BitmapImage
         {
             DecodePixelWidth = maxPx,
-            DecodePixelHeight = maxPx,
             UriSource = uri
         };
     }

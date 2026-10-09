@@ -35,6 +35,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     private bool                         _disposed;
     private bool                         _pendingReload;
     private bool                         _needsAdapterReload;
+    private OneShotAdapterObserver?      _pendingObserver;
 
     public GalleryViewHandler() : base(Mapper) { }
 
@@ -62,6 +63,8 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     {
         _disposed = true;
         UnsubscribeImages();
+        _pendingObserver?.Cancel();
+        _pendingObserver = null;
         platformView.OnLayoutChanged = null;
         if (_pageCallback is not null)
         {
@@ -92,6 +95,8 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     private void DoReloadAdapter()
     {
         UnsubscribeImages();
+        _pendingObserver?.Cancel();
+        _pendingObserver = null;
 
         var pager  = PlatformView.Pager;
         var images = VirtualView.Images;
@@ -106,7 +111,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
 
         var targetIdx = Math.Clamp(VirtualView.SelectedIndex, 0, images.Count - 1);
 
-        pager.Adapter = new ThumbPagerAdapter(
+        var adapter = new ThumbPagerAdapter(
             images:        images.ToArray(),
             isUrl:         VirtualView.LegacyIsUrl,
             placeholder:   VirtualView.Placeholder,
@@ -119,11 +124,13 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
             onImageLoaded: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageLoaded()),
             onImageFailed: () => MainThread.BeginInvokeOnMainThread(() => VirtualView?.RaiseImageFailed()),
             context:       Context!);
+        pager.Adapter = adapter;
 
         if (targetIdx > 0)
         {
-            var observer = new OneShotAdapterObserver(pager, targetIdx);
-            pager.Adapter.RegisterAdapterDataObserver(observer);
+            var observer = new OneShotAdapterObserver(pager, adapter, targetIdx);
+            adapter.RegisterAdapterDataObserver(observer);
+            _pendingObserver = observer;
             pager.Post(observer.Apply);
         }
 
@@ -547,28 +554,44 @@ internal sealed class ThumbPageViewHolder : RecyclerView.ViewHolder
 
 internal sealed class OneShotAdapterObserver : RecyclerView.AdapterDataObserver
 {
-    private readonly ViewPager2 _pager;
-    private readonly int        _index;
-    private bool                _done;
+    private readonly ViewPager2           _pager;
+    // Desregistrar sempre no adapter em que o observer foi registrado — _pager.Adapter pode já
+    // ser outro, e unregister em adapter errado lança IllegalStateException.
+    private readonly RecyclerView.Adapter _adapter;
+    private readonly int                  _index;
+    private bool                          _done;
 
-    public OneShotAdapterObserver(ViewPager2 pager, int index)
+    public OneShotAdapterObserver(ViewPager2 pager, RecyclerView.Adapter adapter, int index)
     {
-        _pager = pager;
-        _index = index;
+        _pager   = pager;
+        _adapter = adapter;
+        _index   = index;
     }
 
     public override void OnChanged() => Apply();
 
+    public void Cancel()
+    {
+        if (_done) return;
+        _done = true;
+        _adapter.UnregisterAdapterDataObserver(this);
+    }
+
     public void Apply()
     {
         if (_done) return;
+        if (!ReferenceEquals(_pager.Adapter, _adapter))
+        {
+            Cancel(); // adapter trocado: o índice deste observer é obsoleto
+            return;
+        }
         if (_pager.Width == 0 || _pager.Height == 0)
         {
             _pager.Post(Apply);
             return;
         }
         _done = true;
-        _pager.Adapter?.UnregisterAdapterDataObserver(this);
+        _adapter.UnregisterAdapterDataObserver(this);
         _pager.SetCurrentItem(_index, false);
     }
 }
