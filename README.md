@@ -92,9 +92,6 @@ Release notes per version are shown on each package page.
 | `SignaturePad` | `Agile.Maui.SignaturePad` | `SignaturePad` | [docs/SignaturePad.md](docs/SignaturePad.md) |
 | `sample` | sample application | demos of all components | [docs/Sample.md](docs/Sample.md) |
 
-The `Controls/` folder contains only leftover build artifacts (`bin`/`obj`) from the old
-monolithic project and is not part of the active solution.
-
 ## Installation
 
 Install only the packages your application actually uses:
@@ -198,6 +195,8 @@ VirtualizedCollectionView/
 ChipGroup/
 SignaturePad/
 sample/
+*.Tests/            (host test projects, one per component)
+.github/workflows/  (CI tests and NuGet publish)
 docs/
 TUNING.md
 PROFILING.md
@@ -214,6 +213,20 @@ dotnet build -f net11.0-maccatalyst
 dotnet build -f net10.0-windows10.0.19041.0
 dotnet build -f net11.0-windows10.0.26100.0
 ```
+
+## Tests
+
+Each component has a host test project (xunit, platform-neutral `net10.0` target,
+no device or emulator required): `ChipGroup.Tests`, `GalleryView.Tests`,
+`PDFViewer.Tests`, `PdfGen.Tests`, `SignaturePad.Tests`, and
+`VirtualizedCollectionView.Tests`.
+
+```powershell
+dotnet test ChipGroup.Tests    # same for the other <Project>.Tests
+```
+
+The GitHub Actions workflow in `.github/workflows/ci.yml` runs all six suites on
+every push and pull request, on a Windows runner.
 
 ## Package generation
 

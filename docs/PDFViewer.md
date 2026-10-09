@@ -121,7 +121,7 @@ events and commands for navigation, zoom, search, print and thumbnails.
 
 | Input | Behavior |
 |---|---|
-| `https://...` or `http://...` | Downloads and opens as a URL. Downloads share one `HttpClient` per process, with a 60-second timeout; Android and Windows stream the response to a cache file. |
+| `https://...` or `http://...` | Downloads and opens as a URL. Downloads share one `HttpClient` per process, with a 60-second timeout; Android and Windows stream the response to a temporary file instead of buffering the whole PDF in memory. |
 | Existing file path | Opens the local file. |
 | `PdfStream` | Opens the bytes provided by the application. The stream is rewound on reload, so setting `Password` after `PdfStream` reopens the same document. |
 | `PdfReaderView Source="file.pdf"` | If it is not a URL/local file, tries to open it as a MauiAsset and copies it to the cache. |
@@ -142,18 +142,19 @@ events and commands for navigation, zoom, search, print and thumbnails.
 | `MinZoom` | `double` | `0.5` | Minimum zoom. |
 | `MaxZoom` | `double` | `8.0` | Maximum zoom. |
 | `IsPinchZoomEnabled` | `bool` | `true` | Enables the pinch gesture when supported. |
-
-Since `1.1.0`, switching `ScrollOrientation` resets the zoom to `1.0` (100%,
-fit) instead of `MinZoom`, and on Android a double tap while zoomed in also
-returns to 100%. `ResetZoomAsync()` sets `1.0`. On Windows the effective minimum
-zoom is `max(1.0, MinZoom)`, so pages never shrink below fit. On Android, while
-zoomed in, one-finger drag pans on both axes, and horizontal mode snaps page by
-page only at about 100%. `CurrentPage` is re-clamped when `PageCount` changes.
 | `RenderScale` | `double` | `1.5` | Render scale/DPI. |
 | `MaxCacheMB` | `int` | `200` | Limit for the rendered page cache. |
 | `EnablePageCaching` | `bool` | `true` | Enables cache/prefetch. |
 | `PrefetchAbove` | `int` | `2` | Pages above to prefetch. |
 | `PrefetchBelow` | `int` | `3` | Pages below to prefetch. |
+
+Since `1.1.0`, switching `ScrollOrientation` resets the zoom to `1.0` (100%,
+fit) instead of `MinZoom`, and on Android a double tap while zoomed in also
+returns to 100%. `ResetZoomAsync()` sets `1.0`. On Windows the effective minimum
+zoom is `max(1.0, MinZoom)`, so pages never shrink below fit. On Android, while
+zoomed in, one-finger drag pans on both axes, the pinch gesture commits without
+the view jumping to the viewport center, and horizontal mode snaps page by page
+only at about 100%. `CurrentPage` is re-clamped when `PageCount` changes.
 
 ### Appearance and text
 
@@ -166,11 +167,16 @@ page only at about 100%. `CurrentPage` is re-clamped when `PageCount` changes.
 | `ThumbnailBarTitleText` | `string` | `Pages` |
 | `PrintJobName` | `string` | `Document` |
 
+Since `1.1.0`, `PageBackgroundColor` is also applied to the rendered page on
+Windows — before, the rasterized sheet was always white there and the color only
+showed on the loading placeholder.
+
 The area behind the pages (the spacing between them and the margin around a
 page that does not fill the view) is light gray `#EDEDEF` on Android, iOS and
 macOS Catalyst — the same tone as the `PdfReaderView` loading screen — and is
 not configurable. Before `1.1.0` it was `#C2C6C9` on Android and dark `#525659`
-on iOS and macOS Catalyst.
+on iOS and macOS Catalyst. Windows uses its own similar light gray (`#E6E6E8`),
+unchanged.
 
 ### Thumbnails
 
@@ -263,6 +269,13 @@ bar in the app.
 `EnableThumbnailBar`, `RenderScale`, `MaxCacheMB`, `PrefetchAbove`,
 `PrefetchBelow`, text and colors.
 
+Defaults follow `PdfViewer`, with reader-specific exceptions:
+`ThumbnailBarPlacement` defaults to `Right` (so the thumbnails button shows by
+default), and on Windows the reader enables `EnableThumbnailBar` and sets
+`SearchBarMaxWidth` to `408` at construction. The bottom-bar thumbnails button
+toggles the fixed sidebar on Windows and the drawer on the other platforms —
+macOS Catalyst included since `1.1.0` (the button was inert there before).
+
 It also exposes:
 
 | Property | Type | Description |
@@ -276,7 +289,7 @@ It also exposes:
 | `SearchPlaceholder` | `string` | Search placeholder. |
 | `PageCountFormat` | `string` | Format for the total page count. |
 | `LoadFailedText` | `string` | Text on load failure. |
-| `SearchBarMaxWidth` | `double` | Maximum search bar width. Mobile fills the toolbar by default; Windows uses a compact width. |
+| `SearchBarMaxWidth` | `double` | Maximum search bar width. Mobile fills the toolbar by default; on Windows the default is `408`. |
 | `NavigationButtonMode` | `PdfReaderNavigationButtonMode` | Shows a navigation button at the start of the toolbar. `None`, `Auto`, `Menu`, or `Back`. |
 | `NavigationButtonCommand` | `ICommand?` | Optional command that replaces the default navigation action. |
 | `NavigationButtonCommandParameter` | `object?` | Optional parameter for `NavigationButtonCommand`. |
@@ -470,7 +483,7 @@ Viewer.LinkTapped += async (sender, e) =>
 
 | Platform | Engine | Notes |
 |---|---|---|
-| Android | `PdfRenderer` + PDFium | Native rendering; PDFium for text, search and links. |
+| Android | PDFium | Rendering, text, search and links via PDFium (the same engine as Edge/Chrome); `android.graphics.pdf.PdfRenderer` is no longer used. |
 | iOS/MacCatalyst | `PdfKit.PdfView` | Native zoom, selection, links; `LinkTapped` covers external URLs. |
 | Windows | PDFium | Rendering, text and search via PDFium; printing and sharing use WinUI/Windows APIs. |
 
@@ -485,7 +498,7 @@ Viewer.LinkTapped += async (sender, e) =>
   |
   +-- PdfViewer (cross-platform View)
         |
-        +-- Android handler      -> PdfRenderer + PDFium
+        +-- Android handler      -> PDFium (render + text)
         +-- iOS/Mac handler      -> PdfKit.PdfView
         +-- Windows handler      -> PDFium + WinUI
 ```

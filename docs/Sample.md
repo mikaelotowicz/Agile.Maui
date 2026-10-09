@@ -8,8 +8,9 @@ Demo application that consumes the active component projects:
 - `ChipGroup`
 - `SignaturePad`
 
-It also includes a comparison with the standard MAUI `CollectionView` to measure
-behavior, scrolling, and incremental loading.
+It also includes a dedicated benchmark page (`CollectionBenchmarkPage`) that
+compares `VirtualizedCollectionView` with the standard MAUI `CollectionView` to
+measure behavior, scrolling, and incremental loading.
 
 ## Component registration
 
@@ -32,9 +33,10 @@ buttons, and the `IAnchoredMenu` service, used in the custom PDF top menu.
 
 | Page | Purpose |
 |---|---|
-| `MainPage` | Demonstrates `ImageView` and `GalleryView`. |
+| `MainPage` | Demonstrates `ImageView` and `GalleryView` ("Gallery View" menu entry). |
 | `ReaderDemoPage` | Demonstrates `PdfReaderView`, the ready-to-use reader. |
 | `VirtualizedListPage` | Demonstrates `VirtualizedCollectionView` with list, grid, search, and metrics. |
+| `CollectionBenchmarkPage` | Side-by-side benchmark of `VirtualizedCollectionView` vs. the MAUI `CollectionView`. |
 | `ChipGroupPage` | Demonstrates `ChipGroup` in wrap, horizontal scroll, and vertical modes. |
 | `SignaturePadPage` | Demonstrates `SignaturePad` with signature capture, undo/redo, metrics, and PNG export preview. |
 
@@ -62,12 +64,23 @@ PDFs in `Resources/Images` are removed from `MauiImage` and included as
 
 ## Shell menu
 
-`AppShell.xaml` uses a flyout with a header containing `agile.png`. Each menu
-item is a `ShellContent`:
+`AppShell.xaml` uses a redesigned flyout:
 
-- `Gallery View`: images and gallery.
+- **Header**: violet gradient card (`#3A1C9E → #512BD4 → #8A6CF2`) with translucent
+  decorative circles, `agile.png` in a white rounded tile, a "SAMPLE" badge, and a
+  "COMPONENTES" section label.
+- **Items**: a custom `Shell.ItemTemplate` renders each entry as a pill with a
+  font-glyph icon in a lavender tile (glyphs come from the `Icons` static class,
+  read from the item's `FontImageSource`); the `Selected` visual state highlights
+  the pill, icon, title, and a side marker.
+- **Footer**: divider plus a "Android · iOS · Mac · Windows" caption.
+
+Each menu item is a `ShellContent`:
+
+- `Gallery View`: images and gallery (`MainPage`).
 - `PDF Viewer`: ready-to-use UI with `PdfReaderView`.
 - `Virtualized Collection`: virtualized list with search, grid, and metrics.
+- `Collection Benchmark`: `VirtualizedCollectionView` vs. MAUI `CollectionView`.
 - `ChipGroup`: single/multiple chip selection with wrap, horizontal, and vertical layouts.
 - `SignaturePad`: freehand signature capture and export preview.
 
@@ -122,10 +135,11 @@ The page calls `GetSignatureData()` for stroke/point/duration metrics and
 
 ## Build
 
+The sample targets **.NET 11 preview only** (`net11.0-*`); the libraries keep
+their `net10.0` targets for stable consumers.
+
 ```powershell
 dotnet build sample/sample.csproj
-dotnet build sample/sample.csproj -f net10.0-windows10.0.19041.0
 dotnet build sample/sample.csproj -f net11.0-windows10.0.26100.0
-dotnet build sample/sample.csproj -f net10.0-android
 dotnet build sample/sample.csproj -f net11.0-android
 ```

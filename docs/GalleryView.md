@@ -103,11 +103,26 @@ The fullscreen viewers (Android, iOS, MacCatalyst) decode at the largest screen
 dimension times `min(MaxZoom, 2)`, clamped between 720 and 4096 px. On iOS and
 MacCatalyst, remote fullscreen images are decoded off the main thread.
 
+### Fullscreen zoom
+
+Pinch zooms between the fitted scale and `MaxZoom`; double-tap toggles between
+the fitted scale and an intermediate zoom relative to it. When an image is small
+enough that fitting it to the screen already needs a scale above `MaxZoom`, the
+effective maximum is raised to the fit scale, so pinch and double-tap keep
+working on small images. In the single-image viewer, a tap while not zoomed in
+(or Back on Android) closes the viewer; the fullscreen gallery closes through
+its close button. The same zoom rules apply to `GalleryView` fullscreen pages.
+
 ### Loading state and fade-in
 
 `IsLoading` is read-only and reflects the real platform load cycle. It becomes
 `true` before the native request/decode starts and returns to `false` on success,
 failure, empty source, cancellation, or handler teardown.
+
+Changing `Source` (or clearing it) replaces the previous image immediately:
+with a `Placeholder` set, the placeholder shows while the new image loads;
+without one, the control clears to empty instead of keeping the previous photo —
+relevant for recycled cells.
 
 The application can attach a behavior to animate images after loading:
 
@@ -146,7 +161,7 @@ zoom on the platforms that support this flow.
 | `SelectionChangedCommand` | `ICommand?` | `null` | Receives the selected index. |
 | `ImageLoadedCommand` | `ICommand?` | `null` | Command when an image loads. |
 | `ImageFailedCommand` | `ICommand?` | `null` | Command when an image fails. |
-| `ThumbMaxPx` | `int` | `720` | Thumbnail decode limit. Minimum: `64`. |
+| `ThumbMaxPx` | `int` | `720` | Thumbnail decode limit. On Android, iOS, and MacCatalyst pages decode at their measured size once laid out (following rotation/resize) and `ThumbMaxPx` is the fallback before that; on Windows it is the decode width. Minimum: `64`. |
 
 Without `HeightRequest`, the gallery takes all the height offered by its parent,
 capped by `MaximumHeightRequest`, on Android, iOS and macOS Catalyst. Before `1.1.0`, iOS and

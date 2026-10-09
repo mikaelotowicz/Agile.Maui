@@ -159,7 +159,7 @@ Using `SystemLayoutSizeFittingSize` instead would return `height = 0`, making ce
 
 ### INotifyCollectionChanged — Coalescing and Batch Updates
 
-Events from `ObservableCollection` are queued in `_pendingChanges` and flushed in a single `MainThread.BeginInvokeOnMainThread` callback, coalescing bursts of rapid changes (e.g., 500 × `Items.Add`) into one `UICollectionView.PerformBatchUpdates` call.
+Events from `ObservableCollection` are queued in `_pendingChanges` and flushed in a single callback posted through the UI `IDispatcher` captured at connect. `IDispatcher.Dispatch` always queues; `MainThread.BeginInvokeOnMainThread` is deliberately not used here because it runs inline when already on the main thread, which would defeat the coalescing. Bursts of rapid changes (e.g., 500 × `Items.Add`) collapse into one `UICollectionView.PerformBatchUpdates` call.
 
 For pagination, prefer `ObservableRangeCollection<T>.AddRange`: it emits one native batch notification for the whole page instead of one notification per item. For search/filter refreshes, prefer `ReplaceAll`.
 
@@ -185,6 +185,8 @@ For pagination, prefer `ObservableRangeCollection<T>.AddRange`: it emits one nat
 No custom handler is needed on Windows. `VirtualizedCollectionView` inherits from `ContentView` and sets its `Content` to a MAUI `CollectionView` in its constructor (guarded by `#if WINDOWS`). The MAUI `ContentViewHandler` renders it normally.
 
 MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualization enabled by default.
+
+The Windows partial class also adds pointer **drag-to-scroll with inertia**: dragging the list body with mouse or pen scrolls it (4 px threshold before the drag starts), hooked to the rendered list's inner `ScrollViewer` (`ListViewBase`, MAUI ≤ 9) or `ScrollView` (`ItemsView`, MAUI 10 / WinAppSDK 1.4+).
 
 | Property | Windows behavior |
 |---|---|

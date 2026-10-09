@@ -78,10 +78,10 @@ O formato segue Keep a Changelog e o versionamento é semântico.
   dos renderers nativos.
 
 ### Notas
-- Primeira versão publicada no nuget.org. A 1.1.0 foi registrada abaixo, mas
-  não chegou a ser publicada; a 1.2.0 inclui todo o seu conteúdo. É minor, e
-  não patch, porque este ciclo acrescenta API pública e fontes embutidas nos
-  renderers nativos.
+- Primeira versão publicada no nuget.org. As versões 1.0.0 e 1.1.0 registradas
+  abaixo nunca chegaram ao feed; a 1.2.0 inclui todo o conteúdo de ambas. É
+  minor, e não patch, porque este ciclo acrescenta API pública e fontes
+  embutidas nos renderers nativos.
 - Uma instância de `PdfDocument` não é thread-safe: não renderize o mesmo
   documento em paralelo. Renders sequenciais da mesma instância são suportados.
 - Documentação: em apps MAUI com `ImplicitUsings` (padrão do template), dez

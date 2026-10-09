@@ -61,7 +61,7 @@ xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedColle
 | `FooterTemplate` | `DataTemplate?` | `null` | Template for `Footer`. |
 | `ItemHeight` | `double` | `-1` | Explicit fixed height. When `> 0`, it overrides the sizing strategy on Android/iOS/Mac. Ignored on Windows. |
 | `ItemHeightRequest` | `double` | `350` | Fixed item height in `Fixed`; scroll estimate in `Dynamic` and `MeasureFirst`. On Windows there is no equivalent for estimated height. |
-| `ItemWidthRequest` | `double` | `-1` | Item width for `Orientation=Horizontal`: absolute column width on iOS/Mac and size estimate on Android. `-1` falls back to the height values. No effect on Windows. |
+| `ItemWidthRequest` | `double` | `-1` | Item width for `Orientation=Horizontal`: absolute column width on iOS/Mac; on Android it is the fixed width in `Fixed` mode. `-1` falls back to the height values. No effect on Windows. |
 | `Span` | `int` | `1` | Columns in vertical layout; rows in horizontal layout. |
 | `Orientation` | `VirtualizedOrientation` | `Vertical` | `Vertical` or `Horizontal`. |
 | `ItemSizingStrategy` | `ItemSizingStrategy` | `Fixed` | `Fixed` (predictable height), `Dynamic` (height measured per item from content), or `MeasureFirst` (measure the first item and apply its height to all). |
@@ -81,7 +81,7 @@ xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedColle
 | `RemainingItemsThresholdReached` | Infinite scroll event. |
 | `Scrolled` | Scroll event; args expose `HorizontalOffset` and `VerticalOffset`. |
 | `ScrollTo(int index, bool animated = true)` | Scrolls to an index. |
-| `ScrollToStart(bool animated = true)` | Scrolls back to the first item. |
+| `ScrollToStart(bool animated = true)` | Scrolls back to the first item. On Windows it prefers the native scroller (re-locating it if the list was created hidden) and only the explicit call falls back to the internal `CollectionView`'s `ScrollTo`. |
 
 ## Template selector
 
@@ -101,9 +101,16 @@ the template re-measures the first item.
 ## Collection changes
 
 - On Android and iOS/Mac, `INotifyCollectionChanged` notifications are queued
-  under a lock and coalesced through the view's dispatcher (on iOS/Mac, one batch
-  update per dispatch), so batches raised from a background thread are applied on
-  the UI thread.
+  under a lock and coalesced through the view's dispatcher, so changes raised
+  from a background thread are applied on the UI thread. Each notification is
+  applied as its own native update (on iOS/Mac, one batch update per
+  notification); large or mixed batches fall back to a full, transparent reload.
+- `ObservableRangeCollection<T>` (shipped in this package) raises a single
+  notification per batch: `AddRange` raises one `Add` carrying the inserted
+  items and their final starting index, and `ReplaceAll` raises a single
+  `Reset` — or a single `Add` when the collection was empty, so first loads
+  apply incrementally instead of reloading. One notification per batch means
+  one native update instead of one per item.
 - When the list goes from empty to non-empty (first load, or a refresh after an
   empty result), the view scrolls back to the first item on every platform.
 
@@ -129,11 +136,11 @@ public enum ItemSizingStrategy
 `Fixed` is the fastest path. Use it when all items have a predictable height.
 `ItemHeightRequest` is the height applied to every item on Android/iOS/Mac.
 
-> **Platform note — `ItemHeight` in `Fixed` mode:** there is a behavior difference.
-> On **iOS/Mac**, `ItemHeight > 0` takes precedence and overrides `ItemHeightRequest`.
-> On **Android**, `ItemHeight` is **ignored** in `Fixed` mode — `ItemHeightRequest` always wins
-> (`ItemHeight` only takes effect on Android in `Dynamic`/`MeasureFirst`, where `> 0` forces a fixed height).
-> For consistent results in `Fixed`, leave `ItemHeight = -1` (default) and set only `ItemHeightRequest`.
+> **Platform note — `ItemHeight`:** on Android and iOS/Mac, `ItemHeight > 0` takes
+> precedence over the sizing strategy **and** over `ItemHeightRequest` — in any mode,
+> including `Fixed` (in `Dynamic`/`MeasureFirst` it forces a fixed height). Set only one
+> of the two: `ItemHeightRequest` for the strategy-driven height, or `ItemHeight` to
+> force an explicit one.
 
 `Dynamic` measures each item from its content. Use it for posts, expandable cards, or
 text with many variations. On Android, the full dynamic path is only used

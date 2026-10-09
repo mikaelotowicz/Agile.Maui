@@ -16,7 +16,23 @@ dotnet build -f net11.0-maccatalyst
 dotnet build -f net10.0-windows10.0.19041.0
 ```
 
-Não há testes automatizados neste projeto.
+## Testes
+
+Cada componente tem um projeto de testes de host (xunit, TFM neutro `net10.0`, sem plataforma):
+`ChipGroup.Tests`, `GalleryView.Tests`, `PDFViewer.Tests`, `PdfGen.Tests`, `SignaturePad.Tests`
+e `VirtualizedCollectionView.Tests`.
+
+```powershell
+dotnet test ChipGroup.Tests    # idem para os demais <Projeto>.Tests
+```
+
+Convenções:
+- Namespaces `Agile.Maui.XTests` (ex.: `Agile.Maui.ChipGroupTests`) — evita colisão com o tipo do controle.
+- `TestDispatcher` instalado via `[ModuleInitializer]`: executa inline por padrão; `EnqueueMode` +
+  `ProcessQueue()` testam coalescing e threading de forma determinística (sem sleeps).
+- As libs têm `InternalsVisibleTo` para o respectivo projeto de testes.
+- `PdfGen.Tests` usa o `PdfMiniParser` para validar a estrutura dos PDFs gerados.
+- **Todo fix de bug deve ganhar um teste de regressão no projeto de testes do componente.**
 
 ## Architecture
 
@@ -32,20 +48,18 @@ builder.UseAgileGalleryView();
 
 ### Handler Pattern
 
-- **`Controls/ImageView.cs`** — `View` cross-platform com 6 bindable properties (`Source`, `IsUrl`, `Placeholder`, `MaxZoom`, `EnableFullscreen`, `AspectMode`) e eventos `ImageLoaded`/`ImageFailed`. Enum `ZoomImageAspect`: `CenterCrop` e `AspectFit`.
-- **`Platforms/Android/ImageViewHandler.cs`** — Mapeia para `Android.Widget.ImageView` + Glide (cache disco+memória).
-- **`Platforms/iOS/ImageViewHandler.cs`** — Mapeia para `UIImageView` + `NSUrlSession` para URLs.
-- **`Platforms/Windows/ImageViewHandler.cs`** — Mapeia para `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage`. Sem fullscreen zoom.
-- **`Platforms/MacCatalyst/`** — Compilado a partir dos arquivos de `Platforms/iOS/` via ItemGroup no csproj.
+- **`GalleryView/ImageView.cs`** — `View` cross-platform com 6 bindable properties (`Source`, `IsUrl`, `Placeholder`, `MaxZoom`, `EnableFullscreen`, `AspectMode`) e eventos `ImageLoaded`/`ImageFailed`. Enum `ZoomImageAspect`: `CenterCrop` e `AspectFit`.
+- **`GalleryView/Platforms/Android/ImageView/ImageViewHandler.cs`** — Mapeia para `Android.Widget.ImageView` + Glide (cache disco+memória).
+- **`GalleryView/Platforms/iOS/ImageView/ImageViewHandler.cs`** — Mapeia para `UIImageView` + `NSUrlSession` para URLs.
+- **`GalleryView/Platforms/Windows/ImageView/ImageViewHandler.cs`** — Mapeia para `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage`. Sem fullscreen zoom.
+- **`GalleryView/Platforms/MacCatalyst/ImageView/`** — Cópia dos arquivos de iOS (ver seção abaixo).
 
-> Atualizacao: no pacote modular atual os arquivos ficam em `GalleryView/`.
 > `ImageView` possui `DecodeMaxPx` e `IsLoading` read-only. `IsUrl` existe
-> apenas por compatibilidade; HTTP/HTTPS e detectado automaticamente. Os
-> handlers dedicados ficam em `GalleryView/Platforms/{Android,iOS,MacCatalyst,Windows}/ImageView/`.
+> apenas por compatibilidade; HTTP/HTTPS e detectado automaticamente.
 
-### MacCatalyst compartilha iOS
+### MacCatalyst duplica iOS
 
-O `Controls.csproj` inclui `Platforms/iOS/**/*.cs` na compilação `net11.0-maccatalyst`. O `MauiAppBuilderExtensions` usa `#if IOS || MACCATALYST` para registrar o mesmo handler.
+O SDK do MAUI **não** compila `Platforms/iOS/` para maccatalyst: cada componente mantém uma **cópia** dos arquivos em `Platforms/MacCatalyst/` (mesmo namespace `Agile.Maui.Platforms.iOS`). **Todo fix feito em `Platforms/iOS/` deve ser replicado em `Platforms/MacCatalyst/`.** Os `*AppBuilderExtensions` usam `#if IOS || MACCATALYST` para registrar o mesmo handler.
 
 ### Zoom fullscreen Android — Matrix nativo
 
@@ -97,6 +111,12 @@ Internamente: `VirtualView?.RaiseImageLoaded()` / `VirtualView?.RaiseImageFailed
 - `PrefetchingEnabled = false` — desabilita criação antecipada de células fora da tela.
 - `CreateEstimated` deve usar `ItemHeightRequest` (default 350pt), não um valor pequeno. Com 44pt, o UIKit cria ~20 células visíveis estimadas × pool 2× = 40 MAUI views × ~12 MB = 480 MB.
 - MacCatalyst tem cópia idêntica do handler iOS em `Platforms/MacCatalyst/` (mesmo namespace `Agile.Maui.Platforms.iOS`).
+
+### VirtualizedCollectionView — Android (teardown)
+
+**Ordem crítica no `DisconnectHandler`:** chamar `Rv.SetAdapter(null)` / `Rv.SetLayoutManager(null)` **ANTES** de `_adapter?.Dispose()`. `SetAdapter(null)` recicla as views e ainda invoca callbacks no adapter/listener; fazer o `Dispose` antes mata o peer gerenciado e o runtime tenta reativá-lo a partir do handle nativo → `NotSupportedException ("Unable to activate instance ... from native handle")`. O `RecyclerListener` também é removido (`RemoveRecyclerListener`) antes do dispose.
+
+**`VrRecyclerListener` precisa do construtor de ativação** `(IntPtr handle, JniHandleOwnership transfer)` e de `Context?` anulável: se o peer gerenciado for coletado enquanto o Java ainda referencia o listener, o runtime o reativa por esse construtor — sem ele, `NotSupportedException`. `OnViewRecycled` faz guarda de nulo antes de `Glide.With(_context).Clear(...)`.
 
 ### Patterns importantes
 
