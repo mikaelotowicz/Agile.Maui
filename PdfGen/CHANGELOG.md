@@ -20,6 +20,11 @@ O formato segue Keep a Changelog e o versionamento e semantico.
 - Texto com fonte embutida agora fica centrado na linha (caixa ascensao+descida
   do `hhea`); antes a baseline usava so a ascensao, e fontes como Open Sans
   desciam na linha e invadiam o elemento de baixo. Base-14 nao muda.
+- O renderer Android cria o `Typeface` de cada fonte embutida uma única vez por
+  processo (chave = conteúdo da fonte), em vez de um por documento. O Android
+  nunca libera um `Typeface` de `CreateFromFile`: cada `GeneratePdfNative()` com
+  fonte embutida vazava ~60 KB de heap nativo e mantinha mapeado o `.ttf`
+  temporário já apagado.
 
 ### Alterado
 - Streams de conteudo de pagina agora sao comprimidos com `FlateDecode`.

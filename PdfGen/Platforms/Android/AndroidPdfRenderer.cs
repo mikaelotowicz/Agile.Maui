@@ -11,18 +11,21 @@ namespace Agile.Maui.PdfGen.Platforms.Android;
 /// <summary>
 /// Renderer nativo do Android baseado em <see cref="PdfDocument"/> + <see cref="Canvas"/>.
 /// O Canvas usa origem no topo-esquerda com Y para baixo — igual ao motor de layout — sem flip.
-/// Fontes embutidas (<see cref="EmbeddedFont"/>) são usadas via Typeface; bitmaps e typefaces
-/// são cacheados por documento e liberados no EndDocument.
+/// Fontes embutidas (<see cref="EmbeddedFont"/>) são usadas via Typeface, cacheado por processo;
+/// bitmaps são cacheados por documento e liberados no EndDocument.
 /// </summary>
 public sealed class AndroidPdfRenderer : IPdfRenderer
 {
+    // Typeface por processo (chave = conteúdo da fonte), não por documento: o Android nunca
+    // libera um Typeface criado por CreateFromFile, nem com GC Java — um por documento vazava
+    // ~60 KB de heap nativo e mantinha mapeado o .ttf temporário já apagado.
+    static readonly EmbeddedFontCache<Typeface> EmbeddedTypefaces = new();
+
     PdfDocument? _doc;
     PdfDocument.Page? _page;
 
-    // Caches por documento: imagem repetida em N páginas decodifica uma vez só.
+    // Cache por documento: imagem repetida em N páginas decodifica uma vez só.
     readonly Dictionary<Rendering.PdfImage, Bitmap> _bitmaps = new();
-    readonly Dictionary<EmbeddedFont, Typeface?> _typefaces = new();
-    readonly List<string> _tempFontFiles = new();
 
     public void BeginDocument() => _doc = new PdfDocument();
 
@@ -62,17 +65,6 @@ public sealed class AndroidPdfRenderer : IPdfRenderer
             bitmap.Dispose();
         }
         _bitmaps.Clear();
-
-        foreach (Typeface? typeface in _typefaces.Values)
-            typeface?.Dispose();
-        _typefaces.Clear();
-
-        foreach (string path in _tempFontFiles)
-        {
-            try { System.IO.File.Delete(path); }
-            catch { /* temp no cache do app: o sistema limpa se a exclusão falhar */ }
-        }
-        _tempFontFiles.Clear();
     }
 
     /// <summary>Bitmap da imagem, decodificado uma única vez por documento.</summary>
@@ -88,32 +80,36 @@ public sealed class AndroidPdfRenderer : IPdfRenderer
     }
 
     /// <summary>
-    /// Typeface da fonte embutida, criado uma vez por documento. No minSdk 24 não há API de
-    /// Typeface a partir de bytes em memória: grava no temp do app (cache) e usa CreateFromFile;
-    /// os arquivos são apagados no EndDocument. Falha fica cacheada como null e o texto recai
-    /// na fonte do sistema.
+    /// Typeface da fonte embutida, criado uma vez por conteúdo de fonte no processo. Falha fica
+    /// cacheada como null e o texto recai na fonte do sistema. O Typeface é compartilhado entre
+    /// documentos: nunca descartar o peer.
     /// </summary>
-    internal Typeface? GetEmbeddedTypeface(EmbeddedFont font)
-    {
-        if (_typefaces.TryGetValue(font, out Typeface? cached))
-            return cached;
+    internal Typeface? GetEmbeddedTypeface(EmbeddedFont font) =>
+        EmbeddedTypefaces.GetOrCreate(font, CreateTypeface);
 
-        Typeface? typeface = null;
+    /// <summary>
+    /// No minSdk 24 não há API de Typeface a partir de bytes em memória: grava no temp do app
+    /// (cache) e usa CreateFromFile. O arquivo é mapeado na criação e o mapeamento sobrevive à
+    /// exclusão, então o temp é apagado logo em seguida.
+    /// </summary>
+    static Typeface? CreateTypeface(EmbeddedFont font)
+    {
+        string path = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), $"agile-pdfgen-{System.Guid.NewGuid():N}.ttf");
         try
         {
-            string path = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(), $"agile-pdfgen-{System.Guid.NewGuid():N}.ttf");
             System.IO.File.WriteAllBytes(path, font.FontData);
-            _tempFontFiles.Add(path);
-            typeface = Typeface.CreateFromFile(path);
+            return Typeface.CreateFromFile(path);
         }
         catch
         {
-            typeface = null;
+            return null;
         }
-
-        _typefaces[font] = typeface;
-        return typeface;
+        finally
+        {
+            try { System.IO.File.Delete(path); }
+            catch { /* temp no cache do app: o sistema limpa se a exclusão falhar */ }
+        }
     }
 }
 
