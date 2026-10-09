@@ -83,6 +83,7 @@ public sealed class PdfViewerHandler
     private CancellationTokenSource?      _loadCts;
     private CancellationTokenSource?      _prefetchCts;
     private CancellationTokenSource?      _zoomSettleCts;   // debounce: render só quando o zoom assenta
+    private CancellationTokenSource?      _resizeSettleCts; // debounce: re-layout só quando o resize assenta
     // Serializa os renders: o PDFium (PDFtoImage) não é thread-safe; sem o gate, rasterizações
     // concorrentes corromperiam o estado nativo. Também limita o pico de CPU/memória.
     private readonly SemaphoreSlim        _renderGate = new(1, 1);
@@ -235,6 +236,7 @@ public sealed class PdfViewerHandler
         _loadCts?.Cancel();    _loadCts?.Dispose();    _loadCts    = null;
         _prefetchCts?.Cancel();_prefetchCts?.Dispose();_prefetchCts = null;
         _zoomSettleCts?.Cancel();_zoomSettleCts?.Dispose();_zoomSettleCts = null;
+        _resizeSettleCts?.Cancel();_resizeSettleCts?.Dispose();_resizeSettleCts = null;
 
         pv.ScrollViewer.ViewChanged          -= OnViewChanged;
         pv.SizeChanged                        -= OnSizeChanged;
@@ -599,19 +601,35 @@ public sealed class PdfViewerHandler
         if (vph < 1) vph = (_horizontal ? PlatformView.ActualWidth : PlatformView.ActualHeight) / zoom;
         double bot = top + vph;
 
-        for (int i = 0; i < _pageOffsets.Length; i++)
-        {
-            double pTop = _pageOffsets[i];
-            double pBot = pTop + _pageMain[i];
-            if (pBot < top || pTop > bot) continue;
-            if (firstVis < 0) firstVis = i;
-            lastVis = i;
-        }
-        if (firstVis < 0) return false;
+        // Busca binária (offsets crescentes): lastVis = última página cujo INÍCIO não passa do
+        // fundo; firstVis = primeira cujo FIM alcança o topo (a candidata pode terminar antes do
+        // topo quando ele cai no ESPAÇAMENTO entre páginas → avança uma). O(log n) por frame em
+        // vez de varrer todas as páginas.
+        int last = PageIndexAtOffset(bot);
+        if (last < 0) return false;                       // viewport antes da 1ª página
+        int first = Math.Max(0, PageIndexAtOffset(top));
+        if (_pageOffsets[first] + _pageMain[first] < top) first++;
+        if (first > last) return false;                   // viewport inteira num gap/fora do conteúdo
 
+        firstVis = first;
+        lastVis  = last;
         activeStart = Math.Max(0,         firstVis - above);
         activeEnd   = Math.Min(total - 1, lastVis  + below);
         return true;
+    }
+
+    // Maior índice i com _pageOffsets[i] <= offset (busca binária; -1 se offset antes da 1ª página).
+    private int PageIndexAtOffset(double offset)
+    {
+        var offs = _pageOffsets;
+        int lo = 0, hi = offs.Length - 1, ans = -1;
+        while (lo <= hi)
+        {
+            int mid = (lo + hi) >> 1;
+            if (offs[mid] <= offset) { ans = mid; lo = mid + 1; }
+            else hi = mid - 1;
+        }
+        return ans;
     }
 
     // Cria os placeholders (folhas com PageBackgroundColor) de toda a janela ativa e remove
@@ -1078,12 +1096,7 @@ public sealed class PdfViewerHandler
         double viewportMain = (_horizontal ? svp.ViewportWidth : svp.ViewportHeight) / pgZoom;
         if (viewportMain < 1) viewportMain = (_horizontal ? PlatformView.ActualWidth : PlatformView.ActualHeight) / pgZoom;
         double centerBase = (_horizontal ? svp.HorizontalOffset : svp.VerticalOffset) / pgZoom + viewportMain / 2;
-        int page = 0;
-        for (int i = 0; i < _pageOffsets.Length; i++)
-        {
-            if (_pageOffsets[i] <= centerBase) page = i;
-            else break;
-        }
+        int page = Math.Max(0, PageIndexAtOffset(centerBase));   // O(log n) por frame de scroll
         // Dedup: o ViewChanged intermediário dispara a cada frame com a MESMA página; sem o
         // filtro, PageChanged (evento + Command) era invocado ~60×/s com o mesmo valor.
         if (page != _lastReportedPage)
@@ -1148,11 +1161,30 @@ public sealed class PdfViewerHandler
         if (_pdfDoc is null) return;
         // Recalcula layout quando o container é redimensionado. _pageWidth muda → a resolução
         // das bitmaps cacheadas fica obsoleta; esvazia o cache e re-renderiza na nova escala.
-        InitVirtualCanvas(_pdfDoc.PageCount);   // limpa as imagens (canvas.Children.Clear)
-        _cache?.EvictAll();
-        float z = PlatformView is not null ? PlatformView.ScrollViewer.ZoomFactor : 1f;
-        _renderedZoom = z < 0.0001f ? 1f : z;
-        RenderVisible();
+        // DEBOUNCE (~150 ms, como o do zoom): o resize interativo dispara o evento a cada tick
+        // e cada um refazia InitVirtualCanvas + EvictAll + render (tempestade de re-render);
+        // só o ÚLTIMO tamanho conta.
+        _resizeSettleCts?.Cancel(); _resizeSettleCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _resizeSettleCts = cts;
+        _ = Task.Delay(150, cts.Token).ContinueWith(t =>
+        {
+            if (t.IsCanceled || cts.IsCancellationRequested) return;
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                // O handler pode ter sido desconectado durante o settle — a PlatformView TIPADA
+                // lança "PlatformView cannot be null here"; checa pela interface.
+                if (cts.IsCancellationRequested
+                    || ((Microsoft.Maui.IElementHandler)this).PlatformView is null
+                    || _pdfDoc is null) return;
+
+                InitVirtualCanvas(_pdfDoc.PageCount);   // limpa as imagens (canvas.Children.Clear)
+                _cache?.EvictAll();
+                float z = PlatformView.ScrollViewer.ZoomFactor;
+                _renderedZoom = z < 0.0001f ? 1f : z;
+                RenderVisible();
+            });
+        }, TaskScheduler.Default);
     }
 
     // Ctrl+Scroll: zoom programático via mouse wheel
@@ -1382,12 +1414,15 @@ public sealed class PdfViewerHandler
         if (zoom > 1.05f) return false;
 
         double left = sv.HorizontalOffset / zoom;
-        int nearest = 0; double best = double.MaxValue;
-        for (int i = 0; i < _pageOffsets.Length; i++)
-        {
-            double d = Math.Abs(_pageOffsets[i] - left);
-            if (d < best) { best = d; nearest = i; }
-        }
+        // Offset mais próximo via busca binária: o candidato é o último slot que começa antes
+        // de 'left' ou o seguinte (empate mantém o anterior, como a varredura antiga).
+        int k = PageIndexAtOffset(left);
+        int nearest;
+        if (k < 0) nearest = 0;
+        else if (k + 1 < _pageOffsets.Length
+                 && Math.Abs(_pageOffsets[k + 1] - left) < Math.Abs(_pageOffsets[k] - left))
+            nearest = k + 1;
+        else nearest = k;
         double target = _pageOffsets[nearest] * zoom;
         if (Math.Abs(target - sv.HorizontalOffset) < 1.0) return false;   // já alinhado
         sv.ChangeView(target, null, null, disableAnimation: false);

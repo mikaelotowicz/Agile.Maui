@@ -89,6 +89,11 @@ public sealed class PdfViewerHandler
     private readonly object            _queueLock  = new();
     private readonly HashSet<int>      _queued     = new();
     private readonly SemaphoreSlim     _workerGate = new(1, 1);
+    // Dedup de IN-FLIGHT (worker único → no máximo 1 página em raster): re-solicitar a página em
+    // raster não re-enfileira na hora — marca _renderingAgain e o worker re-enfileira AO CONCLUIR
+    // (invalidações legítimas, ex. ReRenderAll, não se perdem; rebinds redundantes não rasterizam 2×).
+    private int                        _renderingPage  = -1;
+    private bool                       _renderingAgain;
     private volatile int               _currentCenter;
     private volatile int               _scrollDir = 1;  // +1 avançando páginas, -1 retrocedendo (prioriza a fila)
     private bool                       _syncingPage;
@@ -300,7 +305,7 @@ public sealed class PdfViewerHandler
         _cache?.EvictAll();
         _cache = null;
 
-        lock (_queueLock) _queued.Clear();
+        lock (_queueLock) { _queued.Clear(); _renderingAgain = false; }   // nada do doc/sessão anterior re-enfileira
 
         _shutdownCts.Dispose();
         base.DisconnectHandler(pv);
@@ -316,7 +321,7 @@ public sealed class PdfViewerHandler
         _shutdownCts.Cancel();
         _shutdownCts.Dispose();
         _shutdownCts = new CancellationTokenSource();
-        lock (_queueLock) _queued.Clear();
+        lock (_queueLock) { _queued.Clear(); _renderingAgain = false; }   // nada do doc/sessão anterior re-enfileira
 
         _loadCts?.Cancel();
         _loadCts?.Dispose();
@@ -551,6 +556,7 @@ public sealed class PdfViewerHandler
 
         lock (_queueLock)
         {
+            if (idx == _renderingPage) { _renderingAgain = true; return; }   // em raster → re-enfileira ao concluir
             if (!_queued.Add(idx)) return;   // já enfileirado → dedup
         }
         TryStartRenderWorker();
@@ -581,42 +587,57 @@ public sealed class PdfViewerHandler
                         if (token.IsCancellationRequested || _queued.Count == 0) return;
                         idx = PickNearestQueued();
                         _queued.Remove(idx);
+                        _renderingPage  = idx;     // in-flight: re-solicitações marcam _renderingAgain
+                        _renderingAgain = false;
                     }
 
-                    var engine = _doc;
-                    var cache  = _cache;
-                    if (engine is null || cache is null || token.IsCancellationRequested) return;
-
-                    // Chegou ao cache por outro caminho → só aplica.
-                    if (cache.ContainsPage(idx)) { PostApply(pv, idx, token); continue; }
-
-                    // Saiu da janela ativa enquanto esperava na fila → descarta (o re-bind
-                    // re-solicita se voltar). Evita drenar o motor com renders obsoletos —
-                    // é o que causava o "branco por segundos" ao rolar rápido.
-                    if (IsOutsideWindow(idx)) continue;
-
-                    int widthPx = RenderWidthPx();
-                    var bg      = (VirtualView?.PageBackgroundColor ?? Colors.White).ToPlatform();
                     try
                     {
-                        var bmp = await engine.RenderAndroidBitmapAsync(idx, widthPx, bg, token);
-                        if (bmp is null || token.IsCancellationRequested) continue;
-                        // Não escrever num cache órfão: se ApplyCache substituiu _cache, o bitmap
-                        // nunca seria exibido → leak. ReferenceEquals cobre essa troca.
-                        if (!ReferenceEquals(cache, _cache)) continue;
-                        cache.Put(idx, bmp);
-                        PostApply(pv, idx, token);
+                        var engine = _doc;
+                        var cache  = _cache;
+                        if (engine is null || cache is null || token.IsCancellationRequested) return;
+
+                        // Chegou ao cache por outro caminho → só aplica.
+                        if (cache.ContainsPage(idx)) { PostApply(pv, idx, token); continue; }
+
+                        // Saiu da janela ativa enquanto esperava na fila → descarta (o re-bind
+                        // re-solicita se voltar). Evita drenar o motor com renders obsoletos —
+                        // é o que causava o "branco por segundos" ao rolar rápido.
+                        if (IsOutsideWindow(idx)) continue;
+
+                        int widthPx = RenderWidthPx();
+                        var bg      = (VirtualView?.PageBackgroundColor ?? Colors.White).ToPlatform();
+                        try
+                        {
+                            var bmp = await engine.RenderAndroidBitmapAsync(idx, widthPx, bg, token);
+                            if (bmp is null || token.IsCancellationRequested) continue;
+                            // Não escrever num cache órfão: se ApplyCache substituiu _cache, o bitmap
+                            // nunca seria exibido → leak. ReferenceEquals cobre essa troca.
+                            if (!ReferenceEquals(cache, _cache)) continue;
+                            cache.Put(idx, bmp);
+                            PostApply(pv, idx, token);
+                        }
+                        catch (OperationCanceledException) { }
+                        catch (Java.Lang.OutOfMemoryError)
+                        {
+                            PdfViewerLog.Write(Tag, $"Render pág {idx}: OOM");
+                            cache.ReduceByHalf();
+                            GC.Collect();
+                        }
+                        catch (Exception ex)
+                        {
+                            PdfViewerLog.Write(Tag, $"Render pág {idx}: ERRO [{ex.GetType().Name}] {ex.Message}");
+                        }
                     }
-                    catch (OperationCanceledException) { }
-                    catch (Java.Lang.OutOfMemoryError)
+                    finally
                     {
-                        PdfViewerLog.Write(Tag, $"Render pág {idx}: OOM");
-                        cache.ReduceByHalf();
-                        GC.Collect();
-                    }
-                    catch (Exception ex)
-                    {
-                        PdfViewerLog.Write(Tag, $"Render pág {idx}: ERRO [{ex.GetType().Name}] {ex.Message}");
+                        lock (_queueLock)
+                        {
+                            _renderingPage = -1;
+                            // Invalidação legítima chegou DURANTE o raster (ex.: ReRenderAll,
+                            // troca de cor/escala) → re-enfileira para rasterizar de novo.
+                            if (_renderingAgain) { _renderingAgain = false; _queued.Add(idx); }
+                        }
                     }
                 }
             }

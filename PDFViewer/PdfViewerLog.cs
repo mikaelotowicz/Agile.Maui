@@ -9,8 +9,6 @@ namespace Agile.Maui;
 /// </summary>
 internal static class PdfViewerLog
 {
-    private static readonly object _gate = new();
-
     /// <summary>Disparado no thread que chamou Write — use MainThread se for atualizar UI.</summary>
     public static event Action<string>? Received;
 
@@ -19,6 +17,8 @@ internal static class PdfViewerLog
     {
         var line = $"{DateTime.Now:HH:mm:ss.fff} [{platform}] {message}";
         Debug.WriteLine(line);
-        lock (_gate) Received?.Invoke(line);
+        // Sem gate: delegate multicast é imutável e a leitura é atômica; invocar handlers
+        // segurando um lock serializava (e podia travar) threads de render que logam juntas.
+        Received?.Invoke(line);
     }
 }

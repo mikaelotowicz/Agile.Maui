@@ -91,20 +91,28 @@ internal sealed class PdfiumDoc : IDisposable
     {
         if (ct.IsCancellationRequested) return null;
 
+        int    w, h;
+        byte[] pixels;
+
+        // Região crítica MÍNIMA: só as chamadas FPDF_* exigem o lock global. O PDFium rasteriza
+        // direto no buffer MANAGED pinado — após Destroy/Free os pixels continuam válidos no
+        // array —, então o swap B↔R O(n) e a criação/cópia do Bitmap Android rodam FORA do lock.
+        // Antes, o pós-processamento inteiro segurava o lock e atrasava seleção/busca/links que
+        // disputam o PDFium na UI thread.
         lock (Lib)
         {
             if (_doc is null || idx < 0 || idx >= _wPt.Length || ct.IsCancellationRequested) return null;
 
-            int w = Math.Max(1, widthPx);
-            int h = Math.Max(1, (int)Math.Round(w * (_hPt[idx] / _wPt[idx])));
+            w = Math.Max(1, widthPx);
+            h = Math.Max(1, (int)Math.Round(w * (_hPt[idx] / _wPt[idx])));
 
             var page = fpdfview.FPDF_LoadPage(_doc, idx);
             if (page is null) return null;
             try
             {
-                int stride   = w * 4;
-                var pixels   = new byte[stride * h];
-                var pin      = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+                int stride = w * 4;
+                pixels     = new byte[stride * h];
+                var pin    = GCHandle.Alloc(pixels, GCHandleType.Pinned);
                 try
                 {
                     var bmp = fpdfview.FPDFBitmapCreateEx(w, h, FPDFBitmap_BGRA, pin.AddrOfPinnedObject(), stride);
@@ -119,30 +127,30 @@ internal sealed class PdfiumDoc : IDisposable
                     finally { fpdfview.FPDFBitmapDestroy(bmp); }
                 }
                 finally { pin.Free(); }
-
-                if (ct.IsCancellationRequested) return null;
-
-                // PDFium produz ordem de byte B,G,R,A; o Bitmap ARGB_8888 do Android, via
-                // CopyPixelsFromBuffer, interpreta o buffer como R,G,B,A. Troca B↔R in-place.
-                for (int p = 0; p < pixels.Length; p += 4)
-                    (pixels[p], pixels[p + 2]) = (pixels[p + 2], pixels[p]);
-
-                var abmp = Bitmap.CreateBitmap(w, h, Bitmap.Config.Argb8888!);
-                if (abmp is null) return null;
-                try
-                {
-                    using var bb = Java.Nio.ByteBuffer.Wrap(pixels)!;
-                    abmp.CopyPixelsFromBuffer(bb);
-                }
-                catch
-                {
-                    abmp.Recycle();   // bmp recém-alocado, nunca exibido/cacheado → seguro reciclar
-                    throw;
-                }
-                return abmp;
             }
             finally { fpdfview.FPDF_ClosePage(page); }
         }
+
+        if (ct.IsCancellationRequested) return null;
+
+        // PDFium produz ordem de byte B,G,R,A; o Bitmap ARGB_8888 do Android, via
+        // CopyPixelsFromBuffer, interpreta o buffer como R,G,B,A. Troca B↔R in-place.
+        for (int p = 0; p < pixels.Length; p += 4)
+            (pixels[p], pixels[p + 2]) = (pixels[p + 2], pixels[p]);
+
+        var abmp = Bitmap.CreateBitmap(w, h, Bitmap.Config.Argb8888!);
+        if (abmp is null) return null;
+        try
+        {
+            using var bb = Java.Nio.ByteBuffer.Wrap(pixels)!;
+            abmp.CopyPixelsFromBuffer(bb);
+        }
+        catch
+        {
+            abmp.Recycle();   // bmp recém-alocado, nunca exibido/cacheado → seguro reciclar
+            throw;
+        }
+        return abmp;
     }
 
     // ── Camada de texto (seleção/busca) ──────────────────────────────────────────
