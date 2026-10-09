@@ -16,7 +16,7 @@
 #   - A primeira publicação de cada ID (ou a reserva do prefixo Agile.Maui.*) deve
 #     ser feita pela conta dona dos pacotes.
 #
-# O push usa --skip-duplicates: versões já publicadas são ignoradas, então só os
+# O push usa --skip-duplicate: versões já publicadas são ignoradas, então só os
 # pacotes cuja versão (definida em cada .csproj) mudou sobem de fato. Os símbolos
 # (.snupkg) sobem automaticamente junto de cada .nupkg.
 name: Publicar no NuGet

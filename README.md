@@ -235,7 +235,7 @@ Besides the platform assemblies, each package contains a platform-neutral `net10
 assembly (plus `net11.0` in the preview channel) with only the cross-platform code,
 without handlers; it is what the host test projects run against.
 
-The publish workflow pushes with `--skip-duplicates`, so a package only reaches
+The publish workflow pushes with `--skip-duplicate`, so a package only reaches
 nuget.org when its version in the `.csproj` changes.
 
 ## Additional documentation
