@@ -276,8 +276,9 @@ public sealed class FullscreenZoomDialogFragment : DialogFragment
     {
         var metrics = RequireContext().Resources?.DisplayMetrics;
         var maxScreenPx = Math.Max(metrics?.WidthPixels ?? 0, metrics?.HeightPixels ?? 0);
+        // Fator 2 (não 3) reduz o pico de memória por página; 4096 segue como teto absoluto.
         var decodePx = Math.Clamp(
-            (int)(maxScreenPx * Math.Max(1f, Math.Min(_maxZoom, 3f))),
+            (int)(maxScreenPx * Math.Max(1f, Math.Min(_maxZoom, 2f))),
             720,
             4096);
 

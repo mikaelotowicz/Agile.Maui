@@ -136,13 +136,12 @@ public sealed class ImageViewHandler : ViewHandler<ImageView, UIImageView>
 
     private async Task LoadFromUrlAsync(string url, CancellationToken token)
     {
-        // Lidos na main thread antes do ConfigureAwait — BindableObject e UIScreen não são thread-safe
-        var targetW     = VirtualView.WidthRequest;
-        var targetH     = VirtualView.HeightRequest;
+        // Lidos na main thread antes do ConfigureAwait — UIKit e BindableObject não são thread-safe.
+        // Bounds reais da view (como no caminho local); antes do layout caem no DecodeMaxPx.
         var screenScale = UIScreen.MainScreen.Scale;
         var maxPixelSize = AppleImageCache.ResolveMaxPixelSize(
-            targetW,
-            targetH,
+            PlatformView.Bounds.Width,
+            PlatformView.Bounds.Height,
             screenScale,
             VirtualView.DecodeMaxPx);
         var cacheKey = AppleImageCache.Key(url, maxPixelSize);

@@ -261,7 +261,8 @@ public sealed class FullscreenZoomViewController
     {
         var bounds = View?.Bounds ?? UIScreen.MainScreen.Bounds;
         var maxPoints = Math.Max(bounds.Width, bounds.Height);
-        var scaled = (int)Math.Ceiling(maxPoints * UIScreen.MainScreen.Scale * Math.Max(1f, Math.Min(_maxZoom, 3f)));
+        // Fator 2 (não 3) reduz o pico de memória; 4096 segue como teto absoluto.
+        var scaled = (int)Math.Ceiling(maxPoints * UIScreen.MainScreen.Scale * Math.Max(1f, Math.Min(_maxZoom, 2f)));
         return Math.Clamp(scaled, 720, 4096);
     }
 

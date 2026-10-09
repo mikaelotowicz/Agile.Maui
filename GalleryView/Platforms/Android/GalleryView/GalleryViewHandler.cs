@@ -50,6 +50,9 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
         platformView.OnLayoutChanged = () =>
         {
             UpdateDots();
+            // Rotação/resize: o adapter passa a decodificar no tamanho novo sem ser recriado.
+            if (PlatformView?.Pager.Adapter is ThumbPagerAdapter adapter)
+                adapter.UpdateCellSize(PlatformView.Pager.Width, PlatformView.Pager.Height);
             if (_needsAdapterReload)
             {
                 _needsAdapterReload = false;
@@ -409,18 +412,18 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
 {
     private readonly string[]                _images;
     private readonly bool                    _isUrl;
-    private readonly string?                 _placeholder;
     private readonly ZoomImageAspect         _aspectMode;
     private readonly ImageAlignment          _verticalAlignment;
     private readonly int                     _thumbMaxPx;
-    private readonly int                     _cellWidth;
-    private readonly int                     _cellHeight;
+    private readonly int                     _placeholderId;
     private readonly Action<int>             _onPageClick;
     private readonly Action                  _onImageLoaded;
     private readonly Action                  _onImageFailed;
     private readonly ImgGlideRequestListener _glideListener;
-    // Pré-construído no construtor — todos os inputs são imutáveis após a criação.
-    private readonly RequestOptions          _requestOptions;
+    // Tamanho da célula e options acompanham o layout real (rotação/resize) via UpdateCellSize.
+    private int                              _cellWidth;
+    private int                              _cellHeight;
+    private RequestOptions                   _requestOptions;
 
     public ThumbPagerAdapter(
         string[]                             images,
@@ -438,17 +441,28 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
     {
         _images         = images;
         _isUrl          = isUrl;
-        _placeholder    = placeholder;
         _aspectMode     = aspectMode;
         _verticalAlignment = verticalAlignment;
         _thumbMaxPx     = thumbMaxPx > 0 ? thumbMaxPx : 720;
+        _placeholderId  = AndroidImageLoader.ResolveDrawable(context, placeholder);
         _cellWidth      = cellWidth;
         _cellHeight     = cellHeight;
         _onPageClick    = onPageClick;
         _onImageLoaded  = onImageLoaded;
         _onImageFailed  = onImageFailed;
         _glideListener  = new ImgGlideRequestListener(onImageLoaded, onImageFailed);
-        _requestOptions = BuildOptions(context);
+        _requestOptions = BuildOptions();
+    }
+
+    // Rotação/resize: células rebindadas a partir daqui decodificam no tamanho novo; as já
+    // bindadas ficam como estão até o próximo rebind (sem reload global).
+    internal void UpdateCellSize(int width, int height)
+    {
+        if (width <= 0 || height <= 0) return;
+        if (width == _cellWidth && height == _cellHeight) return;
+        _cellWidth      = width;
+        _cellHeight     = height;
+        _requestOptions = BuildOptions();
     }
 
     public override int ItemCount => _images.Length;
@@ -523,8 +537,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         AndroidImageLoader.LoadInto(vh.ImageView, source, _requestOptions, _glideListener, _isUrl);
     }
 
-    // Chamado uma única vez no construtor — context é o único input não-armazenado.
-    private RequestOptions BuildOptions(global::Android.Content.Context context)
+    private RequestOptions BuildOptions()
     {
         var o = _aspectMode == ZoomImageAspect.CenterCrop
             ? new RequestOptions().CenterCrop()
@@ -534,8 +547,7 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
         o = o.Override(overrideW, overrideH)
             .DontAnimate();
         o.SetDiskCacheStrategy(DiskCacheStrategy.Automatic!);
-        var ph = AndroidImageLoader.ResolveDrawable(context, _placeholder);
-        if (ph != 0) o = o.Placeholder(ph).Error(ph);
+        if (_placeholderId != 0) o = o.Placeholder(_placeholderId).Error(_placeholderId);
         return o;
     }
 
