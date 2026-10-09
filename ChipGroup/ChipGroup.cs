@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Windows.Input;
 using Microsoft.Maui.Controls.Shapes;
@@ -21,6 +22,9 @@ public sealed class ChipGroup : ContentView
     private readonly List<ChipItem> _observedChipItems = new();
     private INotifyCollectionChanged? _observedCollection;
     private bool _suppressItemChanged;
+    private bool _syncingSelection;
+    private bool _detached;
+    private int _rebuildPending;
 
     public ChipGroup()
     {
@@ -48,7 +52,7 @@ public sealed class ChipGroup : ContentView
 
     public static readonly BindableProperty SelectionModeProperty =
         BindableProperty.Create(nameof(SelectionMode), typeof(ChipSelectionMode), typeof(ChipGroup),
-            ChipSelectionMode.Single, propertyChanged: Redraw);
+            ChipSelectionMode.Single, propertyChanged: (b, _, _) => ((ChipGroup)b).OnSelectionModeChanged());
 
     public static readonly BindableProperty LayoutModeProperty =
         BindableProperty.Create(nameof(LayoutMode), typeof(ChipGroupLayoutMode), typeof(ChipGroup),
@@ -56,11 +60,11 @@ public sealed class ChipGroup : ContentView
 
     public static readonly BindableProperty SelectedItemProperty =
         BindableProperty.Create(nameof(SelectedItem), typeof(object), typeof(ChipGroup), null,
-            BindingMode.TwoWay, propertyChanged: Redraw);
+            BindingMode.TwoWay, propertyChanged: (b, _, _) => ((ChipGroup)b).OnSelectionBindableChanged());
 
     public static readonly BindableProperty SelectedItemsProperty =
         BindableProperty.Create(nameof(SelectedItems), typeof(IList), typeof(ChipGroup), null,
-            BindingMode.TwoWay, propertyChanged: Redraw);
+            BindingMode.TwoWay, propertyChanged: (b, _, _) => ((ChipGroup)b).OnSelectionBindableChanged());
 
     public static readonly BindableProperty DisplayMemberPathProperty =
         BindableProperty.Create(nameof(DisplayMemberPath), typeof(string), typeof(ChipGroup), null,
@@ -171,12 +175,19 @@ public sealed class ChipGroup : ContentView
         set => SetValue(SelectedItemsProperty, value);
     }
 
+    /// <summary>Nome da propriedade usada como texto do chip quando o item não é <see cref="ChipItem"/>.</summary>
+    /// <remarks>Resolvida por reflection em runtime: com trimming completo ou NativeAOT, preserve a
+    /// propriedade no tipo do item (ex.: <c>[DynamicallyAccessedMembers]</c>/<c>DynamicDependency</c>),
+    /// senão ela pode ser removida e o texto cai em <c>ToString()</c>.</remarks>
     public string? DisplayMemberPath
     {
         get => (string?)GetValue(DisplayMemberPathProperty);
         set => SetValue(DisplayMemberPathProperty, value);
     }
 
+    /// <summary>Nome da propriedade usada como valor selecionado quando o item não é <see cref="ChipItem"/>.</summary>
+    /// <remarks>Resolvida por reflection em runtime: com trimming completo ou NativeAOT, preserve a
+    /// propriedade no tipo do item, senão ela pode ser removida e o valor passa a ser <c>null</c>.</remarks>
     public string? ValueMemberPath
     {
         get => (string?)GetValue(ValueMemberPathProperty);
@@ -294,7 +305,54 @@ public sealed class ChipGroup : ContentView
     public event EventHandler<ChipSelectionChangedEventArgs>? SelectionChanged;
 
     private static void Redraw(BindableObject bindable, object oldValue, object newValue)
-        => ((ChipGroup)bindable).Rebuild();
+        => ((ChipGroup)bindable).RequestRebuild();
+
+    /// <summary>
+    /// Coalesce de rebuilds: N mudanças no mesmo ciclo geram um único <see cref="Rebuild"/>,
+    /// sempre despachado para o UI thread (seguro para CollectionChanged em thread de fundo).
+    /// </summary>
+    private void RequestRebuild()
+    {
+        if (Interlocked.Exchange(ref _rebuildPending, 1) == 1)
+            return;
+
+        Dispatcher.Dispatch(() =>
+        {
+            Interlocked.Exchange(ref _rebuildPending, 0);
+            if (_detached)
+                return; // controle fora de cena: o rebuild acontece no re-attach do handler
+
+            Rebuild();
+        });
+    }
+
+    protected override void OnHandlerChanged()
+    {
+        base.OnHandlerChanged();
+
+        if (Handler is null)
+        {
+            // Página saiu de cena: solta CollectionChanged/PropertyChanged para a coleção e os
+            // ChipItems do consumidor não manterem o controle vivo (leak) nem rebuildarem controle morto.
+            _detached = true;
+            if (_observedCollection is not null)
+                _observedCollection.CollectionChanged -= OnCollectionChanged;
+            DetachObservedChipItems();
+            return;
+        }
+
+        if (_detached)
+        {
+            _detached = false;
+            if (_observedCollection is not null)
+            {
+                _observedCollection.CollectionChanged -= OnCollectionChanged; // guarda contra dupla assinatura
+                _observedCollection.CollectionChanged += OnCollectionChanged;
+            }
+
+            Rebuild();
+        }
+    }
 
     private void ApplyLayoutMode()
     {
@@ -332,13 +390,14 @@ public sealed class ChipGroup : ContentView
             _observedCollection.CollectionChanged -= OnCollectionChanged;
 
         _observedCollection = newValue as INotifyCollectionChanged;
-        if (_observedCollection is not null)
+        if (_observedCollection is not null && !_detached)
             _observedCollection.CollectionChanged += OnCollectionChanged;
 
-        Rebuild();
+        RequestRebuild();
     }
 
-    private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => Rebuild();
+    // RequestRebuild é thread-safe: coalesce + Dispatcher.Dispatch cobrem CollectionChanged fora do UI thread.
+    private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => RequestRebuild();
 
     private void Rebuild()
     {
@@ -358,6 +417,11 @@ public sealed class ChipGroup : ContentView
 
             _layout.Children.Add(CreateChipView(entry));
         }
+
+        // Estado inicial: ChipItem.IsSelected pré-definido deve refletir em SelectedItem/SelectedItems
+        // antes do primeiro toque (SyncSelectionFromChipItems tem guarda de reentrância).
+        if (_observedChipItems.Count > 0)
+            SyncSelectionFromChipItems();
     }
 
     private View CreateChipView(ChipEntry entry)
@@ -412,6 +476,10 @@ public sealed class ChipGroup : ContentView
             };
         }
 
+        // Acessibilidade: leitores de tela anunciam o texto e o estado do chip.
+        SemanticProperties.SetDescription(border, entry.Text);
+        SemanticProperties.SetHint(border, selected ? "Selecionado" : "Não selecionado");
+
         if (enabled)
         {
             border.GestureRecognizers.Add(new TapGestureRecognizer
@@ -459,6 +527,10 @@ public sealed class ChipGroup : ContentView
 
     private void ToggleSelection(ChipEntry entry)
     {
+        // Re-tap no chip já selecionado em Single: nada muda, não dispara evento nem rebuild.
+        if (SelectionMode == ChipSelectionMode.Single && IsEntrySelected(entry))
+            return;
+
         _suppressItemChanged = true;
         try
         {
@@ -473,7 +545,7 @@ public sealed class ChipGroup : ContentView
         }
 
         RaiseSelectionChanged();
-        Rebuild();
+        RequestRebuild();
     }
 
     private void SelectSingle(ChipEntry selectedEntry)
@@ -483,7 +555,7 @@ public sealed class ChipGroup : ContentView
 
         SetEntrySelected(selectedEntry, true);
         SelectedItem = selectedEntry.Value;
-        SelectedItems = new List<object?> { selectedEntry.Value };
+        SetSelectedValues(new List<object?> { selectedEntry.Value });
     }
 
     private void ToggleMultiple(ChipEntry entry)
@@ -498,7 +570,7 @@ public sealed class ChipGroup : ContentView
                 selectedValues.Add(entry.Value);
 
             SelectedItem = selectedValues.LastOrDefault();
-            SelectedItems = selectedValues;
+            SetSelectedValues(selectedValues);
             return;
         }
 
@@ -510,7 +582,7 @@ public sealed class ChipGroup : ContentView
             .ToList();
 
         SelectedItem = selected.LastOrDefault();
-        SelectedItems = selected;
+        SetSelectedValues(selected);
     }
 
     private void RaiseSelectionChanged()
@@ -559,6 +631,10 @@ public sealed class ChipGroup : ContentView
         return new ChipEntry(item, text, value, null);
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2075",
+        Justification = "DisplayMemberPath/ValueMemberPath resolvem propriedade por nome em tipo do consumidor; " +
+            "com trimming completo/NativeAOT o consumidor deve preservar a propriedade no modelo " +
+            "(documentado nos remarks das propriedades).")]
     private static object? GetMemberValue(object? item, string? memberPath)
     {
         if (item is null || string.IsNullOrWhiteSpace(memberPath)) return null;
@@ -576,17 +652,120 @@ public sealed class ChipGroup : ContentView
             and not nameof(ChipItem.IsEnabled))
             return;
 
+        // ChipItem pode ser alterado fora do UI thread: bindables e árvore visual só no dispatcher.
+        if (Dispatcher.IsDispatchRequired)
+        {
+            Dispatcher.Dispatch(HandleChipItemChanged);
+            return;
+        }
+
+        HandleChipItemChanged();
+    }
+
+    private void HandleChipItemChanged()
+    {
+        if (_detached) return;
+
         SyncSelectionFromChipItems();
-        Rebuild();
+        RequestRebuild();
     }
 
     private void SyncSelectionFromChipItems()
     {
-        var selected = EnumerateEntries().Where(IsEntrySelected).Select(static e => e.Value).ToList();
-        SelectedItems = selected;
-        SelectedItem = SelectionMode == ChipSelectionMode.Single
-            ? selected.FirstOrDefault()
-            : selected.LastOrDefault();
+        if (_syncingSelection) return;
+
+        _syncingSelection = true;
+        try
+        {
+            var selected = EnumerateEntries().Where(IsEntrySelected).Select(static e => e.Value).ToList();
+            SetSelectedValues(selected);
+            SelectedItem = SelectionMode == ChipSelectionMode.Single
+                ? selected.FirstOrDefault()
+                : selected.LastOrDefault();
+        }
+        finally
+        {
+            _syncingSelection = false;
+        }
+    }
+
+    /// <summary>
+    /// Atualiza SelectedItems preservando a lista do consumidor: muta a lista existente (Clear/Add)
+    /// quando ela é gravável; só substitui a instância quando não há lista utilizável.
+    /// </summary>
+    private void SetSelectedValues(List<object?> values)
+    {
+        var current = SelectedItems;
+        if (current is { IsReadOnly: false, IsFixedSize: false })
+        {
+            if (!ReferenceEquals(current, values))
+            {
+                current.Clear();
+                foreach (var value in values)
+                    current.Add(value);
+            }
+
+            return;
+        }
+
+        SelectedItems = values;
+    }
+
+    private void OnSelectionBindableChanged()
+    {
+        ApplySelectionToChipItems();
+        RequestRebuild();
+    }
+
+    /// <summary>
+    /// Two-way VM→controle: reflete SelectedItem/SelectedItems em ChipItem.IsSelected.
+    /// Guardas evitam reentrância com o toggle (_suppressItemChanged) e com o sync inverso (_syncingSelection).
+    /// </summary>
+    private void ApplySelectionToChipItems()
+    {
+        if (_suppressItemChanged || _syncingSelection) return;
+
+        _suppressItemChanged = true;
+        try
+        {
+            foreach (var entry in EnumerateEntries())
+            {
+                if (entry.ChipItem is null) continue;
+
+                var selected = SelectionMode == ChipSelectionMode.Single
+                    ? EqualsValue(SelectedItem, entry.Value)
+                    : SelectedItems?.Cast<object?>().Any(value => EqualsValue(value, entry.Value)) == true;
+                entry.ChipItem.IsSelected = selected;
+            }
+        }
+        finally
+        {
+            _suppressItemChanged = false;
+        }
+    }
+
+    private void OnSelectionModeChanged()
+    {
+        // Multiple→Single: normaliza a seleção mantendo só o primeiro item selecionado.
+        if (SelectionMode == ChipSelectionMode.Single)
+        {
+            _suppressItemChanged = true;
+            try
+            {
+                var keep = EnumerateEntries().FirstOrDefault(IsEntrySelected);
+                foreach (var entry in EnumerateEntries())
+                    SetEntrySelected(entry, keep?.ChipItem is not null && ReferenceEquals(entry.ChipItem, keep.ChipItem));
+
+                SelectedItem = keep?.Value;
+                SetSelectedValues(keep is null ? new List<object?>() : new List<object?> { keep.Value });
+            }
+            finally
+            {
+                _suppressItemChanged = false;
+            }
+        }
+
+        RequestRebuild();
     }
 
     private void DetachObservedChipItems()
