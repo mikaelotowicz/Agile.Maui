@@ -1529,6 +1529,17 @@ internal sealed class VrItemHost : global::Android.Widget.FrameLayout
     public VrItemHost(IntPtr handle, JniHandleOwnership transfer)
         : base(handle, transfer) { }
 
+    // Linha de lista não tem área segura. O LayoutViewGroup do MAUI que entra na janela pede os
+    // insets (RequestApplyInsets), a janela inteira os redistribui e cada layout da linha roda o
+    // listener gerenciado do MAUI — no Redmi Pad, até 47 ms por linha nova durante a rolagem. O
+    // MAUI só poupa os itens da CollectionView dele (IMauiRecyclerView, interna); aqui o host corta
+    // o pedido que sobe e a distribuição que desce.
+#pragma warning disable CS0672 // RequestFitSystemWindows é obsoleto, mas é por ele que o RequestApplyInsets sobe.
+    public override void RequestFitSystemWindows() { }
+#pragma warning restore CS0672
+
+    public override WindowInsets? DispatchApplyWindowInsets(WindowInsets? insets) => insets;
+
     protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
     {
         var target = GetTargetWidth(widthMeasureSpec);
