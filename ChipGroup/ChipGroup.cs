@@ -462,7 +462,8 @@ public sealed class ChipGroup : ContentView
             StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(CornerRadius) },
             Content = row,
             Opacity = enabled ? 1 : 0.45,
-            WidthRequest = ChipWidth > 0 ? ChipWidth : -1,
+            // Mínima, não fixa: com a fonte do sistema aumentada o chip cresce em vez de cortar o texto.
+            MinimumWidthRequest = ChipWidth > 0 ? ChipWidth : -1,
             // Sem altura mínima: a altura vem de ChipPadding + texto. Os 44pt da 1.1.0 inflavam
             // os chips compactos dos consumidores (ChipPadding 8 vertical ≈ 34pt).
         };

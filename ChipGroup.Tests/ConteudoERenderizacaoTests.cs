@@ -85,6 +85,20 @@ public class RebuildConteudoTests
         });
     }
 
+    // Aparelho com a fonte do sistema aumentada: o texto não cabe em ChipWidth e o chip cresce,
+    // em vez de cortar o texto.
+    [Fact]
+    public void ChipWidth_e_largura_minima_e_nao_fixa()
+    {
+        var group = new ChipGroup { ChipWidth = 104, ItemsSource = new[] { "Todos", "Em andamento" } };
+
+        Assert.All(GetChips(group), chip =>
+        {
+            Assert.Equal(104, chip.MinimumWidthRequest);
+            Assert.Equal(-1, chip.WidthRequest);
+        });
+    }
+
     [Fact]
     public void Chip_desabilitado_fica_translucido_e_sem_gesto_de_toque()
     {

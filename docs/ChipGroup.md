@@ -77,7 +77,7 @@ xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
 | `ChipSpacing` | `double` | `8` | Horizontal spacing after each chip. |
 | `RowSpacing` | `double` | `10` | Vertical spacing after each chip. |
 | `CornerRadius` | `double` | `18` | Rounded corner radius. |
-| `ChipWidth` | `double` | `-1` | Fixed chip width when greater than zero. |
+| `ChipWidth` | `double` | `-1` | Minimum chip width when greater than zero. The chip grows when the text needs more room (for example, with a larger system font). |
 | `FontSize` | `double` | `13` | Chip text size. |
 | `ShowCheckmark` | `bool` | `true` | Shows the circular indicator/checkmark in multiple selection mode. |
 | `SelectedBackgroundColor` | `Color` | `White` | Selected chip background. |
