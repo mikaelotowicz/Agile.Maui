@@ -13,7 +13,7 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
     public static readonly PropertyMapper<GalleryView, GalleryViewHandler> Mapper =
         new(ViewMapper)
         {
-            [nameof(GalleryView.Images)]        = (h, _) => h.Reconfigure(),
+            [nameof(GalleryView.Images)]        = (h, _) => h.ReplaceImages(),
             [nameof(GalleryView.SelectedIndex)] = (h, _) => h.SyncPage(),
             ["IsUrl"]                           = (h, _) => h.Reconfigure(),
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.Reconfigure(),
@@ -97,7 +97,26 @@ internal sealed class GalleryViewHandler : ViewHandler<GalleryView, ThumbGallery
     private void OnImagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_disposed || PlatformView is null) return;
-        MainThread.BeginInvokeOnMainThread(Reconfigure);
+        MainThread.BeginInvokeOnMainThread(ReplaceImages);
+    }
+
+    // Mesma quantidade de fotos (a miniatura trocada pelo original, por exemplo): as páginas e a
+    // posição ficam, e só a fonte muda. O Configure recriava as páginas e voltava para a primeira.
+    private void ReplaceImages()
+    {
+        if (_disposed || PlatformView is null) return;
+
+        var images = VirtualView.Images;
+
+        if (images is not null && images.Count > 0 && PlatformView.PageCount == images.Count)
+        {
+            UnsubscribeImages();
+            PlatformView.ReplaceImages(images.ToArray());
+            SubscribeImages(images);
+            return;
+        }
+
+        Reconfigure();
     }
 
     private void UpdateIndicator()
@@ -261,6 +280,29 @@ internal sealed class ThumbGalleryView : UIView
         SetNeedsLayout();
     }
 
+    public int PageCount => _pages.Count;
+
+    /// <summary>Troca as fontes sem mudar a quantidade; só as páginas cuja fonte mudou recarregam.</summary>
+    public void ReplaceImages(string[] images)
+    {
+        var anteriores = _images;
+        _images = images;
+
+        for (int i = 0; i < _pages.Count; i++)
+        {
+            if (string.Equals(anteriores[i], images[i], StringComparison.Ordinal))
+                continue;
+
+            // A foto atual continua na UIImageView: a página recarrega por cima dela.
+            var entry = _pages[i];
+            entry.Cts?.Cancel();
+            entry.Cts?.Dispose();
+            _pages[i] = new PageEntry(entry.ImageView, null, PageLoadState.Empty, null);
+        }
+
+        LoadWindow(_currentPage);
+    }
+
     // Como no Android, a galeria ocupa o espaço oferecido. Sem isto o UIView devolve o tamanho atual
     // (zero na primeira medida) e o MAUI a deixa no MinimumHeightRequest: com AspectFit, a foto
     // deitada ficava limitada pela altura e sobrava faixa dos lados. O MAUI já limita a oferta pelo
@@ -421,7 +463,9 @@ internal sealed class ThumbGalleryView : UIView
                 return;
             }
 
-            ApplyPlaceholder(entry.ImageView);
+            // Na troca de fonte, a foto atual segura a página até a nova chegar.
+            if (entry.ImageView.Image is null)
+                ApplyPlaceholder(entry.ImageView);
             var cts = new CancellationTokenSource();
             _pages[index] = new PageEntry(entry.ImageView, cts, PageLoadState.Loading, source);
             _ = LoadFromUrlAsync(index, source, maxPixelSize, UIScreen.MainScreen.Scale, cts);

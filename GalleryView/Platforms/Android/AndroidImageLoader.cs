@@ -10,49 +10,45 @@ internal static class AndroidImageLoader
     // Ids de resource são estáveis por processo — GetIdentifier (reflexivo e lento) só na 1ª vez.
     private static readonly ConcurrentDictionary<string, int> s_drawableIds = new();
 
+    /// <param name="currentSource">A foto que a página mostra agora, quando a fonte dela foi trocada.</param>
     public static void LoadInto(
         global::Android.Widget.ImageView imageView,
         string source,
         RequestOptions options,
         Bumptech.Glide.Request.IRequestListener? listener,
-        bool legacyIsUrl = false)
+        bool legacyIsUrl = false,
+        string? currentSource = null)
     {
+        var request = Request(imageView, source, legacyIsUrl).Apply(options);
+        if (listener is not null) request = request.Listener(listener);
+
+        // A foto atual, com as mesmas options, está na memória do Glide: como thumbnail ela volta na
+        // hora e segura a página até a nova decodificar. Sem isso a página fica vazia nesse meio-tempo.
+        if (currentSource is not null)
+            request = request.Thumbnail(Request(imageView, currentSource, legacyIsUrl).Apply(options));
+
+        request.Into(imageView);
+    }
+
+    private static RequestBuilder Request(
+        global::Android.Widget.ImageView imageView, string source, bool legacyIsUrl)
+    {
+        var glide = Glide.With(imageView);
+
         if (ImageSourceResolver.IsRemote(source, legacyIsUrl))
-        {
-            var request = Glide.With(imageView).Load(source).Apply(options);
-            if (listener is not null) request = request.Listener(listener);
-            request.Into(imageView);
-            return;
-        }
+            return glide.Load(source);
 
         var drawableId = ResolveDrawable(imageView.Context!, source);
         if (drawableId != 0)
-        {
-            var request = Glide.With(imageView).Load(drawableId).Apply(options);
-            if (listener is not null) request = request.Listener(listener);
-            request.Into(imageView);
-            return;
-        }
+            return glide.Load(drawableId);
 
         if (ImageSourceResolver.TryGetLocalFilePath(source, out var path))
-        {
-            var request = Glide.With(imageView).Load(new Java.IO.File(path)).Apply(options);
-            if (listener is not null) request = request.Listener(listener);
-            request.Into(imageView);
-            return;
-        }
+            return glide.Load(new Java.IO.File(path));
 
         if (ImageSourceResolver.TryGetAbsoluteLocalUri(source, out _))
-        {
-            var request = Glide.With(imageView).Load(global::Android.Net.Uri.Parse(source)).Apply(options);
-            if (listener is not null) request = request.Listener(listener);
-            request.Into(imageView);
-            return;
-        }
+            return glide.Load(global::Android.Net.Uri.Parse(source));
 
-        var fallback = Glide.With(imageView).Load(source).Apply(options);
-        if (listener is not null) fallback = fallback.Listener(listener);
-        fallback.Into(imageView);
+        return glide.Load(source);
     }
 
     public static int ResolveDrawable(global::Android.Content.Context context, string? source)

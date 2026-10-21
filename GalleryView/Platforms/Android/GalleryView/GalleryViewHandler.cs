@@ -16,7 +16,7 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     public static readonly PropertyMapper<GalleryView, GalleryViewHandler> Mapper =
         new(ViewMapper)
         {
-            [nameof(GalleryView.Images)]        = (h, _) => h.ReloadAdapter(),
+            [nameof(GalleryView.Images)]        = (h, _) => h.ReplaceImages(),
             [nameof(GalleryView.SelectedIndex)] = (h, _) => h.SyncPage(),
             ["IsUrl"]                           = (h, _) => h.ReloadAdapter(),
             [nameof(GalleryView.Placeholder)]   = (h, _) => h.ReloadAdapter(),
@@ -162,7 +162,31 @@ public sealed class GalleryViewHandler : ViewHandler<GalleryView, GalleryContain
     private void OnImagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_disposed || PlatformView is null) return;
-        MainThread.BeginInvokeOnMainThread(ReloadAdapter);
+        MainThread.BeginInvokeOnMainThread(ReplaceImages);
+    }
+
+    // Mesma quantidade de fotos (a miniatura trocada pelo original, por exemplo): as páginas ficam e
+    // só a fonte muda. Recriar o adapter deixava cada página vazia até a foto nova decodificar.
+    private void ReplaceImages()
+    {
+        if (_disposed || PlatformView is null) return;
+
+        var images = VirtualView.Images;
+
+        if (images is not null
+            && images.Count > 0
+            && !_pendingReload
+            && PlatformView.Pager.Adapter is ThumbPagerAdapter adapter
+            && adapter.ItemCount == images.Count)
+        {
+            UnsubscribeImages();
+            adapter.ReplaceImages(images.ToArray());
+            SubscribeImages(images);
+            UpdateDots();
+            return;
+        }
+
+        ReloadAdapter();
     }
 
     private void SyncPage()
@@ -410,7 +434,13 @@ internal sealed class DotsView : global::Android.Widget.LinearLayout
 
 internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
 {
-    private readonly string[]                _images;
+    // Com payload, o RecyclerView rebinda o MESMO ViewHolder: sem ele, a animação de troca criaria
+    // um segundo e cruzaria os dois.
+    private static readonly Java.Lang.Object ReplacePayload = new Java.Lang.String("replace");
+
+    private string[]                         _images;
+    // As fontes de antes da última troca: a foto que cada página mostra enquanto a nova carrega.
+    private string[]?                        _replacedImages;
     private readonly bool                    _isUrl;
     private readonly ZoomImageAspect         _aspectMode;
     private readonly ImageAlignment          _verticalAlignment;
@@ -466,6 +496,35 @@ internal sealed class ThumbPagerAdapter : RecyclerView.Adapter
     }
 
     public override int ItemCount => _images.Length;
+
+    /// <summary>Troca as fontes sem mudar a quantidade; só as páginas cuja fonte mudou são rebindadas.</summary>
+    internal void ReplaceImages(string[] images)
+    {
+        var anteriores = _images;
+        _images         = images;
+        _replacedImages = anteriores;
+
+        for (int i = 0; i < images.Length; i++)
+        {
+            if (!string.Equals(anteriores[i], images[i], StringComparison.Ordinal))
+                NotifyItemChanged(i, ReplacePayload);
+        }
+    }
+
+    public override void OnBindViewHolder(
+        RecyclerView.ViewHolder holder, int position, IList<Java.Lang.Object> payloads)
+    {
+        if (payloads.Count == 0 || _replacedImages is null || holder is not ThumbPageViewHolder vh)
+        {
+            base.OnBindViewHolder(holder, position, payloads);
+            return;
+        }
+
+        // Sem limpar a ImageView: a foto anterior fica na página até a nova chegar.
+        AndroidImageLoader.LoadInto(
+            vh.ImageView, _images[position], _requestOptions, _glideListener, _isUrl,
+            currentSource: _replacedImages[position]);
+    }
 
     public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType)
     {
