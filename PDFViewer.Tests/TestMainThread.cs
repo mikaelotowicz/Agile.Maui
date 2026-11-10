@@ -19,7 +19,10 @@ internal static class TestMainThreadInstaller
     internal static void Install()
     {
         var mt  = typeof(Microsoft.Maui.ApplicationModel.MainThread);
-        var set = mt.GetMethod("SetCustomImplementation", BindingFlags.NonPublic | BindingFlags.Static)
+        // Pelos tipos: o MAUI 11 ganhou uma sobrecarga SetCustomImplementation(MainThreadImplementation)
+        // e a busca só pelo nome passou a lançar AmbiguousMatchException.
+        var set = mt.GetMethod("SetCustomImplementation", BindingFlags.NonPublic | BindingFlags.Static,
+                      binder: null, types: [typeof(Func<bool>), typeof(Action<Action>)], modifiers: null)
             ?? throw new InvalidOperationException(
                 "Seam interno MainThread.SetCustomImplementation não encontrado — a versão do MAUI mudou; " +
                 "atualize TestMainThread.cs (os testes de eventos dependem dele no host).");
