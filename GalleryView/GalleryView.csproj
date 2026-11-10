@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.Gallery</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.2.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.2.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.Gallery</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,12 +20,9 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
+		<TargetFrameworks>net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
@@ -45,7 +42,7 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.Gallery</Title>
-		<PackageReleaseNotes>1.1.0: GalleryView.VerticalImageAlignment (Start/Center/End) posiciona a foto com AspectFit no Android, iOS e Mac Catalyst. Correções: páginas da galeria Android ocupam a área inteira; GalleryView no iOS/Mac ocupa a altura oferecida, como no Android (com MinimumHeightRequest/MaximumHeightRequest e sem HeightRequest, ficava no mínimo e a foto com AspectFit ganhava faixa dos lados); pinch sem crash em foto menor que a tela; proporção preservada no decode do Windows (só DecodePixelWidth); fim do loop de ImageFailed com placeholder inválido; rotação re-ancora o zoom e a página; decode do fullscreen proporcional à tela (teto de 4096 px) e, no iOS/Mac, fora da main thread; cache Apple limitado a 96 MB. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote. iOS/Mac Catalyst: os fullscreens (zoom e galeria) mostram a foto em vez do placeholder — a escala da tela era lida fora da main thread após o download e falhava em Debug.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.2.0: suporte ao .NET 11 no canal estável: TFMs net11.0, net11.0-android, net11.0-ios, net11.0-maccatalyst e net11.0-windows10.0.26100.0 ao lado dos net10.0, com Microsoft.Maui.Controls 11.0.0. trocar as imagens com a mesma quantidade (por exemplo, a miniatura pelo original) mantém as páginas e a posição e troca só a fonte das que mudaram, sem a foto piscar. Android: a página é rebindada no mesmo ViewHolder e a foto anterior segura a página até a nova decodificar. iOS/Mac Catalyst: a posição atual é mantida (antes voltava para a primeira) e o placeholder não cobre a foto atual durante a carga. Quantidade diferente, ou outra propriedade mudando, continua recriando a galeria; no Windows a galeria ainda é recriada. 1.1.0: GalleryView.VerticalImageAlignment (Start/Center/End) posiciona a foto com AspectFit no Android, iOS e Mac Catalyst. Correções: páginas da galeria Android ocupam a área inteira; GalleryView no iOS/Mac ocupa a altura oferecida, como no Android (com MinimumHeightRequest/MaximumHeightRequest e sem HeightRequest, ficava no mínimo e a foto com AspectFit ganhava faixa dos lados); pinch sem crash em foto menor que a tela; proporção preservada no decode do Windows (só DecodePixelWidth); fim do loop de ImageFailed com placeholder inválido; rotação re-ancora o zoom e a página; decode do fullscreen proporcional à tela (teto de 4096 px) e, no iOS/Mac, fora da main thread; cache Apple limitado a 96 MB. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote. iOS/Mac Catalyst: os fullscreens (zoom e galeria) mostram a foto em vez do placeholder — a escala da tela era lida fora da main thread após o download e falhava em Debug.</PackageReleaseNotes>
 		<PackageIcon>agile.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
@@ -70,7 +67,7 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-rc.2.26505.5" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0" />
 	</ItemGroup>
 
 	<!-- Dependências Android usadas diretamente pelos handlers (Glide e DialogFragment). Referências

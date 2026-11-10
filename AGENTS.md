@@ -14,11 +14,15 @@ dotnet build -f net10.0-android
 dotnet build -f net10.0-ios
 dotnet build -f net11.0-maccatalyst
 dotnet build -f net10.0-windows10.0.19041.0
+dotnet build -f net11.0-windows10.0.26100.0
 ```
+
+Todas as bibliotecas compilam para .NET 10 e .NET 11 (`net10.0*` e `net11.0*`) nos dois canais
+de pacote; `AgilePackageChannel` (`Stable`/`Preview`) só muda o sufixo da versão.
 
 ## Testes
 
-Cada componente tem um projeto de testes de host (xunit, TFM neutro `net10.0`, sem plataforma):
+Cada componente tem um projeto de testes de host (xunit, TFMs neutros `net10.0` e `net11.0`, sem plataforma):
 `ChipGroup.Tests`, `GalleryView.Tests`, `PDFViewer.Tests`, `PdfGen.Tests`, `SignaturePad.Tests`
 e `VirtualizedCollectionView.Tests`.
 

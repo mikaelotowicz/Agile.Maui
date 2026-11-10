@@ -18,14 +18,10 @@ Este pacote gera PDFs. Para visualizar PDFs em MAUI, use o pacote irmão
 ## Instalação
 
 ```powershell
-dotnet add package Agile.Maui.PdfGen --version 1.2.0
+dotnet add package Agile.Maui.PdfGen --version 1.3.0
 ```
 
-Para projetos .NET 11 preview, use o canal preview:
-
-```powershell
-dotnet add package Agile.Maui.PdfGen --version 1.2.0-preview.1
-```
+A mesma versão atende projetos .NET 10 e .NET 11.
 
 O histórico de versões está no `CHANGELOG.md` incluído no pacote.
 

@@ -9,21 +9,16 @@ Registration: `builder.UseAgileChipGroup()`
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 with package `Agile.Maui.ChipGroup` `1.1.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later).
-- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.ChipGroup` `1.1.0-preview.1`.
+- .NET MAUI / .NET 10.0 or 11.0 with package `Agile.Maui.ChipGroup` `1.2.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later on .NET 10 and `11.0.0` or later on .NET 11).
 - Android, iOS, macOS Catalyst, or Windows.
 
 ## Installation
 
 ```powershell
-dotnet add package Agile.Maui.ChipGroup --version 1.1.0
+dotnet add package Agile.Maui.ChipGroup --version 1.2.0
 ```
 
-For .NET 11 preview projects:
-
-```powershell
-dotnet add package Agile.Maui.ChipGroup --version 1.1.0-preview.1
-```
+The same version serves .NET 10 and .NET 11 projects.
 
 ```csharp
 using Agile.Maui;
@@ -77,7 +72,7 @@ xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
 | `ChipSpacing` | `double` | `8` | Horizontal spacing after each chip. |
 | `RowSpacing` | `double` | `10` | Vertical spacing after each chip. |
 | `CornerRadius` | `double` | `18` | Rounded corner radius. |
-| `ChipWidth` | `double` | `-1` | Minimum chip width when greater than zero. The chip grows when the text needs more room (for example, with a larger system font). |
+| `ChipWidth` | `double` | `-1` | Minimum chip width when greater than zero. The chip grows when the text needs more room (for example, with a larger system font). Before `1.2.0` it was a fixed width and longer text was truncated with an ellipsis. |
 | `FontSize` | `double` | `13` | Chip text size. |
 | `ShowCheckmark` | `bool` | `true` | Shows the circular indicator/checkmark in multiple selection mode. |
 | `SelectedBackgroundColor` | `Color` | `White` | Selected chip background. |

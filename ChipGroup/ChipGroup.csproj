@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.ChipGroup</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.2.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.2.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.ChipGroup</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,14 +20,11 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.ChipGroup</Title>
-		<PackageReleaseNotes>1.1.0: seleção two-way com a VM (definir SelectedItem/SelectedItems seleciona os chips, pelo valor ou pelo próprio item da fonte) e estado inicial lido de ChipItem.IsSelected; SemanticProperties para leitores de tela. Mudanças de comportamento: a lista SelectedItems do consumidor é mutada em vez de substituída; o rebuild dos chips é coalescido e despachado na UI thread; novo toque no chip já selecionado em Single não dispara evento; Multiple→Single mantém só o primeiro selecionado; ChipWidth é largura mínima (o chip cresce quando o texto não cabe, como com a fonte do sistema aumentada). Teardown de eventos sem leak. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.2.0: suporte ao .NET 11 no canal estável: TFMs net11.0, net11.0-android, net11.0-ios, net11.0-maccatalyst e net11.0-windows10.0.26100.0 ao lado dos net10.0, com Microsoft.Maui.Controls 11.0.0. mudança de comportamento — ChipWidth passa a ser largura mínima (MinimumWidthRequest) em vez de fixa: quando o texto cabe, o chip fica do mesmo tamanho; quando não cabe (fonte do sistema aumentada, texto longo), o chip cresce em vez de cortar o texto com reticências, e com LayoutMode="Horizontal" a faixa rola. 1.1.0: seleção two-way com a VM (definir SelectedItem/SelectedItems seleciona os chips, pelo valor ou pelo próprio item da fonte) e estado inicial lido de ChipItem.IsSelected; SemanticProperties para leitores de tela. Mudanças de comportamento: a lista SelectedItems do consumidor é mutada em vez de substituída; o rebuild dos chips é coalescido e despachado na UI thread; novo toque no chip já selecionado em Single não dispara evento; Multiple→Single mantém só o primeiro selecionado. Teardown de eventos sem leak. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
+		<TargetFrameworks>net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
@@ -60,7 +57,7 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-rc.2.26505.5" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>

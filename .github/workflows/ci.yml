@@ -1,4 +1,4 @@
-# Testes de host a cada push/PR: as 6 suítes xunit rodam no TFM neutro (net10.0),
+# Testes de host a cada push/PR: as 6 suítes xunit rodam nos TFMs neutros (net10.0 e net11.0),
 # mas o restore avalia todos os TFMs das libs — por isso o runner Windows (único SO
 # que produz android + ios/maccatalyst + windows) e o workload MAUI instalado.
 name: Testes
@@ -25,12 +25,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Os TFMs net11.0 exigem SDK .NET 11 (prerelease enquanto não há GA).
-      - name: Instalar .NET SDK 11 (prerelease)
+      # O SDK .NET 11 compila os TFMs net10.0 e net11.0.
+      - name: Instalar .NET SDK 11
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
 
       - name: Instalar workload MAUI
         run: dotnet workload install maui

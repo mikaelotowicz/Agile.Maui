@@ -56,8 +56,21 @@ Each module can be installed separately, so the app consumes only what it uses.
 
 ## What's new
 
-Release of 2026-10-09. Each package keeps its own version; behavior changes are
-marked as such.
+.NET 11 support. Every package now ships the .NET 11 targets (`net11.0`, `net11.0-android`, `net11.0-ios`, `net11.0-maccatalyst` and `net11.0-windows10.0.26100.0`) next to the .NET 10
+ones in the stable channel, built against `Microsoft.Maui.Controls` `11.0.0`. Projects on
+.NET 11 install the same stable versions as projects on .NET 10; the `-preview.N` channel is
+no longer needed. Each package keeps its own version; behavior changes are marked as such.
+
+| Package | Version | Highlights |
+|---|---|---|
+| `Agile.Maui.Gallery` | `1.2.0` | .NET 11. Replacing `Images` with the same number of photos (for example, a thumbnail swapped for the original) keeps the pages and the current position and only reloads the changed sources, without the photo flashing. Android and iOS/Mac Catalyst; Windows still rebuilds the gallery. |
+| `Agile.Maui.VirtualizedCollection` | `1.2.0` | .NET 11. Android: rows no longer request or receive window insets, which made MAUI 11 redistribute insets over the whole window for every new row while scrolling (late frames 14.3% → 5.4% in the measured catalog). |
+| `Agile.Maui.ChipGroup` | `1.2.0` | .NET 11. Behavior change: `ChipWidth` is now a minimum width. Chips grow instead of truncating the text when it does not fit (for example, with a larger system font); with `LayoutMode="Horizontal"` the row scrolls. |
+| `Agile.Maui.Pdf` | `1.2.0` | .NET 11. No other changes. |
+| `Agile.Maui.SignaturePad` | `1.2.0` | .NET 11. No other changes. |
+| `Agile.Maui.PdfGen` | `1.3.0` | .NET 11. No API or behavior changes. |
+
+### Previous release (2026-10-09)
 
 | Package | Version | Highlights |
 |---|---|---|
@@ -68,15 +81,14 @@ marked as such.
 | `Agile.Maui.ChipGroup` | `1.1.0` | Two-way selection with the view model and initial state from `ChipItem.IsSelected`. Behavior changes: a bound `SelectedItems` list is updated in place, and chips are rebuilt asynchronously on the UI dispatcher. |
 | `Agile.Maui.SignaturePad` | `1.1.0` | Behavior change: white "paper" `BackgroundColor` by default (override it, including with `Transparent`). Fixes: export scale on Android/iOS/Mac, trimming-safe JSON, palm/second touch ignored, Windows pen eraser and right button no longer draw. |
 
-The five control packages now depend on `Microsoft.Maui.Controls` `10.0.90`
-(stable) or `11.0.0-preview.7.26406.9` (preview); `Agile.Maui.PdfGen` does not
+The five control packages depend on `Microsoft.Maui.Controls` `10.0.90` on .NET 10
+and `11.0.0` on .NET 11; `Agile.Maui.PdfGen` does not
 depend on MAUI. All six packages include XML documentation for IntelliSense.
 Release notes per version are shown on each package page.
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 for the stable packages, with `Microsoft.Maui.Controls` `10.0.90` or later.
-- .NET MAUI / .NET 11.0 preview for the `-preview.1` packages.
+- .NET MAUI / .NET 10.0 with `Microsoft.Maui.Controls` `10.0.90` or later, or .NET MAUI / .NET 11.0 with `Microsoft.Maui.Controls` `11.0.0` or later.
 - Android 7.0 (API 24)+, iOS 15.0+, macOS Catalyst 15.0+, or Windows 10.0.17763.0+.
 - Registration of the visual MAUI control packages used in `MauiProgram.cs`. `Agile.Maui.PdfGen` is a generator library and does not require handler registration.
 
@@ -94,27 +106,19 @@ Release notes per version are shown on each package page.
 
 ## Installation
 
-Install only the packages your application actually uses:
+Install only the packages your application actually uses. The same versions serve
+.NET 10 and .NET 11 projects:
 
 ```powershell
-dotnet add package Agile.Maui.Gallery --version 1.1.0
-dotnet add package Agile.Maui.Pdf --version 1.1.0
-dotnet add package Agile.Maui.PdfGen --version 1.2.0
-dotnet add package Agile.Maui.VirtualizedCollection --version 1.1.0
-dotnet add package Agile.Maui.ChipGroup --version 1.1.0
-dotnet add package Agile.Maui.SignaturePad --version 1.1.0
+dotnet add package Agile.Maui.Gallery --version 1.2.0
+dotnet add package Agile.Maui.Pdf --version 1.2.0
+dotnet add package Agile.Maui.PdfGen --version 1.3.0
+dotnet add package Agile.Maui.VirtualizedCollection --version 1.2.0
+dotnet add package Agile.Maui.ChipGroup --version 1.2.0
+dotnet add package Agile.Maui.SignaturePad --version 1.2.0
 ```
 
-For .NET 11 preview projects, use the preview package channel:
-
-```powershell
-dotnet add package Agile.Maui.Gallery --version 1.1.0-preview.1
-dotnet add package Agile.Maui.Pdf --version 1.1.0-preview.1
-dotnet add package Agile.Maui.PdfGen --version 1.2.0-preview.1
-dotnet add package Agile.Maui.VirtualizedCollection --version 1.1.0-preview.1
-dotnet add package Agile.Maui.ChipGroup --version 1.1.0-preview.1
-dotnet add package Agile.Maui.SignaturePad --version 1.1.0-preview.1
-```
+Projects that used the `-preview.1` packages for .NET 11 should move to these stable versions.
 
 Then register the handlers in `MauiProgram.cs`:
 
@@ -230,23 +234,24 @@ every push and pull request, on a Windows runner.
 
 ## Package generation
 
-Generate the stable .NET 10 packages and the .NET 11 preview packages with one command:
+Generate the packages with one command:
 
 ```powershell
 dotnet pack Agile.Maui.PackAll.proj -c Release
 ```
 
 Packages are written to `nupkgs/` at the repository root. Each project defines its own
-version in its `.csproj` (currently `1.1.0` for the five control packages and `1.2.0`
-for `Agile.Maui.PdfGen`). Packing must run on Windows, the only OS that builds every
-target framework. The command produces:
+version in its `.csproj` (currently `1.2.0` for the five control packages and `1.3.0` for
+`Agile.Maui.PdfGen`). Packing must run on Windows, the only OS that builds every target
+framework. Every package targets .NET 10 and .NET 11; the command produces:
 
-- stable packages for .NET 10 projects.
-- `-preview.1` packages for .NET 10 and .NET 11 preview projects.
+- stable packages (`dotnet msbuild Agile.Maui.PackAll.proj -t:PackStable`), the ones published.
+- `-preview.N` packages with the same targets (`-t:PackPreview`). The channel only changes the
+  version suffix; it is kept for the next .NET previews and does not need to be published now.
 
-Besides the platform assemblies, each package contains a platform-neutral `net10.0`
-assembly (plus `net11.0` in the preview channel) with only the cross-platform code,
-without handlers; it is what the host test projects run against.
+Besides the platform assemblies, each package contains platform-neutral `net10.0` and
+`net11.0` assemblies with only the cross-platform code, without handlers; they are what the
+host test projects run against.
 
 The publish workflow pushes with `--skip-duplicate`, so a package only reaches
 nuget.org when its version in the `.csproj` changes.
