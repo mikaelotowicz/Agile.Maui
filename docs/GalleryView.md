@@ -11,21 +11,16 @@ Registration: `builder.UseAgileGalleryView()`
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 with package `Agile.Maui.Gallery` `1.1.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later).
-- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.Gallery` `1.1.0-preview.1`.
+- .NET MAUI / .NET 10.0 or 11.0 with package `Agile.Maui.Gallery` `1.2.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later on .NET 10 and `11.0.0` or later on .NET 11).
 - Android 7.0 (API 24)+, iOS 15.0+, macOS Catalyst 15.0+, or Windows 10.0.17763.0+.
 
 ## Installation
 
 ```powershell
-dotnet add package Agile.Maui.Gallery --version 1.1.0
+dotnet add package Agile.Maui.Gallery --version 1.2.0
 ```
 
-For .NET 11 preview projects:
-
-```powershell
-dotnet add package Agile.Maui.Gallery --version 1.1.0-preview.1
-```
+The same version serves .NET 10 and .NET 11 projects.
 
 ```csharp
 using Agile.Maui;
@@ -162,6 +157,15 @@ zoom on the platforms that support this flow.
 | `ImageLoadedCommand` | `ICommand?` | `null` | Command when an image loads. |
 | `ImageFailedCommand` | `ICommand?` | `null` | Command when an image fails. |
 | `ThumbMaxPx` | `int` | `720` | Thumbnail decode limit. On Android, iOS, and MacCatalyst pages decode at their measured size once laid out (following rotation/resize) and `ThumbMaxPx` is the fallback before that; on Windows it is the decode width. Minimum: `64`. |
+
+Since `1.2.0`, replacing `Images` (a new list, or a change in an `ObservableCollection`)
+with the same number of photos keeps the pages and the current position and only reloads the
+sources that changed; the photo already on screen stays until the new one is decoded. This is
+the pattern for showing a thumbnail first and swapping in the original when it finishes
+downloading. On Android the page is rebound in place with the previous photo as Glide
+thumbnail; on iOS and macOS Catalyst the placeholder is not drawn over the current photo. A
+different number of photos, or a change to another gallery property, still rebuilds the
+gallery, and so does any `Images` change on Windows.
 
 Without `HeightRequest`, the gallery takes all the height offered by its parent,
 capped by `MaximumHeightRequest`, on Android, iOS and macOS Catalyst. Before `1.1.0`, iOS and

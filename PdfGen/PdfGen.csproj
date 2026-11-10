@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui.PdfGen</RootNamespace>
 		<PackageId>Agile.Maui.PdfGen</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.2.0</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.2.0-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.3.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.3.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.PdfGen</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -23,12 +23,9 @@
 
 		<!-- Alvos base (net10.0/net11.0): motor de layout + escritor PDF gerenciado + testes de host.
 		     Alvos de plataforma: renderers nativos isolados por #if. Não usa Microsoft.Maui.Controls. -->
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
+		<TargetFrameworks>net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
@@ -45,7 +42,7 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<PackageIcon>agile.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<PackageReleaseNotes>1.2.0 (primeira versão publicada no nuget.org): fontes embutidas também em GeneratePdfNative (Android e iOS/Mac); Background/Border com cantos arredondados desenhados uma vez por página sobre conteúdo paginado; AlignRight/AlignCenter do contêiner alinham o PageNumber; JPEG em escala de cinza e CMYK com o colorspace certo; texto com fonte embutida centrado na linha; Typeface por processo no Android, sem vazar a cada documento; alpha em texto, linhas, bordas e fundos sólidos; content streams e ToUnicode comprimidos; alinhamento justificado; decoders de PNG/fonte blindados contra entrada malformada. Inclui o conteúdo da 1.1.0 (fontes TrueType embutidas com Unicode e subsetting, gradientes, PNG com transparência, exportação SVG). Veja CHANGELOG.md.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.3.0: suporte ao .NET 11 no canal estável: TFMs net11.0, net11.0-android, net11.0-ios, net11.0-maccatalyst e net11.0-windows10.0.26100.0 ao lado dos net10.0; sem mudanças de API ou de comportamento. 1.2.0 (primeira versão publicada no nuget.org): fontes embutidas também em GeneratePdfNative (Android e iOS/Mac); Background/Border com cantos arredondados desenhados uma vez por página sobre conteúdo paginado; AlignRight/AlignCenter do contêiner alinham o PageNumber; JPEG em escala de cinza e CMYK com o colorspace certo; texto com fonte embutida centrado na linha; Typeface por processo no Android, sem vazar a cada documento; alpha em texto, linhas, bordas e fundos sólidos; content streams e ToUnicode comprimidos; alinhamento justificado; decoders de PNG/fonte blindados contra entrada malformada. Inclui o conteúdo da 1.1.0 (fontes TrueType embutidas com Unicode e subsetting, gradientes, PNG com transparência, exportação SVG). Veja CHANGELOG.md.</PackageReleaseNotes>
 	</PropertyGroup>
 
 	<ItemGroup>

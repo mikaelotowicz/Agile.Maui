@@ -49,8 +49,7 @@ thumbnails and navigation.
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 with package `Agile.Maui.Pdf` `1.1.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later; on Android and Windows, also on PDFium `153.0.7999`).
-- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.Pdf` `1.1.0-preview.1`.
+- .NET MAUI / .NET 10.0 or 11.0 with package `Agile.Maui.Pdf` `1.2.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later on .NET 10 and `11.0.0` or later on .NET 11; on Android and Windows, also on PDFium `153.0.7999`).
 - Android 7.0 (API 24)+.
 - iOS 15.0+ (raised from 12.1 in `1.1.0`).
 - macOS Catalyst 15.0+.
@@ -61,14 +60,10 @@ thumbnails and navigation.
 ### 1. Install the package
 
 ```powershell
-dotnet add package Agile.Maui.Pdf --version 1.1.0
+dotnet add package Agile.Maui.Pdf --version 1.2.0
 ```
 
-For .NET 11 preview projects:
-
-```powershell
-dotnet add package Agile.Maui.Pdf --version 1.1.0-preview.1
-```
+The same version serves .NET 10 and .NET 11 projects.
 
 ### 2. Register the handler
 

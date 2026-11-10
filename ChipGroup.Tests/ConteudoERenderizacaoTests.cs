@@ -159,6 +159,50 @@ public class RebuildConteudoTests
         Assert.Equal(2, GetChips(group).Count);
     }
 
+    // Regressão (sample em net11, Android): o FlexLayout do MAUI 11 sem quebra, num ScrollView
+    // horizontal, desconta a margem vertical do filho da altura dele — com a margem de RowSpacing os
+    // chips da faixa saíam com 27 em vez de 36 e o texto, cortado pela metade. E na coluna (Vertical)
+    // o Shrink padrão comia ~3 da altura do chip e cortava a base do texto (MAUI 10 e 11).
+    // Horizontal: sem margem inferior e sem encolher. Vertical: RowSpacing e sem encolher. Wrap:
+    // RowSpacing e o Shrink padrão. Vale também depois de trocar de modo com os chips montados.
+    [Fact]
+    public void Margem_e_shrink_dos_chips_seguem_o_modo()
+    {
+        var group = new ChipGroup
+        {
+            LayoutMode = ChipGroupLayoutMode.Horizontal,
+            ChipSpacing = 6,
+            RowSpacing = 12,
+            ItemsSource = new[] { "All", "Popular", "Recent" },
+        };
+
+        void AssertFaixa() => Assert.All(GetChips(group), chip =>
+        {
+            Assert.Equal(new Thickness(0, 0, 6, 0), chip.Margin);
+            Assert.Equal(0f, FlexLayout.GetShrink(chip));
+        });
+        void AssertQuebra() => Assert.All(GetChips(group), chip =>
+        {
+            Assert.Equal(new Thickness(0, 0, 6, 12), chip.Margin);
+            Assert.Equal(1f, FlexLayout.GetShrink(chip));
+        });
+
+        AssertFaixa();
+
+        group.LayoutMode = ChipGroupLayoutMode.Wrap;
+        AssertQuebra();
+
+        group.LayoutMode = ChipGroupLayoutMode.Horizontal;
+        AssertFaixa();
+
+        group.LayoutMode = ChipGroupLayoutMode.Vertical;
+        Assert.All(GetChips(group), chip =>
+        {
+            Assert.Equal(new Thickness(0, 0, 6, 12), chip.Margin);
+            Assert.Equal(0f, FlexLayout.GetShrink(chip));
+        });
+    }
+
     [Fact]
     public void LayoutMode_Vertical_usa_coluna_sem_ScrollView()
     {

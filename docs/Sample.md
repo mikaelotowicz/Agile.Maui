@@ -135,8 +135,8 @@ The page calls `GetSignatureData()` for stroke/point/duration metrics and
 
 ## Build
 
-The sample targets **.NET 11 preview only** (`net11.0-*`); the libraries keep
-their `net10.0` targets for stable consumers.
+The sample targets **.NET 11 only** (`net11.0-*`, `Microsoft.Maui.Controls` `11.0.0`); the
+libraries target both .NET 10 and .NET 11.
 
 ```powershell
 dotnet build sample/sample.csproj

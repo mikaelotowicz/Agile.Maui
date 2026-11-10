@@ -12,14 +12,10 @@ The package ships its own README and `CHANGELOG.md` (in Portuguese), kept in
 ## Install
 
 ```powershell
-dotnet add package Agile.Maui.PdfGen --version 1.2.0
+dotnet add package Agile.Maui.PdfGen --version 1.3.0
 ```
 
-For .NET 11 preview projects:
-
-```powershell
-dotnet add package Agile.Maui.PdfGen --version 1.2.0-preview.1
-```
+The same version serves .NET 10 and .NET 11 projects (`1.3.0` adds the .NET 11 targets).
 
 `1.2.0` is the first version published on nuget.org; it includes everything
 listed under `1.1.0` in the changelog.

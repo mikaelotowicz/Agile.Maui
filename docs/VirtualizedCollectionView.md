@@ -9,21 +9,16 @@ Registration: `builder.UseAgileVirtualizedCollectionView()`
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 with package `Agile.Maui.VirtualizedCollection` `1.1.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later).
-- .NET MAUI / .NET 11.0 preview with package `Agile.Maui.VirtualizedCollection` `1.1.0-preview.1`.
+- .NET MAUI / .NET 10.0 or 11.0 with package `Agile.Maui.VirtualizedCollection` `1.2.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later on .NET 10 and `11.0.0` or later on .NET 11).
 - Android 7.0 (API 24)+, iOS 15.0+, macOS Catalyst 15.0+, or Windows 10.0.17763.0+.
 
 ## Installation
 
 ```powershell
-dotnet add package Agile.Maui.VirtualizedCollection --version 1.1.0
+dotnet add package Agile.Maui.VirtualizedCollection --version 1.2.0
 ```
 
-For .NET 11 preview projects:
-
-```powershell
-dotnet add package Agile.Maui.VirtualizedCollection --version 1.1.0-preview.1
-```
+The same version serves .NET 10 and .NET 11 projects.
 
 ```csharp
 using Agile.Maui;
@@ -202,7 +197,7 @@ fixed height on Windows, set `HeightRequest` within the `DataTemplate` itself.
 
 | Platform | Implementation |
 |---|---|
-| Android | `RecyclerView`, `LinearLayoutManager`, `GridLayoutManager`, and `CachingLinearLayoutManager` for dynamic height. View holders discarded by the recycled-view pool are tracked by weak reference and can be collected. |
+| Android | `RecyclerView`, `LinearLayoutManager`, `GridLayoutManager`, and `CachingLinearLayoutManager` for dynamic height. View holders discarded by the recycled-view pool are tracked by weak reference and can be collected. Since `1.2.0`, rows neither request nor receive window insets (a list row has no safe area), so MAUI 11 does not redistribute insets over the whole window for every new row while scrolling. |
 | iOS/MacCatalyst | `UICollectionView` with `UICollectionViewCompositionalLayout`; `PreferredLayoutAttributesFitting` measures MAUI views. Cells hold the collection view by weak reference, so closing the page releases the list, cells, and views. |
 | Windows | `ContentView` hosting a MAUI `CollectionView`, with mouse drag-to-scroll and inertia. The automatic scroll back to the first item (empty → non-empty) only moves the native scroller offset, never `ItemsView.ScrollTo`, which can freeze the UI on MAUI 11 right after a large batch. |
 

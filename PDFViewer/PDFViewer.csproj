@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.Pdf</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.2.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.2.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.Pdf</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,14 +20,11 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.Pdf</Title>
-		<PackageReleaseNotes>1.1.0: a troca de orientação (todas as plataformas) e o duplo toque para afastar (Android) voltam ao zoom de 100% (fit) em vez de MinZoom; pan nos dois eixos quando ampliado no Android; iOS mínimo 15.0; o fundo atrás das páginas passa a cinza claro #EDEDEF no Android, iOS e Mac Catalyst (era #C2C6C9 no Android e #525659, escuro, no iOS/Mac). Correções: reload confiável de PdfStream ao definir Password; pinch sem salto; busca cancelável que não trava a UI ao trocar Source; HttpClient compartilhado com timeout de 60 s e download em streaming; miniaturas com LRU e botão de miniaturas funcionando no Mac Catalyst; PageBackgroundColor aplicada no Windows; renders deduplicados e lock do PDFium enxuto. PDFium 153, Microsoft.Maui.Controls 10.0.90 e XML docs no pacote. Pacote NuGet: a fonte de ícones do PdfReaderView agora vai no pacote (buildTransitive declara o MauiFont no app) — antes, instalado pelo NuGet, os ícones apareciam em branco.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.2.0: suporte ao .NET 11 no canal estável: TFMs net11.0, net11.0-android, net11.0-ios, net11.0-maccatalyst e net11.0-windows10.0.26100.0 ao lado dos net10.0, com Microsoft.Maui.Controls 11.0.0; sem mudanças de código. 1.1.0: a troca de orientação (todas as plataformas) e o duplo toque para afastar (Android) voltam ao zoom de 100% (fit) em vez de MinZoom; pan nos dois eixos quando ampliado no Android; iOS mínimo 15.0; o fundo atrás das páginas passa a cinza claro #EDEDEF no Android, iOS e Mac Catalyst (era #C2C6C9 no Android e #525659, escuro, no iOS/Mac). Correções: reload confiável de PdfStream ao definir Password; pinch sem salto; busca cancelável que não trava a UI ao trocar Source; HttpClient compartilhado com timeout de 60 s e download em streaming; miniaturas com LRU e botão de miniaturas funcionando no Mac Catalyst; PageBackgroundColor aplicada no Windows; renders deduplicados e lock do PDFium enxuto. PDFium 153, Microsoft.Maui.Controls 10.0.90 e XML docs no pacote. Pacote NuGet: a fonte de ícones do PdfReaderView agora vai no pacote (buildTransitive declara o MauiFont no app) — antes, instalado pelo NuGet, os ícones apareciam em branco.</PackageReleaseNotes>
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
+		<TargetFrameworks>net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
@@ -54,7 +51,7 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-rc.2.26505.5" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0" />
 	</ItemGroup>
 
 	<!-- Fonte de ícones do PdfReaderView (Material Design Icons), registrada por UseAgilePdfViewer().

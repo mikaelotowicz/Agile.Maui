@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.SignaturePad</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.2.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.2.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.SignaturePad</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,14 +20,11 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.SignaturePad</Title>
-		<PackageReleaseNotes>1.1.0: fundo branco de papel por padrão (BackgroundColor = White, sobrescrevível inclusive com Transparent) para a tinta preta continuar legível no tema escuro. Correções: export PNG/JPEG na escala certa no Android/iOS/Mac (a assinatura ocupava só um canto do bitmap); JSON com contexto source-generated, compatível com trimming/AOT; segundo toque (palma) não interfere no traço; botão direito, botão da caneta e borracha não desenham no Windows e o ScrollViewer não rouba o gesto; linha do tempo contínua após carregar uma assinatura; JSON com nulos gera InvalidOperationException; redesenho com cache por traço; UseAgileSignaturePad idempotente. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.2.0: suporte ao .NET 11 no canal estável: TFMs net11.0, net11.0-android, net11.0-ios, net11.0-maccatalyst e net11.0-windows10.0.26100.0 ao lado dos net10.0, com Microsoft.Maui.Controls 11.0.0; sem mudanças de código. 1.1.0: fundo branco de papel por padrão (BackgroundColor = White, sobrescrevível inclusive com Transparent) para a tinta preta continuar legível no tema escuro. Correções: export PNG/JPEG na escala certa no Android/iOS/Mac (a assinatura ocupava só um canto do bitmap); JSON com contexto source-generated, compatível com trimming/AOT; segundo toque (palma) não interfere no traço; botão direito, botão da caneta e borracha não desenham no Windows e o ScrollViewer não rouba o gesto; linha do tempo contínua após carregar uma assinatura; JSON com nulos gera InvalidOperationException; redesenho com cache por traço; UseAgileSignaturePad idempotente. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote.</PackageReleaseNotes>
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
+		<TargetFrameworks>net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
@@ -54,7 +51,7 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-rc.2.26505.5" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0" />
 	</ItemGroup>
 
 	<!-- Só para depuração do sample: não embarcar o atributo nos assemblies publicados. -->

@@ -46,6 +46,12 @@
                 Wrap="Wrap"
                 JustifyContent="Start"
                 AlignItems="Center">
+                <!--  Shrink 0: sem caber na linha, o botão quebra para a próxima em vez de encolher e cortar o texto.  -->
+                <FlexLayout.Resources>
+                    <Style TargetType="Button">
+                        <Setter Property="FlexLayout.Shrink" Value="0" />
+                    </Style>
+                </FlexLayout.Resources>
                 <Button
                     Margin="0,0,10,10"
                     Clicked="OnClear"

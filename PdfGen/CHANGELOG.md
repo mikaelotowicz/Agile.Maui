@@ -3,6 +3,13 @@
 Todas as mudanças relevantes deste pacote são documentadas aqui.
 O formato segue Keep a Changelog e o versionamento é semântico.
 
+## [1.3.0] - 2026-11-10
+
+### Adicionado
+- Suporte ao .NET 11 no pacote estável: TFMs `net11.0`, `net11.0-android`,
+  `net11.0-ios`, `net11.0-maccatalyst` e `net11.0-windows10.0.26100.0` ao lado
+  dos `net10.0`. Sem mudanças de API ou de comportamento.
+
 ## [1.2.0] - 2026-10-09
 
 ### Adicionado

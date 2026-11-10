@@ -5,8 +5,8 @@
 		<RootNamespace>Agile.Maui</RootNamespace>
 		<PackageId>Agile.Maui.VirtualizedCollection</PackageId>
 		<AgilePackageChannel Condition="'$(AgilePackageChannel)' == ''">Preview</AgilePackageChannel>
-		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.1.0</Version>
-		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.1.0-preview.1</Version>
+		<Version Condition="'$(AgilePackageChannel)' == 'Stable'">1.2.0</Version>
+		<Version Condition="'$(AgilePackageChannel)' != 'Stable'">1.2.0-preview.1</Version>
 		<Authors>Micael Otowicz</Authors>
 		<Product>Agile.Maui.VirtualizedCollection</Product>
 		<Copyright>Copyright © 2026 Micael Otowicz</Copyright>
@@ -20,14 +20,11 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 		<NeutralLanguage>pt-BR</NeutralLanguage>
 		<Title>Agile.Maui.VirtualizedCollection</Title>
-		<PackageReleaseNotes>1.1.0: ItemTemplate aceita DataTemplateSelector (template resolvido por item no Android e no iOS/Mac Catalyst); a lista volta ao topo quando passa de vazia para preenchida. Correções: mudanças de coleção enfileiradas e coalescidas no dispatcher (lotes de thread de fundo não derrubam o iOS); célula iOS sem reter a lista e sem crash ao liberar o card; Header/Footer preservados na reciclagem; holders do Android sob referência fraca; altura medida invalidada na troca de item e na rotação; scroll sem alocação por frame. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote. Windows/MAUI 11: a volta automática ao topo usa só o scroller nativo — antes, numa lista que nasceu oculta, chamava ItemsView.ScrollTo(0) logo após um lote grande e travava a UI.</PackageReleaseNotes>
+		<PackageReleaseNotes>1.2.0: suporte ao .NET 11 no canal estável: TFMs net11.0, net11.0-android, net11.0-ios, net11.0-maccatalyst e net11.0-windows10.0.26100.0 ao lado dos net10.0, com Microsoft.Maui.Controls 11.0.0. Android — as linhas da lista não pedem nem recebem os insets da janela. Com o MAUI 11, cada linha nova disparava uma redistribuição de insets na janela inteira durante a rolagem (até 47 ms por linha num Redmi Pad); no catálogo medido, quadros atrasados caíram de 14,3% para 5,4% e o p99 de 250 para 53 ms. 1.1.0: ItemTemplate aceita DataTemplateSelector (template resolvido por item no Android e no iOS/Mac Catalyst); a lista volta ao topo quando passa de vazia para preenchida. Correções: mudanças de coleção enfileiradas e coalescidas no dispatcher (lotes de thread de fundo não derrubam o iOS); célula iOS sem reter a lista e sem crash ao liberar o card; Header/Footer preservados na reciclagem; holders do Android sob referência fraca; altura medida invalidada na troca de item e na rotação; scroll sem alocação por frame. Microsoft.Maui.Controls 10.0.90 e XML docs no pacote. Windows/MAUI 11: a volta automática ao topo usa só o scroller nativo — antes, numa lista que nasceu oculta, chamava ItemsView.ScrollTo(0) logo após um lote grande e travava a UI.</PackageReleaseNotes>
 		<!-- TFM neutro (net10.0/net11.0): só o código cross-platform — usado pelos testes de host. -->
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable'">net10.0;net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' == 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable'">net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="'$(AgilePackageChannel)' != 'Stable' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
+		<TargetFrameworks>net10.0;net11.0;net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net11.0-ios;net10.0-maccatalyst;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
@@ -54,7 +51,7 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0-rc.2.26505.5" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0" />
 	</ItemGroup>
 
 	<!-- Só para depuração do sample: não embarcar o atributo nos assemblies publicados. -->
