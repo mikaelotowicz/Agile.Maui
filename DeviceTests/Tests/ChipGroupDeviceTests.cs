@@ -56,6 +56,80 @@ public static class ChipGroupDeviceTests
         await host.UnmountAsync();
     }
 
+    // Visto no sample em net11 (Android): no modo Horizontal os chips saíam cortados pela metade na
+    // vertical — o FlexLayout do MAUI 11 sem quebra, num ScrollView horizontal, descontava a margem
+    // inferior (RowSpacing) da altura do chip. O chip da faixa tem de ter a mesma altura do chip em
+    // Wrap, e a faixa (ScrollView) tem de caber o chip inteiro. Em net10 passava antes do fix.
+    [DeviceFact(Platforms.All, TimeoutSeconds = 60)]
+    public static async Task ChipGroup_Horizontal_Nao_Corta_A_Altura_Dos_Chips(TestHost host)
+    {
+        var items = new List<string> { "All", "Popular", "Recent", "Design", "Development", "Marketing" };
+        var wrap = new ChipGroup { ItemsSource = items, ShowCheckmark = false };
+        var horizontal = new ChipGroup
+        {
+            ItemsSource = items,
+            LayoutMode = ChipGroupLayoutMode.Horizontal,
+            ShowCheckmark = false,
+        };
+
+        await host.MountAsync(new VerticalStackLayout { Spacing = 14, Children = { wrap, horizontal } });
+
+        await host.WaitForAsync(
+            () => FindChipBorders(wrap).Count == items.Count && FindChipBorders(horizontal).Count == items.Count
+                  && FindChipBorders(wrap).All(b => b.Height > 0) && FindChipBorders(horizontal).All(b => b.Height > 0),
+            5_000,
+            "chips dos dois modos montados e com altura");
+        await host.PumpAsync(300);
+
+        var alturaWrap = FindChipBorders(wrap)[0].Height;
+        var chip = FindChipBorders(horizontal)[0];
+        var faixa = (ScrollView)horizontal.Content;
+
+        var flex = (FlexLayout)faixa.Content;
+        var label = chip.Content is Layout row ? row.Children.OfType<Label>().FirstOrDefault() : null;
+        var medidas = $"group={horizontal.Width:F1}x{horizontal.Height:F1} scroll={faixa.Width:F1}x{faixa.Height:F1} " +
+                      $"flex={flex.Width:F1}x{flex.Height:F1} chip={chip.Width:F1}x{chip.Height:F1} " +
+                      $"chipDesired={chip.DesiredSize.Width:F1}x{chip.DesiredSize.Height:F1} " +
+                      $"label={label?.Width:F1}x{label?.Height:F1} wrapChip={FindChipBorders(wrap)[0].Width:F1}x{alturaWrap:F1}";
+
+        Assert.True(Math.Abs(chip.Height - alturaWrap) <= 1,
+            $"chip horizontal com altura {chip.Height:F1}, em Wrap {alturaWrap:F1} — {medidas}");
+        Assert.True(faixa.Height + 0.5 >= chip.Height,
+            $"faixa horizontal ({faixa.Height:F1}) menor que o chip ({chip.Height:F1}): chip cortado");
+        Assert.True(horizontal.Height + 0.5 >= chip.Height,
+            $"ChipGroup horizontal ({horizontal.Height:F1}) menor que o chip ({chip.Height:F1}): chip cortado");
+
+        await host.UnmountAsync();
+    }
+
+    // Visto no sample (Android, MAUI 10 e 11): no modo Vertical a base do texto saía cortada — com o
+    // Shrink padrão a coluna descontava ~3 da altura do chip por causa da margem de RowSpacing.
+    [DeviceFact(Platforms.All, TimeoutSeconds = 60)]
+    public static async Task ChipGroup_Vertical_Nao_Encolhe_A_Altura_Dos_Chips(TestHost host)
+    {
+        var items = new List<string> { "Open", "In progress", "Waiting", "Closed" };
+        var wrap = new ChipGroup { ItemsSource = items, ShowCheckmark = false };
+        var vertical = new ChipGroup { ItemsSource = items, LayoutMode = ChipGroupLayoutMode.Vertical, ShowCheckmark = false };
+
+        await host.MountAsync(new VerticalStackLayout { Spacing = 14, Children = { wrap, vertical } });
+        await host.WaitForAsync(
+            () => FindChipBorders(wrap).Count == items.Count && FindChipBorders(vertical).Count == items.Count
+                  && FindChipBorders(wrap).All(b => b.Height > 0) && FindChipBorders(vertical).All(b => b.Height > 0),
+            5_000,
+            "chips dos dois modos montados e com altura");
+        await host.PumpAsync(300);
+
+        var wrapChips = FindChipBorders(wrap);
+        var verticalChips = FindChipBorders(vertical);
+        for (var i = 0; i < items.Count; i++)
+        {
+            Assert.True(Math.Abs(verticalChips[i].Height - wrapChips[i].Height) <= 1,
+                $"'{items[i]}' na coluna com altura {verticalChips[i].Height:F1}, em Wrap {wrapChips[i].Height:F1}");
+        }
+
+        await host.UnmountAsync();
+    }
+
     /// <summary>Chips são Borders filhos do FlexLayout (Content no modo Wrap; dentro do ScrollView no Horizontal).</summary>
     private static List<Border> FindChipBorders(ChipGroup chips)
     {

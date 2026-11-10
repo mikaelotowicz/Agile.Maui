@@ -47,7 +47,7 @@ xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
 | Value | Behavior | Best for |
 |---|---|---|
 | `Wrap` | Default. Chips flow in rows and automatically wrap when there is no space. | Forms, filters, small and medium option sets. |
-| `Horizontal` | Chips stay in one row inside a horizontal scroll. | Mobile screens with many options where the user swipes to find the option. |
+| `Horizontal` | Chips stay in one row inside a horizontal scroll; they never shrink, the row scrolls. | Mobile screens with many options where the user swipes to find the option. |
 | `Vertical` | Chips are stacked vertically. | Status lists, menus, or narrow layouts. |
 
 ```xml
@@ -70,7 +70,7 @@ xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
 | `SelectionChangedCommand` | `ICommand?` | `null` | Command executed when the user changes the selection. Receives `ChipSelectionChangedEventArgs`. |
 | `ChipPadding` | `Thickness` | `14,8` | Inner padding of each chip. |
 | `ChipSpacing` | `double` | `8` | Horizontal spacing after each chip. |
-| `RowSpacing` | `double` | `10` | Vertical spacing after each chip. |
+| `RowSpacing` | `double` | `10` | Vertical spacing after each chip. Not applied in `Horizontal` mode, which has a single row. |
 | `CornerRadius` | `double` | `18` | Rounded corner radius. |
 | `ChipWidth` | `double` | `-1` | Minimum chip width when greater than zero. The chip grows when the text needs more room (for example, with a larger system font). Before `1.2.0` it was a fixed width and longer text was truncated with an ellipsis. |
 | `FontSize` | `double` | `13` | Chip text size. |

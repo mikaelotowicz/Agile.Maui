@@ -354,6 +354,21 @@ public sealed class ChipGroup : ContentView
         }
     }
 
+    // Margem e Shrink do chip dependem do modo, e são reaplicados quando o modo muda com os chips montados.
+    // - Horizontal (uma linha só, num ScrollView): sem margem inferior. O FlexLayout do MAUI 11 sem
+    //   quebra, num ScrollView horizontal, desconta a margem vertical do filho da altura dele — com a
+    //   margem de RowSpacing o chip saía 10 mais baixo e o texto, cortado pela metade (no MAUI 10 não).
+    // - Horizontal e Vertical (sem quebra): Shrink 0. A faixa rola e a coluna cresce; com o Shrink
+    //   padrão o FlexLayout apertava o chip no eixo principal — na coluna, a margem de RowSpacing
+    //   comia ~3 da altura e cortava a base do texto (MAUI 10 e 11).
+    // - Wrap: RowSpacing embaixo e o Shrink padrão (chip mais largo que a linha encolhe e o texto
+    //   ganha reticências).
+    private void ApplyChipLayout(View chip)
+    {
+        chip.Margin = new Thickness(0, 0, ChipSpacing, LayoutMode == ChipGroupLayoutMode.Horizontal ? 0 : RowSpacing);
+        FlexLayout.SetShrink(chip, LayoutMode == ChipGroupLayoutMode.Wrap ? 1f : 0f);
+    }
+
     private void ApplyLayoutMode()
     {
         _layout.Direction = LayoutMode == ChipGroupLayoutMode.Vertical
@@ -362,6 +377,9 @@ public sealed class ChipGroup : ContentView
         _layout.Wrap = LayoutMode == ChipGroupLayoutMode.Wrap
             ? FlexWrap.Wrap
             : FlexWrap.NoWrap;
+
+        foreach (var chip in _layout.Children.OfType<View>())
+            ApplyChipLayout(chip);
 
         if (LayoutMode == ChipGroupLayoutMode.Horizontal)
         {
@@ -415,7 +433,9 @@ public sealed class ChipGroup : ContentView
                 _observedChipItems.Add(entry.ChipItem);
             }
 
-            _layout.Children.Add(CreateChipView(entry));
+            var chip = CreateChipView(entry);
+            ApplyChipLayout(chip);
+            _layout.Children.Add(chip);
         }
 
         // Estado inicial: ChipItem.IsSelected pré-definido deve refletir em SelectedItem/SelectedItems
@@ -455,7 +475,7 @@ public sealed class ChipGroup : ContentView
         var border = new Border
         {
             Padding = GetCompensatedPadding(selected),
-            Margin = new Thickness(0, 0, ChipSpacing, RowSpacing),
+            // Margin: ApplyChipLayout (depende do LayoutMode).
             BackgroundColor = selected ? SelectedBackgroundColor : UnselectedBackgroundColor,
             Stroke = new SolidColorBrush(selected ? SelectedStrokeColor : UnselectedStrokeColor),
             StrokeThickness = selected ? SelectedStrokeThickness : UnselectedStrokeThickness,

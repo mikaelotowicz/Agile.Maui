@@ -2,10 +2,12 @@
 # faz poll do logcat (tag DEVICETEST) até o [DEVICETEST-SUMMARY] ou timeout.
 # Exit code 0 = suíte verde (fail=0); 1 = falhas ou timeout.
 #
-# Uso: .\run-android.ps1 [-Configuration Debug] [-Avd pixel_7_-_api_36_0] [-DeviceSerial emulator-5554]
+# Uso: .\run-android.ps1 [-Configuration Debug] [-Dotnet net10|net11] [-Avd pixel_7_-_api_36_0] [-DeviceSerial emulator-5554]
 [CmdletBinding()]
 param(
     [string]$Configuration = 'Debug',
+    [ValidateSet('net10', 'net11')]
+    [string]$Dotnet = 'net10',
     [string]$Avd = 'pixel_7_-_api_36_0',
     [string]$DeviceSerial = '',
     [int]$BootTimeoutSeconds = 300,
@@ -13,6 +15,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+$tfm = "$Dotnet.0-android"
 
 $sdk = 'C:\Program Files (x86)\Android\android-sdk'
 $adb = Join-Path $sdk 'platform-tools\adb.exe'
@@ -58,8 +62,8 @@ Write-Host "Boot concluído."
 # ── 2. Build + install (retry para locks transitórios de NuGet/MSBuild) ────────
 $installed = $false
 for ($attempt = 1; $attempt -le 2 -and -not $installed; $attempt++) {
-    Write-Host "== Build + Install (net10.0-android, $Configuration) — tentativa $attempt =="
-    & dotnet build $proj -f net10.0-android -c $Configuration -t:Install -p:AdbTarget="-s $serial"
+    Write-Host "== Build + Install ($tfm, $Configuration) — tentativa $attempt =="
+    & dotnet build $proj -f $tfm -c $Configuration -t:Install -p:AdbTarget="-s $serial"
     if ($LASTEXITCODE -eq 0) { $installed = $true }
     elseif ($attempt -lt 2) { Write-Warning "build/install falhou; retry em 10s…"; Start-Sleep -Seconds 10 }
 }

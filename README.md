@@ -65,7 +65,7 @@ no longer needed. Each package keeps its own version; behavior changes are marke
 |---|---|---|
 | `Agile.Maui.Gallery` | `1.2.0` | .NET 11. Replacing `Images` with the same number of photos (for example, a thumbnail swapped for the original) keeps the pages and the current position and only reloads the changed sources, without the photo flashing. Android and iOS/Mac Catalyst; Windows still rebuilds the gallery. |
 | `Agile.Maui.VirtualizedCollection` | `1.2.0` | .NET 11. Android: rows no longer request or receive window insets, which made MAUI 11 redistribute insets over the whole window for every new row while scrolling (late frames 14.3% → 5.4% in the measured catalog). |
-| `Agile.Maui.ChipGroup` | `1.2.0` | .NET 11. Behavior change: `ChipWidth` is now a minimum width. Chips grow instead of truncating the text when it does not fit (for example, with a larger system font); with `LayoutMode="Horizontal"` the row scrolls. |
+| `Agile.Maui.ChipGroup` | `1.2.0` | .NET 11. Fixes: with `LayoutMode="Horizontal"` chips were cut in half vertically on Android with MAUI 11, and with `LayoutMode="Vertical"` the bottom of the text was cut. Behavior change: `ChipWidth` is now a minimum width. Chips grow instead of truncating the text when it does not fit (for example, with a larger system font); with `LayoutMode="Horizontal"` the row scrolls. |
 | `Agile.Maui.Pdf` | `1.2.0` | .NET 11. No other changes. |
 | `Agile.Maui.SignaturePad` | `1.2.0` | .NET 11. No other changes. |
 | `Agile.Maui.PdfGen` | `1.3.0` | .NET 11. No API or behavior changes. |

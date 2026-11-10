@@ -2,16 +2,18 @@
 # espera %TEMP%\agile-devicetests-result.txt e imprime o resultado.
 # Exit code 0 = suíte verde (fail=0); 1 = falhas ou timeout.
 #
-# Uso: .\run-windows.ps1 [-Configuration Debug]
+# Uso: .\run-windows.ps1 [-Configuration Debug] [-Dotnet net10|net11]
 [CmdletBinding()]
 param(
     [string]$Configuration = 'Debug',
+    [ValidateSet('net10', 'net11')]
+    [string]$Dotnet = 'net10',
     [int]$RunTimeoutSeconds = 300
 )
 
 $ErrorActionPreference = 'Stop'
 
-$tfm = 'net10.0-windows10.0.19041.0'
+$tfm = if ($Dotnet -eq 'net11') { 'net11.0-windows10.0.26100.0' } else { 'net10.0-windows10.0.19041.0' }
 $proj = Join-Path $PSScriptRoot 'DeviceTests.csproj'
 $resultFile = Join-Path $env:TEMP 'agile-devicetests-result.txt'
 

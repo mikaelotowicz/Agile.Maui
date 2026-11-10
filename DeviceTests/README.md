@@ -1,9 +1,10 @@
 # DeviceTests
 
-Device tests da Agile.Maui: complemento dos testes de host (TFM neutro `net10.0`) para o que
+Device tests da Agile.Maui: complemento dos testes de host (TFMs neutros `net10.0`/`net11.0`) para o que
 **só roda em plataforma** — handlers nativos, export de bitmap, PDFium, Glide, RecyclerView.
 
-É um **app MAUI** (`net10.0-android` e `net10.0-windows10.0.19041.0`) com harness próprio:
+É um **app MAUI** (`net10.0-android`/`net11.0-android` e `net10.0-windows10.0.19041.0`/`net11.0-windows10.0.26100.0`)
+com harness próprio:
 sem pacote de runner (frágeis em net10), só `xunit.assert` + atributo `[DeviceFact]`.
 A descoberta é por reflection e a execução é **sequencial na UI thread**, com timeout
 individual por teste. O app roda a suíte inteira no startup, mostra os resultados na tela e
@@ -30,10 +31,16 @@ No Windows, as mesmas linhas também vão para `%TEMP%\agile-devicetests-result.
 cd DeviceTests
 .\run-android.ps1    # builda, instala no emulador, inicia a activity e faz poll do logcat
 .\run-windows.ps1    # builda, roda o exe e espera o arquivo de resultado
+.\run-android.ps1 -Dotnet net11    # o mesmo contra o MAUI 11 (default: net10)
 ```
 
 Ambos imprimem o resultado e saem com exit code 0 (verde) ou 1 (falha/timeout).
-Parâmetros úteis: `-Configuration`, `-Avd`/`-DeviceSerial` (Android), `-RunTimeoutSeconds`.
+Parâmetros úteis: `-Dotnet net10|net11`, `-Configuration`, `-Avd`/`-DeviceSerial` (Android),
+`-RunTimeoutSeconds`. Ao alternar `-Dotnet` no Android, desinstale antes o app
+(`adb uninstall com.agile.maui.devicetests`): a implantação rápida de um TFM não sobrescreve a do outro (XA0127).
+
+Os ícones e o splash são SVG **sem `<text>`**: o Resizetizer do MAUI 11.0.0 lança
+`MissingMethodException` (`SKTextBlobBuilder.AddPositionedRun`) ao rasterizar texto em SVG.
 No Windows, `AGILE_DEVICETESTS_KEEP_OPEN=1` mantém a janela aberta após a suíte.
 
 ## Como adicionar um teste
@@ -69,6 +76,8 @@ No Windows, `AGILE_DEVICETESTS_KEEP_OPEN=1` mantém a janela aberta após a suí
 | `PdfGen_Nativo_Typeface_Carrega_No_PdfViewer` | Android | `GeneratePdfNative()` (caminho Typeface do Android) |
 | `ImageView_Carrega_Local_E_Abre_Fullscreen_Com_Imagem_Pequena` | Android | `ImageLoaded` com arquivo local + fullscreen com imagem menor que a tela (regressão do `Math.Clamp` min>max no `InitMatrix`) |
 | `ChipGroup_Renderiza_Chips_E_Tap_Programatico_Seleciona` | Android + Windows | chips com tamanho real após layout + seleção via Command do `TapGestureRecognizer` |
+| `ChipGroup_Horizontal_Nao_Corta_A_Altura_Dos_Chips` | Android + Windows | faixa horizontal com chips da mesma altura do Wrap (no MAUI 11 Android o FlexLayout descontava a margem inferior e cortava o texto) |
+| `ChipGroup_Vertical_Nao_Encolhe_A_Altura_Dos_Chips` | Android + Windows | coluna com chips da mesma altura do Wrap (o Shrink padrão cortava a base do texto) |
 
 Limitação conhecida: no teste de fullscreen do ImageView, pinch/double-tap reais **não** são
 simulados (exigiria injetar `MotionEvent`s com timing realista no `GestureDetector`); o caminho

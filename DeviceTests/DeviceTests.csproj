@@ -3,8 +3,8 @@
 	<PropertyGroup>
 		<!-- Device tests: só Android (emulador/dispositivo) e Windows local.
 		     iOS/MacCatalyst exigem um Mac e ficam fora do escopo deste projeto. -->
-		<TargetFrameworks>net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks>net10.0-android;net11.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0;net11.0-windows10.0.26100.0</TargetFrameworks>
 
 		<OutputType>Exe</OutputType>
 		<AssemblyName>Agile.Maui.DeviceTests</AssemblyName>
@@ -38,7 +38,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))" />
 		<!-- Só os asserts do xunit: runners de terceiros são frágeis em net10 — o harness
 		     de discovery/execução é próprio (TestRunner/). -->
 		<PackageReference Include="xunit.assert" Version="2.9.2" />
