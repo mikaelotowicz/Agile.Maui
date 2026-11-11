@@ -13,7 +13,7 @@
 [![ChipGroup NuGet](https://img.shields.io/nuget/v/Agile.Maui.ChipGroup?label=Agile.Maui.ChipGroup)](https://www.nuget.org/packages/Agile.Maui.ChipGroup)
 [![SignaturePad NuGet](https://img.shields.io/nuget/v/Agile.Maui.SignaturePad?label=Agile.Maui.SignaturePad)](https://www.nuget.org/packages/Agile.Maui.SignaturePad)
 
-![.NET](https://img.shields.io/badge/.NET-10.0%20%7C%2011.0--preview-512BD4)
+![.NET](https://img.shields.io/badge/.NET-10.0%20%7C%2011.0-512BD4)
 ![MAUI](https://img.shields.io/badge/MAUI-supported-512BD4)
 ![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20Catalyst%20%7C%20Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
