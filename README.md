@@ -56,10 +56,11 @@ Each module can be installed separately, so the app consumes only what it uses.
 
 ## What's new
 
-.NET 11 support. Every package now ships the .NET 11 targets (`net11.0`, `net11.0-android`, `net11.0-ios`, `net11.0-maccatalyst` and `net11.0-windows10.0.26100.0`) next to the .NET 10
-ones in the stable channel, built against `Microsoft.Maui.Controls` `11.0.0`. Projects on
-.NET 11 install the same stable versions as projects on .NET 10; the `-preview.N` channel is
-no longer needed. Each package keeps its own version; behavior changes are marked as such.
+Release of 2026-11-10: .NET 11 support. Every package now ships the .NET 11 targets
+(`net11.0`, `net11.0-android`, `net11.0-ios`, `net11.0-maccatalyst` and
+`net11.0-windows10.0.26100.0`) next to the .NET 10 ones, built against
+`Microsoft.Maui.Controls` `11.0.0`, so .NET 10 and .NET 11 projects install the same
+versions. Each package keeps its own version; behavior changes are marked as such.
 
 | Package | Version | Highlights |
 |---|---|---|
@@ -69,6 +70,11 @@ no longer needed. Each package keeps its own version; behavior changes are marke
 | `Agile.Maui.Pdf` | `1.2.0` | .NET 11. No other changes. |
 | `Agile.Maui.SignaturePad` | `1.2.0` | .NET 11. No other changes. |
 | `Agile.Maui.PdfGen` | `1.3.0` | .NET 11. No API or behavior changes. |
+
+The five control packages depend on `Microsoft.Maui.Controls` `10.0.90` on .NET 10 and
+`11.0.0` on .NET 11; `Agile.Maui.PdfGen` does not depend on MAUI. All six packages include
+XML documentation for IntelliSense. Release notes per version are shown on each package
+page; `Agile.Maui.PdfGen` also ships a [CHANGELOG.md](PdfGen/CHANGELOG.md).
 
 ### Previous release (2026-10-09)
 
@@ -80,11 +86,6 @@ no longer needed. Each package keeps its own version; behavior changes are marke
 | `Agile.Maui.VirtualizedCollection` | `1.1.0` | `ItemTemplate` accepts a `DataTemplateSelector`. Behavior change: the list scrolls back to the first item when it goes from empty to non-empty. Fixes: collection changes from background threads, iOS cell leaks/crashes, header/footer kept across recycling, no UI freeze on Windows with MAUI 11 when a hidden list is filled with a large batch. |
 | `Agile.Maui.ChipGroup` | `1.1.0` | Two-way selection with the view model and initial state from `ChipItem.IsSelected`. Behavior changes: a bound `SelectedItems` list is updated in place, and chips are rebuilt asynchronously on the UI dispatcher. |
 | `Agile.Maui.SignaturePad` | `1.1.0` | Behavior change: white "paper" `BackgroundColor` by default (override it, including with `Transparent`). Fixes: export scale on Android/iOS/Mac, trimming-safe JSON, palm/second touch ignored, Windows pen eraser and right button no longer draw. |
-
-The five control packages depend on `Microsoft.Maui.Controls` `10.0.90` on .NET 10
-and `11.0.0` on .NET 11; `Agile.Maui.PdfGen` does not
-depend on MAUI. All six packages include XML documentation for IntelliSense.
-Release notes per version are shown on each package page.
 
 ## Requirements
 
@@ -198,8 +199,11 @@ PdfGen/
 VirtualizedCollectionView/
 ChipGroup/
 SignaturePad/
-sample/
+sample/             (MAUI demo app, .NET 11)
+PdfGen.Sample/      (console demo of PdfGen, .NET 10)
 *.Tests/            (host test projects, one per component)
+DeviceTests/        (handler tests on an Android emulator and on Windows)
+Agile.Maui.PackAll.proj  (packs the six packages)
 .github/workflows/  (CI tests and NuGet publish)
 docs/
 TUNING.md
@@ -220,8 +224,8 @@ dotnet build -f net11.0-windows10.0.26100.0
 
 ## Tests
 
-Each component has a host test project (xunit, platform-neutral `net10.0` target,
-no device or emulator required): `ChipGroup.Tests`, `GalleryView.Tests`,
+Each component has a host test project (xunit, platform-neutral `net10.0` and `net11.0`
+targets, no device or emulator required): `ChipGroup.Tests`, `GalleryView.Tests`,
 `PDFViewer.Tests`, `PdfGen.Tests`, `SignaturePad.Tests`, and
 `VirtualizedCollectionView.Tests`.
 
@@ -230,7 +234,11 @@ dotnet test ChipGroup.Tests    # same for the other <Project>.Tests
 ```
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` runs all six suites on
-every push and pull request, on a Windows runner.
+every push to `master` and on every pull request, on a Windows runner.
+
+What only runs on a device (native handlers, bitmap export, PDFium, Glide, RecyclerView)
+is covered by the `DeviceTests` app, on an Android emulator and on Windows, against .NET 10
+or .NET 11; see [DeviceTests/README.md](DeviceTests/README.md).
 
 ## Package generation
 
@@ -253,8 +261,9 @@ Besides the platform assemblies, each package contains platform-neutral `net10.0
 `net11.0` assemblies with only the cross-platform code, without handlers; they are what the
 host test projects run against.
 
-The publish workflow pushes with `--skip-duplicate`, so a package only reaches
-nuget.org when its version in the `.csproj` changes.
+The publish workflow (`.github/workflows/publish.yml`) runs on a `v*` tag (stable channel)
+or manually, and pushes with `--skip-duplicate`, so a package only reaches nuget.org when
+its version in the `.csproj` changes.
 
 ## Additional documentation
 
@@ -267,6 +276,8 @@ nuget.org when its version in the `.csproj` changes.
 - [Sample application](docs/Sample.md)
 - [Performance tuning](TUNING.md)
 - [Android profiling of VirtualizedCollectionView](PROFILING.md)
+- [Device tests](DeviceTests/README.md)
+- [PdfGen changelog](PdfGen/CHANGELOG.md)
 
 ## License
 

@@ -38,6 +38,9 @@ Convenções:
 - `PdfGen.Tests` usa o `PdfMiniParser` para validar a estrutura dos PDFs gerados.
 - **Todo fix de bug deve ganhar um teste de regressão no projeto de testes do componente.**
 
+Device tests (handlers numa página real, no emulador Android e no Windows) ficam em `DeviceTests/`:
+`.\run-android.ps1` / `.\run-windows.ps1`, com `-Dotnet net10|net11` — ver `DeviceTests/README.md`.
+
 ## Architecture
 
 ### Registro do controle
@@ -52,14 +55,14 @@ builder.UseAgileGalleryView();
 
 ### Handler Pattern
 
-- **`GalleryView/ImageView.cs`** — `View` cross-platform com 6 bindable properties (`Source`, `IsUrl`, `Placeholder`, `MaxZoom`, `EnableFullscreen`, `AspectMode`) e eventos `ImageLoaded`/`ImageFailed`. Enum `ZoomImageAspect`: `CenterCrop` e `AspectFit`.
+- **`GalleryView/ImageView.cs`** — `View` cross-platform com as bindable properties `Source`, `IsUrl`, `Placeholder`, `MaxZoom`, `EnableFullscreen`, `FullscreenSource`, `AspectMode`, `DecodeMaxPx`, `ImageLoadedCommand`/`ImageFailedCommand` e `IsLoading` (read-only), e eventos `ImageLoaded`/`ImageFailed`. Enum `ZoomImageAspect`: `CenterCrop` e `AspectFit`.
 - **`GalleryView/Platforms/Android/ImageView/ImageViewHandler.cs`** — Mapeia para `Android.Widget.ImageView` + Glide (cache disco+memória).
 - **`GalleryView/Platforms/iOS/ImageView/ImageViewHandler.cs`** — Mapeia para `UIImageView` + `NSUrlSession` para URLs.
 - **`GalleryView/Platforms/Windows/ImageView/ImageViewHandler.cs`** — Mapeia para `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage`. Sem fullscreen zoom.
 - **`GalleryView/Platforms/MacCatalyst/ImageView/`** — Cópia dos arquivos de iOS (ver seção abaixo).
 
-> `ImageView` possui `DecodeMaxPx` e `IsLoading` read-only. `IsUrl` existe
-> apenas por compatibilidade; HTTP/HTTPS e detectado automaticamente.
+> `IsLoading` é read-only (o handler o atualiza). `IsUrl` existe apenas por
+> compatibilidade; HTTP/HTTPS é detectado automaticamente.
 
 ### MacCatalyst duplica iOS
 
@@ -78,7 +81,7 @@ O `FullscreenZoomDialogFragment` implementa zoom completo **sem dependências ex
 | Limites de zoom | `Math.Clamp` + `ConstrainMatrix()` |
 | Animação suave | `ValueAnimator.OfFloat` com lerp de matrix |
 
-A class `ZoomTouchHandler` (file-scoped) encapsula toda a lógica. Ela implementa `View.IOnTouchListener` e `ScaleGestureDetector.IOnScaleGestureListener`. A matrix é uma array `float[9]` onde os índices relevantes são: `[0]`=ScaleX, `[2]`=TransX, `[4]`=ScaleY, `[5]`=TransY.
+A classe `ZoomTouchHandler` (`internal sealed`, no mesmo arquivo; não pode ser `file` porque implementa interfaces Java — o gerador de JCW falha com XAJCW7024) encapsula toda a lógica. Ela implementa `View.IOnTouchListener` e `ScaleGestureDetector.IOnScaleGestureListener`. A matrix é uma array `float[9]` onde os índices relevantes são: `[0]`=ScaleX, `[2]`=TransX, `[4]`=ScaleY, `[5]`=TransY.
 
 `InitMatrix()` é chamado via `Post()` após o Glide carregar a imagem, garantindo que a view já foi layoutada antes de calcular a escala fit-center.
 
@@ -125,14 +128,16 @@ Internamente: `VirtualView?.RaiseImageLoaded()` / `VirtualView?.RaiseImageFailed
 ### Patterns importantes
 
 - Propriedades são `BindableProperty` para XAML binding.
-- Helpers internos usam `file sealed class` (file-scoped).
+- Helpers internos sem base Java podem ser `file sealed class`; os que estendem tipos Java ou implementam interfaces Java (Android) precisam ser `internal` — `file` quebra o gerador de JCW (XAJCW7024).
 - iOS handler remove o gesture recognizer ANTES de cancelar o CTS no disconnect.
-- Android: `Glide.With(PlatformView).Clear()` chamado antes de cada early return em `LoadImage()`.
+- Android: `LoadImage()` chama `Glide.With(imageView).Clear(imageView)` antes do early return de fonte vazia (a foto anterior não fica na view).
 
 ## Dependencies
 
 | Package | Platform | Purpose |
 |---|---|---|
-| `Bumptech.Glide` | Android | Carregamento de imagens com cache |
-| `AndroidX.Fragment.App` | Android | DialogFragment |
-| `Microsoft.Maui.Controls` | All | MAUI framework |
+| `Xamarin.Android.Glide` (namespace `Bumptech.Glide`) | Android | Gallery: carregamento de imagens com cache (4.16.0.14 no net10, 5.0.7.1 no net11) |
+| `Xamarin.AndroidX.Fragment` | Android | Gallery: DialogFragment do fullscreen (1.8.8.1 no net10, 1.8.9.3 no net11) |
+| `PDFiumCore` | Android, Windows | Pdf: camada de texto/busca no Android e render no Windows (153.0.7999) |
+| `bblanchon.PDFium.Android` | Android | Pdf: binário nativo do PDFium (153.0.7999) |
+| `Microsoft.Maui.Controls` | All | MAUI framework (10.0.90 no net10, 11.0.0 no net11) |

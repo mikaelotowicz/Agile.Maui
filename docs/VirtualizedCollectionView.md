@@ -55,13 +55,13 @@ xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedColle
 | `Footer` | `object?` | `null` | Content shown after the items. Same rules as `Header`. |
 | `FooterTemplate` | `DataTemplate?` | `null` | Template for `Footer`. |
 | `ItemHeight` | `double` | `-1` | Explicit fixed height. When `> 0`, it overrides the sizing strategy on Android/iOS/Mac. Ignored on Windows. |
-| `ItemHeightRequest` | `double` | `350` | Fixed item height in `Fixed`; scroll estimate in `Dynamic` and `MeasureFirst`. On Windows there is no equivalent for estimated height. |
+| `ItemHeightRequest` | `double` | `350` | Fixed item height in `Fixed`; scroll estimate in `Dynamic` (and in `MeasureFirst` on iOS/Mac). On Windows there is no equivalent for estimated height. |
 | `ItemWidthRequest` | `double` | `-1` | Item width for `Orientation=Horizontal`: absolute column width on iOS/Mac; on Android it is the fixed width in `Fixed` mode. `-1` falls back to the height values. No effect on Windows. |
-| `Span` | `int` | `1` | Columns in vertical layout; rows in horizontal layout. |
+| `Span` | `int` | `1` | Columns in vertical layout; rows in horizontal layout. Must be `≥ 1`. |
 | `Orientation` | `VirtualizedOrientation` | `Vertical` | `Vertical` or `Horizontal`. |
 | `ItemSizingStrategy` | `ItemSizingStrategy` | `Fixed` | `Fixed` (predictable height), `Dynamic` (height measured per item from content), or `MeasureFirst` (measure the first item and apply its height to all). |
-| `ItemSpacing` | `double` | `0` | Space between items. |
-| `RemainingItemsThreshold` | `int` | `-1` | Triggers incremental loading when N items remain. |
+| `ItemSpacing` | `double` | `0` | Space between items. Must be `≥ 0`. |
+| `RemainingItemsThreshold` | `int` | `-1` | Triggers incremental loading when N items remain; `-1` disables it. |
 | `RemainingItemsThresholdReachedCommand` | `ICommand?` | `null` | Command for infinite scroll. |
 | `ScrolledCommand` | `ICommand?` | `null` | Receives `VirtualizedScrolledEventArgs`. |
 | `EmptyView` | `object?` | `null` | Content displayed when empty. |
@@ -83,8 +83,8 @@ xmlns:virtualized="clr-namespace:Agile.Maui;assembly=Agile.Maui.VirtualizedColle
 `ItemTemplate` accepts a `DataTemplateSelector`. On Android and iOS/Mac the
 template is resolved per item, and a recycled cell whose item maps to a different
 template recreates its content on rebind. On Windows the internal MAUI
-`CollectionView` resolves the selector natively. With `MeasureFirst`, switching
-the template re-measures the first item.
+`CollectionView` resolves the selector natively. With `MeasureFirst` on Android
+and iOS/Mac, assigning a different `ItemTemplate` re-measures the first item.
 
 ```xml
 <virtualized:VirtualizedCollectionView
@@ -129,7 +129,8 @@ public enum ItemSizingStrategy
 ## Sizing strategy
 
 `Fixed` is the fastest path. Use it when all items have a predictable height.
-`ItemHeightRequest` is the height applied to every item on Android/iOS/Mac.
+`ItemHeightRequest` is the height applied to every item on Android/iOS/Mac (at least
+44 pt on iOS/Mac).
 
 > **Platform note — `ItemHeight`:** on Android and iOS/Mac, `ItemHeight > 0` takes
 > precedence over the sizing strategy **and** over `ItemHeightRequest` — in any mode,
@@ -171,6 +172,7 @@ fixed height on Windows, set `HeightRequest` within the `DataTemplate` itself.
 
 `VerticalScrollBarVisibility` and `HorizontalScrollBarVisibility` (type
 `Microsoft.Maui.ScrollBarVisibility`) control the native scroll bar / indicator.
+On Windows both are forwarded to the internal `CollectionView`.
 
 | Value | Meaning |
 |---|---|
@@ -232,7 +234,7 @@ fixed height on Windows, set `HeightRequest` within the `DataTemplate` itself.
 - Use `Dynamic` only when the height genuinely varies between items (it is the only mode that never clips).
 - Tune `ItemHeightRequest` to something close to the real average, especially on iOS/Mac (it is the scroll estimate in `Dynamic`/`MeasureFirst`).
 - Use `x:DataType` in your `DataTemplate`.
-- Avoid large remote images inside cells; prefer thumbnails or the `ImageView` from the `GalleryView` package.
+- Avoid large remote images inside cells; prefer thumbnails or the `ImageView` from the `Agile.Maui.Gallery` package.
 - Use `ObservableRangeCollection<T>` for pagination (`AddRange`) and refresh/filter (`ReplaceAll`). `ObservableCollection<T>` works, but one `Add` per item generates more UI notifications and more work during scroll/load.
 
 See also [../TUNING.md](../TUNING.md) and [../PROFILING.md](../PROFILING.md).

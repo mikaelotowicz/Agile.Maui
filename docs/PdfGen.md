@@ -92,8 +92,9 @@ using EmbeddedFont = Agile.Maui.PdfGen.Text.EmbeddedFont;
 Use `GeneratePdf()` for the full feature set. It uses the managed writer and
 supports embedded TrueType fonts, Unicode with `ToUnicode`, PNG transparency,
 JPEG in RGB, grayscale and CMYK, solid-color alpha, compressed page content
-streams and `ToUnicode` CMaps, gradients, tables, pagination, and SVG export
-through `GenerateSvg()`.
+streams and `ToUnicode` CMaps, gradients, tables, and pagination. SVG export
+(`GenerateSvg()`) uses its own renderer, independent of the PDF backend;
+embedded fonts are referenced there by name, not embedded in the SVG.
 
 Use `GeneratePdfNative()` only when a MAUI app specifically wants the native
 Android/iOS/Mac renderer. Native renderers are intentionally smaller and do not
@@ -124,8 +125,8 @@ image instead of generating a logo at runtime.
 dotnet run --project PdfGen.Sample -- output\pdf\premium-proposal.pdf
 ```
 
-The sample covers embedded TrueType fonts, Unicode text, PNG transparency,
-gradients, alpha, cards, tables, a financial summary, and page numbering.
+The sample covers embedded TrueType fonts, Unicode text, gradients, alpha,
+cards, tables, a financial summary, and page numbering.
 
 ## Notes
 
@@ -133,9 +134,10 @@ gradients, alpha, cards, tables, a financial summary, and page numbering.
   Only the glyphs actually used are embedded (automatic subsetting, with the
   `XXXXXX+` subset prefix required by ISO 32000). CFF fonts (`OTTO`) are not
   supported; truncated or corrupted fonts throw `InvalidDataException`.
-- Images: JPEG (RGB, grayscale, CMYK) and PNG are supported; PNG alpha is
-  preserved with `SMask`; malformed PNG throws `InvalidDataException`; 16-bit
-  and Adam7 interlaced PNG are rejected with `NotSupportedException`.
+- Images (managed writer): JPEG (RGB, grayscale, CMYK) and PNG are supported;
+  PNG alpha is preserved with `SMask`; malformed PNG throws
+  `InvalidDataException`; 16-bit, Adam7 interlaced and sub-8-bit grayscale PNG
+  are rejected with `NotSupportedException`.
 - Text: wrap, explicit line breaks, left/center/right/justify alignment. Text
   with an embedded font is vertically centered on its line.
 - Page numbers follow the container alignment (`Footer().AlignRight().PageNumber(...)`)

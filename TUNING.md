@@ -12,12 +12,12 @@ The property controls which `LayoutManager` is created and how cell heights are 
 
 | `ItemSizingStrategy` | `ItemHeight` | Android behavior |
 |---|---|---|
-| `Fixed` | any | `LinearLayoutManager` or `GridLayoutManager`. Cells forced to `ItemHeightRequest` (Android ignores `ItemHeight` in this mode). Fastest path. |
+| `Fixed` | any | `LinearLayoutManager` or `GridLayoutManager`. Cells forced to `ItemHeightRequest`, or to `ItemHeight` when `> 0` (it wins in this mode too). Fastest path. |
 | `Dynamic` | `≤ 0` (default `-1`) | `CachingLinearLayoutManager`. Cells use `WrapContent`; heights are measured from content. Only for `Span=1, Orientation=Vertical`. |
-| `Dynamic` | `> 0` | Explicit `ItemHeight` wins: normal fixed-height layout. |
-| `MeasureFirst` | any | `LinearLayoutManager`/`GridLayoutManager` (no caching manager). Cells start `WrapContent`; the first bound item is measured (`View.post`), its height is fixed for all via `SetFixedHeight` + relayout. Same scroll cost as `Fixed`; assumes uniform heights (taller items clip). |
+| `Dynamic` or `MeasureFirst` | `> 0` | Explicit `ItemHeight` wins: normal fixed-height layout. |
+| `MeasureFirst` | `≤ 0` | `LinearLayoutManager`/`GridLayoutManager` (no caching manager). Cells start `WrapContent`; bound holders observe their layout (layout-change listener plus one `View.post`), and the first height `> 0` reported — so a list filled while hidden is measured once shown — is fixed for all holders (`LayoutParams` + relayout; new holders are created with it). Same scroll cost as `Fixed`; assumes uniform heights (taller items clip). |
 
-> **Grid (`Span > 1`) always uses `GridLayoutManager` with fixed sizing**, regardless of `ItemSizingStrategy`. Dynamic self-sizing is not supported in multi-column mode on Android.
+> **Grid (`Span > 1`) always uses `GridLayoutManager`**, regardless of `ItemSizingStrategy`. In `Dynamic`, grid and horizontal lists still use `WrapContent` cells, but without `CachingLinearLayoutManager`: its cached scroll estimate is single-column, vertical only.
 
 ```xml
 <!-- Fixed: all cells exactly 120 dp tall, zero per-item measurement -->
@@ -43,7 +43,7 @@ Three managers are used, selected automatically:
 | Condition | Manager | `InitialPrefetchItemCount` |
 |---|---|---|
 | `Dynamic`, `Span=1`, vertical, `ItemHeight <= 0` | `CachingLinearLayoutManager` | `4` |
-| `Fixed` or `MeasureFirst`, `Span=1` | `LinearLayoutManager` | `6` |
+| Any other `Span=1` case (`Fixed`, `MeasureFirst`, horizontal, or `ItemHeight > 0`) | `LinearLayoutManager` | `6` |
 | `Span > 1` | `GridLayoutManager` | `Span × 3` |
 
 `InitialPrefetchItemCount` tells RecyclerView's `GapWorker` how many items to pre-inflate during idle frames. Higher values reduce visible inflate jank at the cost of more CPU on the first frame.
@@ -54,15 +54,15 @@ Replaces the default `LinearLayoutManager` in Dynamic mode to eliminate scroll b
 
 **How it works:**
 
-1. Each `OnBindViewHolder` posts a `View.post { }` callback that reads the item's real pixel height after layout and stores it in a `SparseIntArray` cache indexed by adapter position.
+1. While a position has no cached height, `OnBindViewHolder` posts a `View.post { }` callback that reads the item's real pixel height after layout and stores it in a `SparseIntArray` cache indexed by adapter position; binds of already cached positions skip the post.
 2. `GetEstimatedHeight(position)` returns the cached real height if known, then the running average of all measured items, then `ItemHeightRequest` as the last fallback.
 3. `ComputeVerticalScrollRange` sums estimated heights for all items — O(n) on first call, then cached until the dataset or any height changes.
-4. Incremental operations (`IncrementalAdd` / `IncrementalRemove`) call `InvalidateScrollRange()` to clear only the total range cache while preserving per-item heights.
-5. Full dataset replacement (`UpdateItemsAsync`) calls `InvalidateCache()` to clear everything.
+4. Incremental operations (`TryIncrementalAdd` / `TryIncrementalRemove` / `TryIncrementalMove`) call `InvalidateFrom(index)`, which drops the range cache and only the cached heights from the changed index onward (their indices shifted); an append at the end drops no heights, so infinite scroll keeps its cache. `TryIncrementalReplace` drops only the replaced range (`InvalidateRange`).
+5. Full dataset replacement (`ReplaceAll`) calls `InvalidateCache()` to clear everything; so does a width change (rotation/resize) detected in `OnLayoutCompleted`.
 
 **Invariant:** without this cache, `LinearLayoutManager.computeVerticalScrollOffset` uses a linear extrapolation from the first visible item, producing `deltaY` jumps of 10 000 – 20 000 px when item heights are heterogeneous.
 
-**CTS per ViewHolder (Dynamic mode):** `OnBindViewHolder` creates a new `CancellationTokenSource` per bind. The `post { }` closure captures the token and bails out if the holder has been recycled before the post fires. `VrRecyclerListener.OnViewRecycled` cancels the token immediately when the holder enters the recycle pool, ensuring no stale height is written to a wrong position.
+**Bind generation per ViewHolder (Dynamic mode):** `OnBindViewHolder` increments the holder's bind generation (`NextBindGeneration`) on every bind. The `post { }` closure captures it and bails out (`IsCurrentBind`) if the holder has been rebound or recycled before the post fires. `VrRecyclerListener.OnViewRecycled` calls `CancelHeavyBind()`, which bumps the generation immediately when the holder enters the recycle pool, ensuring no stale height is written to a wrong position.
 
 ### RecyclerView View Cache and Pool
 
@@ -74,7 +74,7 @@ D/VrHandler: RAM=4096MB cols=2 → cache=5 pool=12
 
 **Base values (single column):**
 
-| Total RAM | `ItemViewCacheSize` | `RecycledViewPool` max (per viewType) |
+| Total RAM | `ItemViewCacheSize` | `RecycledViewPool` max (item view type `0`) |
 |---|---|---|
 | ≥ 6 GB | 8 | 20 |
 | ≥ 3 GB | 5 | 12 |
@@ -90,15 +90,13 @@ Example: 3-column grid on a 4 GB device → `cache = 5 × 3/2 = 7`, `pool = 12 �
 - **`ItemViewCacheSize`** (`SetItemViewCacheSize`): off-screen views stay *bound* (no rebind needed) until this limit is exceeded. Increasing it reduces rebinds when scrolling back up, at the cost of keeping more MAUI Views alive in memory.
 - **`RecycledViewPool`** (`SetMaxRecycledViews`): unbound views waiting for reuse. Increasing the pool reduces `OnCreateViewHolder` inflation; decreasing it shrinks the heap but causes more allocations during fast scroll.
 
-### Async DiffUtil
+### Collection changes and full reload
 
-When `ItemsSource` is replaced entirely (or `NotifyCollectionChanged.Reset` fires), `DiffUtil.CalculateDiff` runs on a `Task.Run` thread pool thread. The result is dispatched back to the UI thread via `result.DispatchUpdatesTo(adapter)`, animating individual insertions and removals.
+`INotifyCollectionChanged` events are queued under a lock and drained in one flush posted through the UI `IDispatcher` captured at connect. Incremental operations (`Add`, `Remove`, `Replace`, `Move`) call `NotifyItemInserted` / `NotifyItemRangeInserted` / `NotifyItemRemoved` / `NotifyItemRangeRemoved` / `NotifyItemRangeChanged` / `NotifyItemMoved` directly. The item animator is disabled (`SetItemAnimator(null)`), so these updates are not animated.
 
-A `CancellationTokenSource` (`_diffCts`) ensures that if a new diff is requested before the previous one finishes, the previous task is cancelled and the result discarded — preventing stale animations.
+A flush falls back to a full reload when it holds more than 30 events, mixed actions, a `Move` among several events, a `Reset`, or indices that do not match the adapter; replacing `ItemsSource` also reloads. The reload is synchronous on the UI thread: when `ItemTemplate`, `Header`, `Footer` and their templates are unchanged, the adapter's `ReplaceAll` swaps the item list and calls `NotifyDataSetChanged()`; otherwise a new adapter is created. There is no `DiffUtil`: a synchronous replacement never races with the incremental notifications.
 
-Incremental operations (`Add`, `Remove`, `Replace`, `Move`) bypass DiffUtil entirely and call `NotifyItemInserted` / `NotifyItemRemoved` / etc. directly.
-
-### ClippedRecyclerView
+### VrClippedRecyclerView
 
 A `RecyclerView` subclass that clips its `DispatchDraw` canvas to its own bounds. This prevents item rows from visually leaking outside the RecyclerView area (for example, over a header or search bar) when the first visible item is partially scrolled off-screen.
 
@@ -106,9 +104,9 @@ A `RecyclerView` subclass that clips its `DispatchDraw` canvas to its own bounds
 
 Registered via `RecyclerView.AddRecyclerListener`. On each `OnViewRecycled` call it:
 
-1. Cancels and disposes the `BindCts` (stops any pending `post { }` height measurement).
-2. Calls `Glide.With(context).Clear(itemView)` to release any in-flight Glide request and free the bitmap from the view.
-3. Sets `MauiView.BindingContext = null` to disconnect the data binding before the holder re-enters the pool.
+1. Calls `CancelHeavyBind()`: bumps the holder's bind generation (any pending `post { }` height measurement is discarded) and cancels a pending `MeasureFirst` measurement. Header/footer holders stop here.
+2. Sets `MauiView.BindingContext = null` — a pooled holder can come back for the same item and the bind skips an identical context, so without this a cleared image would never reload.
+3. Walks the item view's descendants (up to 10 levels) and calls `Glide.With(context).Clear(view)` on each native `ImageView`, releasing in-flight Glide requests and freeing the bitmaps.
 
 ### HasFixedSize
 
@@ -130,9 +128,9 @@ Every layout change rebuilds a `UICollectionViewCompositionalLayout`. The dimens
 | `ItemHeight ≤ 0` and `ItemSizingStrategy = MeasureFirst`, before measuring | `CreateEstimated(ItemHeightRequest)` | Self-sizing; the first measured cell reports its height back to the handler |
 | `ItemHeight ≤ 0` and `ItemSizingStrategy = MeasureFirst`, after measuring | `CreateAbsolute(measuredHeight)` | Layout rebuilt with the first cell's height for all items |
 
-`MeasureFirst` flow: the cell reports its measured height via a callback (`VrDataSource.ReportFirstMeasure` → `OnFirstCellMeasured`); the handler stores it in `_measureFirstHeight` and rebuilds the compositional layout as `Absolute` (deferred via `BeginInvokeOnMainThread` to avoid reentrancy during the layout pass). `RefreshLayout` resets `_measureFirstHeight` so a layout/strategy/height change re-measures.
+`MeasureFirst` flow: the cell reports its measured height via a callback (`VrDataSource.ReportFirstMeasure` → `OnFirstCellMeasured`); the handler stores it in `_measureFirstHeight` and rebuilds the compositional layout as `Absolute` (deferred via `BeginInvokeOnMainThread` to avoid reentrancy during the layout pass). `RefreshLayout` resets `_measureFirstHeight` so a layout/strategy/height change re-measures; `ReloadItems` does the same for a new source or template.
 
-The estimated height is clamped to a minimum of 44 pt (`Math.Max(44, ItemHeightRequest)`).
+`ItemHeightRequest` is clamped to a minimum of 44 pt (`Math.Max(44, ItemHeightRequest)`), both as the estimated height and as the `Fixed` absolute height.
 
 > **Important:** `ItemHeight > 0` always wins over `ItemSizingStrategy` on iOS, just as on Android. Set `ItemHeight = -1` (the default) to let `ItemSizingStrategy` control sizing.
 
@@ -159,7 +157,7 @@ Using `SystemLayoutSizeFittingSize` instead would return `height = 0`, making ce
 
 ### INotifyCollectionChanged — Coalescing and Batch Updates
 
-Events from `ObservableCollection` are queued in `_pendingChanges` and flushed in a single callback posted through the UI `IDispatcher` captured at connect. `IDispatcher.Dispatch` always queues; `MainThread.BeginInvokeOnMainThread` is deliberately not used here because it runs inline when already on the main thread, which would defeat the coalescing. Bursts of rapid changes (e.g., 500 × `Items.Add`) collapse into one `UICollectionView.PerformBatchUpdates` call.
+Events from `ObservableCollection` are queued in `_pendingChanges` and flushed in a single callback posted through the UI `IDispatcher` captured at connect. `IDispatcher.Dispatch` always queues; `MainThread.BeginInvokeOnMainThread` is deliberately not used here because it runs inline when already on the main thread, which would defeat the coalescing. Bursts of rapid changes are drained in one flush: more than 30 events (e.g., 500 × `Items.Add`) become a single `ReloadData`, while smaller uniform bursts get one `UICollectionView.PerformBatchUpdates` call per event (several events in one batch would mix UIKit's pre- and post-update index coordinates).
 
 For pagination, prefer `ObservableRangeCollection<T>.AddRange`: it emits one native batch notification for the whole page instead of one notification per item. For search/filter refreshes, prefer `ReplaceAll`.
 
@@ -170,9 +168,9 @@ For pagination, prefer `ObservableRangeCollection<T>.AddRange`: it emits one nat
 | `> 30 pending events` | `ReloadData` (full snapshot) |
 | Mixed actions (Add + Remove in same batch) | `ReloadData` |
 | Any `Move` action | `ReloadData` |
-| ≤ 30 events, uniform action type, no moves | `PerformBatchUpdates` with native insert/delete/reload animations |
+| ≤ 30 events, uniform action type, no moves, indices valid for the current snapshot | One `PerformBatchUpdates` per event, with native insert/delete/reload animations |
 
-`Reset` action bypasses the queue entirely and calls `ReloadItems()` directly.
+`Reset` action bypasses the queue: it discards the pending events and dispatches `ReloadItems()` (full snapshot).
 
 ### ScrollTo
 
@@ -182,22 +180,24 @@ For pagination, prefer `ObservableRangeCollection<T>.AddRange`: it emits one nat
 
 ## VirtualizedCollectionView — Windows
 
-No custom handler is needed on Windows. `VirtualizedCollectionView` inherits from `ContentView` and sets its `Content` to a MAUI `CollectionView` in its constructor (guarded by `#if WINDOWS`). The MAUI `ContentViewHandler` renders it normally.
+No custom handler is needed on Windows. `VirtualizedCollectionView` inherits from `ContentView` and sets its `Content` to a MAUI `CollectionView` in its constructor (defined in the Windows-only partial `Platforms/Windows/VirtualizedCollectionView/VirtualizedCollectionView.Windows.cs`). The MAUI `ContentViewHandler` renders it normally.
 
 MAUI's `CollectionView` on Windows uses WinUI's `ItemsRepeater` with virtualization enabled by default.
 
-The Windows partial class also adds pointer **drag-to-scroll with inertia**: dragging the list body with mouse or pen scrolls it (4 px threshold before the drag starts), hooked to the rendered list's inner `ScrollViewer` (`ListViewBase`, MAUI ≤ 9) or `ScrollView` (`ItemsView`, MAUI 10 / WinAppSDK 1.4+).
+The Windows partial class also adds pointer **drag-to-scroll with inertia**: dragging the list body with the mouse (left button) scrolls it (4 px threshold before the drag starts), hooked to the rendered list's inner `ScrollViewer` (`ListViewBase`, MAUI ≤ 9) or `ScrollView` (`ItemsView`, MAUI 10 / WinAppSDK 1.4+).
 
 | Property | Windows behavior |
 |---|---|
 | `ItemsSource` | Forwarded directly to `CollectionView.ItemsSource` |
 | `ItemTemplate` | Forwarded to `CollectionView.ItemTemplate` |
-| `Span` | Mapped to `GridItemsLayout` (> 1) or `LinearItemsLayout` |
+| `Span` / `Orientation` | Mapped to `GridItemsLayout` (> 1) or `LinearItemsLayout`, in the matching orientation |
 | `ItemSpacing` | Mapped to `HorizontalItemSpacing` / `VerticalItemSpacing` / `ItemSpacing` |
 | `ItemHeight` | **Ignored.** Windows delegates sizing to the MAUI layout engine. |
 | `ItemSizingStrategy` | Mapped to MAUI `CollectionView.ItemSizingStrategy`: `Dynamic` → `MeasureAllItems`; `Fixed` and `MeasureFirst` → `MeasureFirstItem` |
 | `ItemHeightRequest` | **Ignored** on Windows. MAUI `CollectionView` has no estimated item height hint. |
+| `ItemWidthRequest` | **Ignored** on Windows. |
 | `EmptyView` / `EmptyViewTemplate` | Forwarded to `CollectionView` |
+| `Header` / `Footer` (and templates), `VerticalScrollBarVisibility` / `HorizontalScrollBarVisibility` | Forwarded to `CollectionView` |
 | `RemainingItemsThreshold` | Forwarded; fired by MAUI `CollectionView.RemainingItemsThresholdReached` |
 
 ---
@@ -208,15 +208,15 @@ The Windows partial class also adds pointer **drag-to-scroll with inertia**: dra
 |---|---|---|---|
 | `ThumbMaxPx` | `int` | `720` | `64` |
 
-**Android:** passed to Glide as `RequestOptions.Override(ThumbMaxPx, ThumbMaxPx)`. Glide decodes the bitmap at this pixel dimension, never into the original resolution. Lowering `ThumbMaxPx` reduces peak memory per thumbnail at the cost of visual quality for very large images.
+**Android:** passed to Glide as `RequestOptions.Override(width, height)` with the pager's measured size in pixels (updated on rotation/resize); `ThumbMaxPx` is used for both dimensions only while the pager has no size yet. Glide never decodes into the original resolution.
 
-**iOS/MacCatalyst:** thumbnails are downloaded with `NSUrlSession` and decoded through `AppleImageCache` using `ThumbMaxPx` as the maximum pixel size.
+**iOS/MacCatalyst:** thumbnails are downloaded with `NSUrlSession` and decoded through `AppleImageCache` at the page's bounds times the screen scale; `ThumbMaxPx` is the maximum pixel size used before the page has been laid out.
 
-**Windows:** thumbnails are loaded via `BitmapImage` using `DecodePixelWidth` and `DecodePixelHeight`.
+**Windows:** thumbnails are loaded via `BitmapImage` with `DecodePixelWidth = ThumbMaxPx` only (also setting `DecodePixelHeight` would discard the aspect ratio).
 
 **When to change it:**
 
-- Gallery with many high-resolution photos and low-end devices → lower to `480` or `360`.
+- Gallery with many high-resolution photos and low-end devices → lower to `480` or `360` (on Android/iOS/Mac this only bounds decodes made before layout).
 - Gallery with already-small images (< 720 px wide) → leave at default; it does not upscale.
 - Use with `ShowIndicator=True` and many images: the indicator dots are small and cheap; the decode size is the only meaningful cost.
 
@@ -240,7 +240,7 @@ changes, clear the app/cache or change the image URL/name.
 **iOS/MacCatalyst:** local and remote sources are decoded through
 `AppleImageCache` using `DecodeMaxPx` or the measured target size when available.
 
-**Windows:** mapped to `BitmapImage.DecodePixelWidth` and `DecodePixelHeight`.
+**Windows:** mapped to `BitmapImage.DecodePixelWidth` only (also setting `DecodePixelHeight` would discard the aspect ratio).
 
 **When to change it:**
 
@@ -269,7 +269,7 @@ set it.
 | Set a fixed `ItemHeight` matching the image aspect ratio | UICollectionView / RecyclerView skips re-measurement on decode |
 | Avoid MAUI `<Image>` for remote URLs in large lists | No bounded decode size; no per-cell cancellation |
 
-**iOS cell image cancellation:** `VrMauiCell.PrepareForReuse` sets `_mauiView.BindingContext = null`, which triggers `DisconnectHandler` on any MAUI handler inside the template — including `ImageViewHandler`, which cancels its `CancellationTokenSource` and aborts the `NSUrlSession` download.
+**iOS cell image cancellation:** `VrMauiCell.PrepareForReuse` only resets the cell's measurement state. When the reused cell is bound to a new item, the new `BindingContext` changes the `ImageView.Source` and `ImageViewHandler` cancels the previous load's `CancellationTokenSource`, which aborts the `NSUrlSession` download. When the cell's template changes or the cell is disposed, its view gets `BindingContext = null` and `DisconnectHandlers()`, which cancels a pending download too.
 
 ---
 
@@ -293,7 +293,7 @@ Which ItemSizingStrategy should I use?
 │
 ├─ Items have variable height (text wrapping, expandable sections)?
 │   ├─ Android:  Dynamic + ItemHeightRequest = <average expected height>
-│   │             Span must be 1.
+│   │             Span=1 (vertical) keeps the cached scroll estimate.
 │   └─ iOS/Mac:  Dynamic + ItemHeightRequest = <average expected height>
 │                 Works with any Span.
 │

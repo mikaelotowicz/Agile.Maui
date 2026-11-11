@@ -45,15 +45,15 @@ thumbnails and navigation.
 - Thumbnails as a fixed sidebar on Windows and as a drawer/overlay on Android, iOS and macOS Catalyst.
 - Text selection and copy where supported by the handler.
 - Localization of the ready-to-use reader's text.
-- Render control via `RenderScale`, `MaxCacheMB`, `PrefetchAbove` and `PrefetchBelow`.
+- Render control via `RenderScale`, `MaxCacheMB`, `PrefetchAbove` and `PrefetchBelow` (Android and Windows).
 
 ## Requirements
 
-- .NET MAUI / .NET 10.0 or 11.0 with package `Agile.Maui.Pdf` `1.2.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later on .NET 10 and `11.0.0` or later on .NET 11; on Android and Windows, also on PDFium `153.0.7999`).
+- .NET MAUI / .NET 10.0 or 11.0 with package `Agile.Maui.Pdf` `1.2.0` (depends on `Microsoft.Maui.Controls` `10.0.90` or later on .NET 10 and `11.0.0` or later on .NET 11; on Android and Windows, also on `PDFiumCore` `153.0.7999`, plus `bblanchon.PDFium.Android` `153.0.7999` on Android).
 - Android 7.0 (API 24)+.
 - iOS 15.0+ (raised from 12.1 in `1.1.0`).
 - macOS Catalyst 15.0+.
-- Windows 10.0.17763.0+; recommended Windows target: `net10.0-windows10.0.19041.0`.
+- Windows 10.0.17763.0+; recommended Windows target: `net10.0-windows10.0.19041.0` on .NET 10 and `net11.0-windows10.0.26100.0` on .NET 11 (the Windows TFMs the package ships).
 
 ## Quick start
 
@@ -75,8 +75,9 @@ builder
     .UseAgilePdfViewer();
 ```
 
-`UseAgilePdfViewer()` also registers the internal `AgilePdfIcons` font, used by the
-`PdfReaderView`.
+`UseAgilePdfViewer()` also registers the `AgilePdfIcons` icon font used by the
+`PdfReaderView`. Its alias (`PdfReaderIcons.FontFamily`) and the reader's glyphs
+(`PdfReaderIcons.Search`, `PdfReaderIcons.Print`, ...) are public constants.
 
 ### 3. Add the XAML namespace
 
@@ -118,15 +119,15 @@ events and commands for navigation, zoom, search, print and thumbnails.
 |---|---|
 | `https://...` or `http://...` | Downloads and opens as a URL. Downloads share one `HttpClient` per process, with a 60-second timeout; Android and Windows stream the response to a temporary file instead of buffering the whole PDF in memory. |
 | Existing file path | Opens the local file. |
-| `PdfStream` | Opens the bytes provided by the application. The stream is rewound on reload, so setting `Password` after `PdfStream` reopens the same document. |
-| `PdfReaderView Source="file.pdf"` | If it is not a URL/local file, tries to open it as a MauiAsset and copies it to the cache. |
+| `PdfStream` | Opens the bytes provided by the application and takes precedence over `Source` when both are set. The stream is rewound on reload, so setting `Password` after `PdfStream` reopens the same document. |
+| `PdfReaderView Source="file.pdf"` | If it is not a URL or an existing absolute file path, tries to open it as a MauiAsset and copies it to the cache; if that fails, the value goes to `PdfViewer` as is, which raises `DocumentLoadFailed`. |
 
 ### State and navigation
 
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `CurrentPage` | `int` | `0` | Current page, 0-based, `TwoWay`. |
-| `PageCount` | `int` | `0` | Total number of pages, set by the control. |
+| `PageCount` | `int` | `0` | Total number of pages; read-only, set by the control when the document loads. |
 | `ScrollOrientation` | `PdfScrollOrientation` | `Vertical` | Continuous vertical scroll or paged horizontal scroll. |
 
 ### Zoom and rendering
@@ -136,12 +137,21 @@ events and commands for navigation, zoom, search, print and thumbnails.
 | `ZoomFactor` | `double` | `1.0` | Zoom relative to the base fit, `TwoWay`. Clamped to `MinZoom`..`MaxZoom`, and re-clamped when the range changes. |
 | `MinZoom` | `double` | `0.5` | Minimum zoom. |
 | `MaxZoom` | `double` | `8.0` | Maximum zoom. |
-| `IsPinchZoomEnabled` | `bool` | `true` | Enables the pinch gesture when supported. |
+| `IsPinchZoomEnabled` | `bool` | `true` | Enables the pinch gesture when supported (on Android also double-tap zoom and the one-finger pan while zoomed in). On iOS and macOS Catalyst `false` locks the zoom at 100%, programmatic zoom included. |
 | `RenderScale` | `double` | `1.5` | Render scale/DPI. |
 | `MaxCacheMB` | `int` | `200` | Limit for the rendered page cache. |
 | `EnablePageCaching` | `bool` | `true` | Enables cache/prefetch. |
 | `PrefetchAbove` | `int` | `2` | Pages above to prefetch. |
 | `PrefetchBelow` | `int` | `3` | Pages below to prefetch. |
+
+`RenderScale`, `MaxCacheMB`, `EnablePageCaching`, `PrefetchAbove` and
+`PrefetchBelow` apply to Android and Windows; on iOS and macOS Catalyst PdfKit
+renders and caches the pages itself and ignores them. Android and Windows also
+cap the effective `RenderScale` for heavy files (`1.0` from 1 MB per page or
+above 40 MB, `1.5` between 15 and 40 MB). Out-of-range values are ignored and
+the property keeps its previous value: `ZoomFactor`, `MinZoom` and `RenderScale`
+must be > 0, `MaxZoom` ≥ 1, `MaxCacheMB` ≥ 10, and `CurrentPage`, `PageSpacing`,
+`PrefetchAbove` and `PrefetchBelow` ≥ 0.
 
 Since `1.1.0`, switching `ScrollOrientation` resets the zoom to `1.0` (100%,
 fit) instead of `MinZoom`, and on Android a double tap while zoomed in also
@@ -177,19 +187,19 @@ unchanged.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `EnableThumbnailBar` | `bool` | `false` | Fixed sidebar on Windows. No effect on the other platforms, macOS Catalyst included. |
-| `IsThumbnailBarOpen` | `bool` | `false` | Drawer on Android, iOS and macOS Catalyst, `TwoWay`. |
-| `ThumbnailBarPlacement` | `PdfThumbnailPlacement` | `None` | `None`, `Left` or `Right`. |
+| `EnableThumbnailBar` | `bool` | `false` | Fixed sidebar on Windows, on the side given by `ThumbnailBarPlacement`. No effect on the other platforms, macOS Catalyst included. |
+| `IsThumbnailBarOpen` | `bool` | `false` | Drawer on Android, iOS and macOS Catalyst, `TwoWay`; the control sets it back to `false` when the user taps outside the drawer or picks a page. No effect on Windows. |
+| `ThumbnailBarPlacement` | `PdfThumbnailPlacement` | `None` | `None`, `Left` or `Right`. `None` disables the thumbnails (neither the drawer nor the Windows sidebar opens); `Left`/`Right` choose the side. |
 
 ### Events
 
 | Event | Args |
 |---|---|
-| `DocumentLoaded` | `PdfDocumentLoadedEventArgs` |
-| `DocumentLoadFailed` | `PdfDocumentLoadFailedEventArgs` |
-| `PageChanged` | `PdfPageChangedEventArgs` |
-| `SearchResultChanged` | `PdfSearchResultEventArgs` |
-| `LinkTapped` | `PdfLinkTappedEventArgs`; Android intercepts internal/external links, iOS/MacCatalyst intercepts external URLs and Windows does not yet expose link interception. Set `Handled = true` to prevent the default action when supported. |
+| `DocumentLoaded` | `PdfDocumentLoadedEventArgs`: `PageCount`. |
+| `DocumentLoadFailed` | `PdfDocumentLoadFailedEventArgs`: `Message`. |
+| `PageChanged` | `PdfPageChangedEventArgs`: `Page` (0-based). |
+| `SearchResultChanged` | `PdfSearchResultEventArgs`: `MatchCount` and `CurrentIndex` (0-based, `-1` without matches). |
+| `LinkTapped` | `PdfLinkTappedEventArgs`: `Uri` (external link, otherwise `null`), `DestinationPage` (0-based target of an internal link, otherwise `-1`) and `Handled`. Android intercepts internal/external links, iOS/MacCatalyst intercepts external URLs and Windows does not yet expose link interception. Set `Handled = true` to prevent the default action when supported. |
 
 ### Commands
 
@@ -213,6 +223,13 @@ Viewer.FindNext();
 Viewer.FindPrevious();
 Viewer.ClearSearch();
 ```
+
+`GoToPageAsync` takes a 0-based page index and clamps it to the document.
+`ZoomInAsync`/`ZoomOutAsync` multiply/divide `ZoomFactor` by 1.25 within
+`MinZoom`..`MaxZoom`. `PrintAsync` opens the native print UI and does nothing
+while no document is loaded. `Search` is case-insensitive and goes to the first
+match; the total and the current index arrive through `SearchResultChanged`.
+`FindNext`/`FindPrevious` wrap around.
 
 On Android and Windows (PDFium search), changing `Source` while a search is
 running cancels it page by page, and the previous document is disposed in the
@@ -259,10 +276,15 @@ bar in the app.
 ### Main properties
 
 `PdfReaderView` forwards most of the `PdfViewer` properties: `Source`,
-`PdfStream`, `Password`, `ZoomFactor`, `MinZoom`, `MaxZoom`,
+`PdfStream`, `Password`, `ZoomFactor`, `MinZoom`, `MaxZoom`, `IsPinchZoomEnabled`,
 `ScrollOrientation`, `ThumbnailBarPlacement`, `IsThumbnailBarOpen`,
 `EnableThumbnailBar`, `RenderScale`, `MaxCacheMB`, `PrefetchAbove`,
-`PrefetchBelow`, text and colors.
+`PrefetchBelow`, `PageSpacing`, `PageBackgroundColor` and the texts
+(`CopyButtonText`, `CopiedMessageText`, `ThumbnailBarTitleText`, `PrintJobName`).
+`CurrentPage`, `PageCount`, `EnablePageCaching`, the commands, the methods and
+the `SearchResultChanged`/`LinkTapped` events are not forwarded; use
+`ViewerControl`. The reader re-raises `DocumentLoaded`, `DocumentLoadFailed` and
+`PageChanged`.
 
 Defaults follow `PdfViewer`, with reader-specific exceptions:
 `ThumbnailBarPlacement` defaults to `Right` (so the thumbnails button shows by
@@ -275,19 +297,19 @@ It also exposes:
 
 | Property | Type | Description |
 |---|---|---|
-| `ViewerControl` | `PdfViewer` | Access to the base control for advanced scenarios. |
+| `ViewerControl` | `PdfViewer` | Access to the base control for advanced scenarios (read-only). |
 | `ToolbarColor` | `Color` | Top bar color. |
 | `BottomBarColor` | `Color` | Bottom bar color. |
-| `IconColor` | `Color` | Icon color on the toolbar and bottom bar. The search pill and the fullscreen button have a fixed white surface and keep a fixed dark icon color. |
-| `CaptionColor` | `Color` | Color of titles and counters. |
+| `IconColor` | `Color` | Icon color on the toolbar and bottom bar, also used for the page count under the file name. The search pill and the fullscreen button have a fixed white surface and keep a fixed dark icon color. |
+| `CaptionColor` | `Color` | Color of the file name and of the zoom (%) and page (`1 / N`) labels in the bottom bar. |
 | `LoadingText` | `string` | Loading text. |
 | `SearchPlaceholder` | `string` | Search placeholder. |
 | `PageCountFormat` | `string` | Format for the total page count. |
 | `LoadFailedText` | `string` | Text on load failure. |
-| `SearchBarMaxWidth` | `double` | Maximum search bar width. Mobile fills the toolbar by default; on Windows the default is `408`. |
+| `SearchBarMaxWidth` | `double` | Maximum search bar width. Android, iOS and macOS Catalyst fill the toolbar by default (`double.PositiveInfinity`); on Windows the default is `408`. |
 | `NavigationButtonMode` | `PdfReaderNavigationButtonMode` | Shows a navigation button at the start of the toolbar. `None`, `Auto`, `Menu`, or `Back`. |
 | `NavigationButtonCommand` | `ICommand?` | Optional command that replaces the default navigation action. |
-| `NavigationButtonCommandParameter` | `object?` | Optional parameter for `NavigationButtonCommand`. |
+| `NavigationButtonCommandParameter` | `object?` | Optional parameter for `NavigationButtonCommand`; when `null`, the `PdfReaderView` itself is passed. |
 | `IsFullscreen` | `bool` | Hides the reader toolbar, bottom bar, search UI, and thumbnails so the PDF fills the control. |
 | `ShowFullscreenToggle` | `bool` | Shows a floating button over the PDF to enter or exit internal fullscreen mode. |
 | `FullscreenTogglePlacement` | `PdfReaderFullscreenTogglePlacement` | Floating fullscreen button placement. `Top` or `Bottom`. |
@@ -333,7 +355,7 @@ Modes:
 | Mode | Behavior |
 |---|---|
 | `None` | Default. Does not show a navigation button. |
-| `Auto` | Shows back when the page can navigate back; otherwise shows menu when a Shell flyout or `FlyoutPage` is available. |
+| `Auto` | Shows back when the page can navigate back; otherwise shows menu when a Shell flyout or `FlyoutPage` is available or `NavigationButtonCommand` is set. |
 | `Menu` | Shows a menu button and opens `Shell.Current.FlyoutIsPresented` or `FlyoutPage.IsPresented`. |
 | `Back` | Shows a back button and tries modal/pop navigation, then Shell relative navigation. |
 
@@ -457,7 +479,7 @@ Viewer.LinkTapped += async (sender, e) =>
     if (e.Uri is null) return;
 
     e.Handled = true;
-    bool open = await DisplayAlert("Abrir link?", e.Uri, "Abrir", "Cancelar");
+    bool open = await DisplayAlertAsync("Abrir link?", e.Uri, "Abrir", "Cancelar");
     if (open)
         await Launcher.OpenAsync(e.Uri);
 };
@@ -505,13 +527,14 @@ Viewer.LinkTapped += async (sender, e) =>
 - `PrefetchAbove` and `PrefetchBelow` improve scroll smoothness at the cost of memory/CPU.
 - `RenderScale` controls sharpness: higher values improve quality but increase cost.
 - For very large documents, reduce prefetch and cache before increasing `RenderScale`.
+- On iOS and macOS Catalyst, PdfKit renders and caches the pages itself; these settings have no effect there.
 
 ## Troubleshooting
 
 ### The PDF does not load
 
 - Check that `Source` is an accessible URL or an existing file path.
-- For assets, mark the PDF as `MauiAsset` in the app project and use the correct logical name.
+- For assets, mark the PDF as `MauiAsset` in the app project and use the correct logical name. Only `PdfReaderView` resolves assets; with `PdfViewer`, pass a file path or a `PdfStream`.
 - If the PDF is protected, set `Password`.
 - Subscribe to `DocumentLoadFailed` to capture the error message.
 
@@ -528,7 +551,7 @@ Viewer.LinkTapped += async (sender, e) =>
 
 ### Sharing on Windows does not open
 
-- The `PdfReaderView` uses the WinUI sharing API bound to the current window's HWND.
+- The `PdfReaderView` shares the file through MAUI `Share.RequestAsync` (`ShareFileRequest`), which on Windows opens the system share UI bound to the active window's HWND.
 - Confirm that there is an active MAUI window and that the document came from a valid file, URL or `PdfStream`.
 
 ### Toolbar icons are blank

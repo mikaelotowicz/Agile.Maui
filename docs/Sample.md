@@ -26,8 +26,8 @@ builder
     .UseAgileSignaturePad();
 ```
 
-It also registers the `MaterialDesignIcons` font, used by the sample app's
-buttons, and the `IAnchoredMenu` service, used in the custom PDF top menu.
+It also registers the `OpenSans` text fonts, the `MaterialDesignIcons` font used by the
+sample app's buttons, and the `IAnchoredMenu` service, used in the custom PDF top menu.
 
 ## Pages
 
@@ -58,6 +58,7 @@ xmlns:signature="clr-namespace:Agile.Maui;assembly=Agile.Maui.SignaturePad"
 | `Resources/Images/InteligenciaArtificial.pdf` | PDF bundled for the demos. |
 | `Resources/Images/dotnet_bot.png` | Image placeholder. |
 | `Resources/Fonts/materialdesignicons-webfont.ttf` | Sample icons. |
+| `Resources/Fonts/OpenSans-Regular.ttf`, `OpenSans-Semibold.ttf` | Text fonts. |
 
 PDFs in `Resources/Images` are removed from `MauiImage` and included as
 `MauiAsset`, to avoid Resizetizer issues with PDF files.
@@ -123,11 +124,11 @@ undo/redo actions, clear action, biometric metrics, and PNG export preview.
 
 ```xml
 <signature:SignaturePad
-    MinStrokeWidth="1.5"
-    MaxStrokeWidth="7"
+    MinStrokeWidth="1"
+    MaxStrokeWidth="3.5"
     PromptText="Sign here"
     ShowSignatureLine="True"
-    StrokeColor="#111111" />
+    StrokeColor="#1A1A2E" />
 ```
 
 The page calls `GetSignatureData()` for stroke/point/duration metrics and

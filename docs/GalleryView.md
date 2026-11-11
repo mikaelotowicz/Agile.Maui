@@ -48,7 +48,7 @@ backward compatibility, but new XAML should omit it.
 |---|---|---|---|
 | `Source` | `string?` | `null` | Local resource name, local file path, file URI, or HTTP/HTTPS URL. |
 | `IsUrl` | `bool` | `false` | Obsolete compatibility flag. URL detection is automatic for HTTP/HTTPS. |
-| `Placeholder` | `string?` | `null` | Local resource shown during loading or on error. |
+| `Placeholder` | `string?` | `null` | Local resource shown during loading or on error. On Windows it is shown only for an empty source or on error. |
 | `MaxZoom` | `float` | `5` | Maximum zoom of the fullscreen viewer. Minimum accepted: `1`. |
 | `EnableFullscreen` | `bool` | `true` | Opens fullscreen when the image is tapped on the supported platforms. When `false`, the image does not consume tap/ripple interaction. |
 | `FullscreenSource` | `string?` | `null` | Higher-quality source for fullscreen. If null, uses `Source`. Ignored where fullscreen is not implemented. |
@@ -87,10 +87,11 @@ small but realistic value such as `128`, `192`, or `256`; use a higher
 `FullscreenSource` when fullscreen should show more detail.
 
 On Android, `DecodeMaxPx` is passed to Glide through
-`RequestOptions.Override(width, height)`. On iOS and MacCatalyst, local and
+`RequestOptions.Override(width, height)`. On iOS and MacCatalyst, local files and
 remote images are downsampled through `AppleImageCache` to the view's actual
 bounds times the screen scale; `DecodeMaxPx` is the fallback used before the
-view has been laid out. The Apple decode cache is capped at 96 MB. On Windows,
+view has been laid out. Image resources from the app bundle load at their packaged
+size through `UIImage.FromBundle`. The Apple decode cache is capped at 96 MB. On Windows,
 it maps to `BitmapImage.DecodePixelWidth` only, so non-square images keep their
 aspect ratio.
 
@@ -103,10 +104,11 @@ MacCatalyst, remote fullscreen images are decoded off the main thread.
 Pinch zooms between the fitted scale and `MaxZoom`; double-tap toggles between
 the fitted scale and an intermediate zoom relative to it. When an image is small
 enough that fitting it to the screen already needs a scale above `MaxZoom`, the
-effective maximum is raised to the fit scale, so pinch and double-tap keep
-working on small images. In the single-image viewer, a tap while not zoomed in
-(or Back on Android) closes the viewer; the fullscreen gallery closes through
-its close button. The same zoom rules apply to `GalleryView` fullscreen pages.
+effective maximum is raised to the fit scale, so pinch and double-tap do not
+break on small images (they just stay at the fit scale). In the single-image
+viewer, the close button or a tap while not zoomed in (or Back on Android)
+closes the viewer; the fullscreen gallery closes through its close button (or
+Back on Android). The same zoom rules apply to `GalleryView` fullscreen pages.
 
 ### Loading state and fade-in
 
@@ -115,9 +117,9 @@ its close button. The same zoom rules apply to `GalleryView` fullscreen pages.
 failure, empty source, cancellation, or handler teardown.
 
 Changing `Source` (or clearing it) replaces the previous image immediately:
-with a `Placeholder` set, the placeholder shows while the new image loads;
-without one, the control clears to empty instead of keeping the previous photo —
-relevant for recycled cells.
+with a `Placeholder` set, the placeholder shows while the new image loads (on
+Windows it appears only if the load fails); without one, the control clears to
+empty instead of keeping the previous photo — relevant for recycled cells.
 
 The application can attach a behavior to animate images after loading:
 
@@ -145,11 +147,11 @@ zoom on the platforms that support this flow.
 |---|---|---|---|
 | `Images` | `IList<string>?` | `null` | List of URLs, local resources, local paths, or file URIs. |
 | `IsUrl` | `bool` | `false` | Obsolete compatibility flag. URL detection is automatic for HTTP/HTTPS. |
-| `Placeholder` | `string?` | `null` | Fallback while each image loads. |
+| `Placeholder` | `string?` | `null` | Fallback while each image loads or when it fails. On Windows it is shown only when an image fails. |
 | `SelectedIndex` | `int` | `0` | Selected index. Minimum value: `0`. |
 | `AspectMode` | `ZoomImageAspect` | `CenterCrop` | How the image fills the space. |
 | `VerticalImageAlignment` | `ImageAlignment` | `Center` | Since `1.1.0`. With `AspectFit`, where each image sits when the page has leftover height: `Start` (top, leftover below), `Center` (split above and below) or `End` (bottom, leftover above). Android, iOS and MacCatalyst; always centered on Windows. Tapping the leftover area also opens fullscreen. |
-| `MaxZoom` | `float` | `5` | Maximum zoom in fullscreen. |
+| `MaxZoom` | `float` | `5` | Maximum zoom in fullscreen. Minimum accepted: `1`. |
 | `ShowIndicator` | `bool` | `false` | Shows page indicators. |
 | `IndicatorColor` | `Color` | `White` | Color of the active indicator. |
 | `IndicatorInactiveColor` | `Color` | white 50% | Color of the inactive indicators. |
@@ -164,8 +166,8 @@ sources that changed; the photo already on screen stays until the new one is dec
 the pattern for showing a thumbnail first and swapping in the original when it finishes
 downloading. On Android the page is rebound in place with the previous photo as Glide
 thumbnail; on iOS and macOS Catalyst the placeholder is not drawn over the current photo. A
-different number of photos, or a change to another gallery property, still rebuilds the
-gallery, and so does any `Images` change on Windows.
+different number of photos, or a change to `Placeholder`, `AspectMode`, `ThumbMaxPx` or
+`VerticalImageAlignment`, still rebuilds the gallery, and so does any `Images` change on Windows.
 
 Without `HeightRequest`, the gallery takes all the height offered by its parent,
 capped by `MaximumHeightRequest`, on Android, iOS and macOS Catalyst. Before `1.1.0`, iOS and
@@ -175,7 +177,7 @@ macOS Catalyst stayed at `MinimumHeightRequest` while Android took the maximum.
 
 | Event | Args | When it fires |
 |---|---|---|
-| `SelectionChanged` | `GalleryIndexChangedEventArgs` | When the current page changes. |
+| `SelectionChanged` | `GalleryIndexChangedEventArgs` | When the current page changes; `e.Index` is the new page index. |
 | `ImageLoaded` | `EventArgs` | When an image loads. |
 | `ImageFailed` | `EventArgs` | When an image fails. |
 
@@ -220,12 +222,12 @@ public enum ImageAlignment
 |---|---|---|
 | Android | `Android.Widget.ImageView` with Glide, disk/memory cache, bounded decode, and fullscreen via `DialogFragment`/`Matrix`. | `ViewPager2`/`RecyclerView`; each page fills the whole gallery; native fullscreen with swipe and zoom. |
 | iOS/MacCatalyst | `UIImageView`; local/remote decode through `AppleImageCache`; fullscreen with `UIScrollView`. | Paged `UIScrollView` + `UIPageControl`; fullscreen with zoom. |
-| Windows | `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage` with decode limits; fullscreen is not implemented. | `FlipView` with indicators. |
+| Windows | `Microsoft.UI.Xaml.Controls.Image` + `BitmapImage` with decode limits; fullscreen is not implemented. | `FlipView` with indicators; fullscreen is not implemented. |
 
 ## Recommendations
 
 - Use `FullscreenSource` when the list shows thumbnails but fullscreen should open a higher-quality image.
 - In large lists, prefer URLs already resized on the server and set `ImageView.DecodeMaxPx` to the rendered thumbnail size.
 - Lower `GalleryView.ThumbMaxPx` or `ImageView.DecodeMaxPx` when many remote images are alive at the same time.
-- Always set `Placeholder` to avoid visual flashes while the image loads.
+- Always set `Placeholder` to avoid visual flashes while the image loads on Android, iOS and MacCatalyst; on Windows it only appears for empty or failed sources.
 - Keep `DecodeMaxPx` at or above `64`. Very small debug values are rejected/clamped and are not representative of production behavior.

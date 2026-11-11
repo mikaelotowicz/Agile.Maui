@@ -142,7 +142,7 @@ using EmbeddedFont = Agile.Maui.PdfGen.Text.EmbeddedFont;
 
 ## Uso fora do MAUI
 
-O pacote não depende de `Microsoft.Maui.Controls` para o backend gerenciado.
+O pacote não depende de `Microsoft.Maui.Controls` (nem de nenhum outro pacote).
 Você pode usá-lo em:
 
 - WinForms ou WPF modernos em .NET 10/11
@@ -164,9 +164,9 @@ SVG:
 dotnet run --project PdfGen.Sample -- output\pdf\premium-proposal.pdf
 ```
 
-O sample demonstra fonte TrueType embutida, Unicode, PNG com transparência,
-gradientes, alpha, cards, tabela, resumo financeiro e numeração de páginas. O
-arquivo `agile.png` é copiado para a pasta de saída pelo `PdfGen.Sample.csproj`.
+O sample demonstra fonte TrueType embutida, Unicode, gradientes, alpha, cards,
+tabela, resumo financeiro e numeração de páginas. O arquivo `agile.png` é
+copiado para a pasta de saída pelo `PdfGen.Sample.csproj`.
 
 ## Backends
 
@@ -257,6 +257,9 @@ ao shape inteiro. Alpha diferente por parada de gradiente ainda não é suportad
 ## Imagens
 
 ```csharp
+using Agile.Maui.PdfGen.Layout.Elements; // ImageFit
+using Agile.Maui.PdfGen.Rendering;       // PdfImage
+
 col.Item().Image(PdfImage.FromFile("logo.png"));
 col.Item().Image(bytesDaImagem, ImageFit.Contain, HorizontalAlignment.Center);
 ```
@@ -266,7 +269,8 @@ col.Item().Image(bytesDaImagem, ImageFit.Contain, HorizontalAlignment.Center);
 - PNG é decodificado e embutido com `FlateDecode`.
 - PNG com transparência usa `SMask`.
 - PNG malformado gera `InvalidDataException`.
-- PNG de 16 bits e PNG entrelaçado Adam7 não são suportados pelo backend gerenciado.
+- PNG de 16 bits, PNG entrelaçado Adam7 e PNG em tons de cinza com menos de 8
+  bits não são suportados pelo backend gerenciado.
 
 ## Exportação SVG
 
@@ -277,7 +281,9 @@ byte[] svg = documento.GenerateSvg();
 documento.GenerateSvg(stream);
 ```
 
-Todas as páginas são empilhadas verticalmente em um único SVG.
+Todas as páginas são empilhadas verticalmente em um único SVG. Fontes
+embutidas não são embarcadas no SVG: o texto as referencia pelo nome
+(`font-family`).
 
 ## Arquitetura
 
@@ -286,8 +292,9 @@ Document -> Layout Tree -> Measure -> Arrange -> Render Tree -> Renderer
 ```
 
 Cada elemento implementa `ILayoutElement` (`Measure`, `Arrange`, `Render`) e
-cada backend implementa `IRenderContext`. O mesmo motor alimenta PDF gerenciado,
-PDF nativo e SVG.
+cada backend implementa `IPdfRenderer`, que abre um `IRenderContext` por página.
+O mesmo motor alimenta PDF gerenciado, PDF nativo e SVG; um backend próprio
+entra por `PdfDocument.Render(IPdfRenderer)`.
 
 ## Recursos
 
@@ -310,8 +317,10 @@ cantos arredondados continua sendo um único retângulo, e um bloco partido entr
 páginas fecha e reabre os cantos na quebra.
 
 Componentes customizados podem implementar `Element` ou `ILayoutElement` e serem
-injetados com `.Element(seuElemento)`. Contêineres pagináveis customizados podem
-levar fundos e bordas ao motor por `FlowItem.Decorations` (`FlowDecoration`).
+injetados com `.Element(seuElemento)`. Para quebrar entre páginas, o contêiner
+customizado implementa também `IFlowContainer` (`Flatten`); sem isso, ele vira
+um bloco indivisível. Contêineres pagináveis customizados podem levar fundos e
+bordas ao motor por `FlowItem.Decorations` (`FlowDecoration`).
 
 ## Licença
 

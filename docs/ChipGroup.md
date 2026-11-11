@@ -46,7 +46,7 @@ xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
 
 | Value | Behavior | Best for |
 |---|---|---|
-| `Wrap` | Default. Chips flow in rows and automatically wrap when there is no space. | Forms, filters, small and medium option sets. |
+| `Wrap` | Default. Chips flow in rows and automatically wrap when there is no space. A chip wider than the whole row shrinks and its text is truncated with an ellipsis. | Forms, filters, small and medium option sets. |
 | `Horizontal` | Chips stay in one row inside a horizontal scroll; they never shrink, the row scrolls. | Mobile screens with many options where the user swipes to find the option. |
 | `Vertical` | Chips are stacked vertically. | Status lists, menus, or narrow layouts. |
 
@@ -63,8 +63,8 @@ xmlns:chips="clr-namespace:Agile.Maui;assembly=Agile.Maui.ChipGroup"
 | `ItemsSource` | `IEnumerable?` | `null` | Data source. Supports `INotifyCollectionChanged`, including notifications raised off the UI thread. |
 | `SelectionMode` | `ChipSelectionMode` | `Single` | `Single` or `Multiple`. Switching from `Multiple` to `Single` keeps only the first selected chip. |
 | `LayoutMode` | `ChipGroupLayoutMode` | `Wrap` | `Wrap`, `Horizontal`, or `Vertical`. |
-| `SelectedItem` | `object?` | `null` | `TwoWay`. Selected value for single selection; last selected value for multiple selection. Setting it from the view model selects the matching chip. |
-| `SelectedItems` | `IList?` | `null` | `TwoWay`. Selected values. A writable list supplied by the app is updated in place (`Clear`/`Add`) instead of being replaced. |
+| `SelectedItem` | `object?` | `null` | `TwoWay`. Selected value for single selection; for multiple selection, the last value in `SelectedItems` (with `ChipItem` sources that list follows `ItemsSource` order, so this is not necessarily the chip tapped last). Setting it from the view model selects the matching chip. |
+| `SelectedItems` | `IList?` | `null` | `TwoWay`. Selected values. A writable list supplied by the app is updated in place (`Clear`/`Add`) instead of being replaced; a read-only or fixed-size list (such as an array) is replaced. |
 | `DisplayMemberPath` | `string?` | `null` | Property used as chip text when the item is not a `ChipItem`. Resolved by reflection (see [Trimming](#trimming-and-nativeaot)). |
 | `ValueMemberPath` | `string?` | `null` | Property used as selected value when the item is not a `ChipItem`. Resolved by reflection (see [Trimming](#trimming-and-nativeaot)). |
 | `SelectionChangedCommand` | `ICommand?` | `null` | Command executed when the user changes the selection. Receives `ChipSelectionChangedEventArgs`. |
@@ -105,17 +105,25 @@ public ObservableCollection<ChipItem> Interests { get; } =
 ];
 ```
 
+`ChipItem` exposes `Text`, `Value` (when `null`, `Text` is used as the value),
+`IsSelected`, and `IsEnabled` (default `true`; a disabled chip is dimmed and
+ignores taps). It raises `PropertyChanged`, so later changes to these properties,
+even off the UI thread, update the chips.
+
 For plain models, set `DisplayMemberPath` and optionally `ValueMemberPath`.
+Without them, the chip text is the item's `ToString()` and the value is the item
+itself.
 
 Selection is synchronized in both directions:
 
 - `ChipItem.IsSelected` set before the first tap is reflected in `SelectedItem`
   and `SelectedItems` as soon as the chips are built.
 - Setting `SelectedItem` (single) or `SelectedItems` (multiple) from the view
-  model selects the matching chips; values are compared with `Equals`. The item
-  from `ItemsSource` itself (for example, the `ChipItem` instance) is also
-  accepted, and the control keeps it in `SelectedItem` instead of replacing it
-  with the value.
+  model selects the matching chips; values are compared with `Equals`. With
+  `ChipItem` sources, the `ChipItem` instance itself is also accepted, and the
+  control keeps it in `SelectedItem` instead of replacing it with the value.
+  For plain models, pass the value (the item itself only when `ValueMemberPath`
+  is not set).
 - When the app binds a writable list to `SelectedItems`, the control updates that
   list in place. Observe `SelectionChanged`, `SelectionChangedCommand` or the
   list itself (for example an `ObservableCollection<object>`) instead of waiting

@@ -40,7 +40,7 @@ Shows a frame histogram, Janky frames %, and the Davey frame count (> 700 ms).
 adb logcat -s VrHandler
 ```
 
-Prints the cache/pool decision on every reconfiguration:
+Prints the cache/pool decision when the handler connects and whenever `Span` changes:
 ```
 D/VrHandler: RAM=4096MB cols=1 → cache=5 pool=12
 ```
@@ -57,21 +57,21 @@ adb logcat -s Choreographer
 
 ## How to measure deltaY
 
-The `VrScrollListener` forwards `dx/dy` to `VirtualView.RaiseScrolled`. To log it:
+The `VrScrollListener` receives `dx/dy`, but `Scrolled` reports absolute offsets (`ComputeHorizontalScrollOffset` / `ComputeVerticalScrollOffset` converted to DIPs; multiply by the display density for px). deltaY is the difference between consecutive `VerticalOffset` values. To log it:
 
 ```csharp
 virtualizedList.Scrolled += (_, e) =>
     System.Diagnostics.Debug.WriteLine($"scrollY={e.VerticalOffset:F0}");
 ```
 
-A deltaY > 5000 px in a single frame indicates an incorrect scroll estimate — confirm that `CachingLinearLayoutManager` is active (ItemSizingStrategy=Dynamic).
+A deltaY > 5000 px in a single frame indicates an incorrect scroll estimate — confirm that `CachingLinearLayoutManager` is active (ItemSizingStrategy=Dynamic, Span=1, vertical, ItemHeight ≤ 0).
 
 ---
 
 ## Checklist before reporting a regression
 
-- [ ] Is `ItemSizingStrategy` set to `Dynamic` with `Span=1`? → `CachingLinearLayoutManager` active
-- [ ] Does the `VrHandler` log appear in Logcat after scrolling?
+- [ ] Is `ItemSizingStrategy` set to `Dynamic` with `Span=1`, vertical orientation and `ItemHeight <= 0`? → `CachingLinearLayoutManager` active
+- [ ] Does the `VrHandler` log appear in Logcat when the list is shown (handler connect) or `Span` changes?
 - [ ] Does `adb shell dumpsys gfxinfo` show Janky frames > 15%?
 - [ ] Does the heap grow linearly as items are added, or does it stabilize after ~50?
-- [ ] Does `VrRecyclerListener` cancel the CTSes? (add a log in `OnViewRecycled` to confirm)
+- [ ] Does `VrRecyclerListener` invalidate the pending binds (`CancelHeavyBind`)? (add a log in `OnViewRecycled` to confirm)
