@@ -73,19 +73,9 @@ versions. Each package keeps its own version; behavior changes are marked as suc
 
 The five control packages depend on `Microsoft.Maui.Controls` `10.0.90` on .NET 10 and
 `11.0.0` on .NET 11; `Agile.Maui.PdfGen` does not depend on MAUI. All six packages include
-XML documentation for IntelliSense. Release notes per version are shown on each package
-page; `Agile.Maui.PdfGen` also ships a [CHANGELOG.md](PdfGen/CHANGELOG.md).
-
-### Previous release (2026-10-09)
-
-| Package | Version | Highlights |
-|---|---|---|
-| `Agile.Maui.Gallery` | `1.1.0` | New `GalleryView.VerticalImageAlignment` (`Start`/`Center`/`End`) for `AspectFit` on Android, iOS and Mac Catalyst. Fixes: Android gallery pages fill the gallery, `GalleryView` on iOS/Mac Catalyst takes the offered height like Android (it stayed at `MinimumHeightRequest`), pinch on images smaller than the screen no longer crashes, Windows decode keeps the aspect ratio, fullscreen decode sized by the screen, iOS/Mac Catalyst fullscreen shows the photo instead of the placeholder. |
-| `Agile.Maui.Pdf` | `1.1.0` | Behavior change: switching orientation (all platforms) and double-tap zoom-out (Android) return to 100% instead of `MinZoom`. iOS minimum raised to 15.0. The background behind the pages is now light gray `#EDEDEF` on Android, iOS and Mac Catalyst (was dark `#525659` on iOS/Mac Catalyst). Fixes: two-axis pan when zoomed on Android, reliable `PdfStream` reload with `Password`, cancellable search, shared `HttpClient` with timeout, thumbnails button on Mac Catalyst, `PdfReaderView` icon font now ships in the NuGet package (icons were blank when installed from NuGet). |
-| `Agile.Maui.PdfGen` | `1.2.0` | First version published on nuget.org. Embedded fonts in `GeneratePdfNative()`, per-page rounded decorations over paginated content, page numbers that follow container alignment, grayscale/CMYK JPEG. See the package `CHANGELOG.md`. |
-| `Agile.Maui.VirtualizedCollection` | `1.1.0` | `ItemTemplate` accepts a `DataTemplateSelector`. Behavior change: the list scrolls back to the first item when it goes from empty to non-empty. Fixes: collection changes from background threads, iOS cell leaks/crashes, header/footer kept across recycling, no UI freeze on Windows with MAUI 11 when a hidden list is filled with a large batch. |
-| `Agile.Maui.ChipGroup` | `1.1.0` | Two-way selection with the view model and initial state from `ChipItem.IsSelected`. Behavior changes: a bound `SelectedItems` list is updated in place, and chips are rebuilt asynchronously on the UI dispatcher. |
-| `Agile.Maui.SignaturePad` | `1.1.0` | Behavior change: white "paper" `BackgroundColor` by default (override it, including with `Transparent`). Fixes: export scale on Android/iOS/Mac, trimming-safe JSON, palm/second touch ignored, Windows pen eraser and right button no longer draw. |
+XML documentation for IntelliSense. Release notes for this and earlier versions are shown on
+each package page on nuget.org; `Agile.Maui.PdfGen` also ships a
+[CHANGELOG.md](PdfGen/CHANGELOG.md).
 
 ## Requirements
 
