@@ -51,7 +51,7 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net11.0'))">
-		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.0" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
 	</ItemGroup>
 
 	<!-- Fonte de ícones do PdfReaderView (Material Design Icons), registrada por UseAgilePdfViewer().

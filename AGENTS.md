@@ -141,4 +141,4 @@ Internamente: `VirtualView?.RaiseImageLoaded()` / `VirtualView?.RaiseImageFailed
 | `Xamarin.AndroidX.Fragment` | Android | Gallery: DialogFragment do fullscreen (1.8.8.1 no net10, 1.8.9.3 no net11) |
 | `PDFiumCore` | Android, Windows | Pdf: camada de texto/busca no Android e render no Windows (153.0.7999) |
 | `bblanchon.PDFium.Android` | Android | Pdf: binário nativo do PDFium (153.0.7999) |
-| `Microsoft.Maui.Controls` | All | MAUI framework (10.0.90 no net10, 11.0.0 no net11) |
+| `Microsoft.Maui.Controls` | All | MAUI framework (10.0.90 no net10, 11.0.10 no net11) |
