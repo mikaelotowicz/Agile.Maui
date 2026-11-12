@@ -735,6 +735,8 @@ internal sealed class VrMauiCell : UICollectionViewCell
     // retém as células; sem GC bridge no iOS, o ciclo nunca é coletado e a lista inteira +
     // células + views MAUI vazam a cada página fechada).
     private WeakReference<UICollectionView>? _collectionView;
+    // Fraca pelo mesmo motivo: a lista só é dona do conteúdo enquanto a célula está na janela.
+    private WeakReference<VirtualizedCollectionView>? _owner;
     private DataTemplate?     _template;
     private View?             _directView;
     private bool              _usesGeneratedLabel;
@@ -746,12 +748,19 @@ internal sealed class VrMauiCell : UICollectionViewCell
     public VrMauiCell(CGRect frame) : base(frame) { }
 
     public void Bind(object? item, DataTemplate? template, IMauiContext context, UICollectionView collectionView,
-        Action<nfloat>? reportFirstMeasure = null)
+        VirtualizedCollectionView? owner, Action<nfloat>? reportFirstMeasure = null)
     {
         if (_collectionView is null)
             _collectionView = new WeakReference<UICollectionView>(collectionView);
         else
             _collectionView.SetTarget(collectionView);
+        if (owner is not null)
+        {
+            if (_owner is null)
+                _owner = new WeakReference<VirtualizedCollectionView>(owner);
+            else
+                _owner.SetTarget(owner);
+        }
         _reportFirstMeasure = reportFirstMeasure;
         var directView = template is null ? item as View : null;
 
@@ -792,7 +801,27 @@ internal sealed class VrMauiCell : UICollectionViewCell
             _mauiView.BindingContext = item;
             InvalidarMedidas(_mauiView);
         }
+
+        // Depois do BindingContext: antes, o card herdaria por um instante o contexto da lista.
+        AtualizarPaiLogico();
         SetNeedsLayout();
+    }
+
+    public override void MovedToWindow()
+    {
+        base.MovedToWindow();
+        AtualizarPaiLogico();
+    }
+
+    // Header/Footer passados como View são do consumidor e ficam fora da árvore lógica.
+    private void AtualizarPaiLogico()
+    {
+        if (_directView is not null)
+            return;
+
+        VirtualizedCollectionView? owner = null;
+        _owner?.TryGetTarget(out owner);
+        CellLogicalParent.Update(owner, _mauiView, Window is not null);
     }
 
     // O item novo liga e desliga filhos (o selo NOVO do card), mas o cache de medida nativo dos
@@ -835,6 +864,7 @@ internal sealed class VrMauiCell : UICollectionViewCell
         _nativeView?.RemoveFromSuperview();
         if (_nativeView is not null)
             DesmontarNativo(_nativeView);
+        CellLogicalParent.Update(null, _mauiView, inWindow: false);
         _mauiView.BindingContext = null;
         _mauiView.DisconnectHandlers();
     }
@@ -1025,16 +1055,16 @@ internal sealed class VrDataSource : UICollectionViewDataSource
         var cell = (VrMauiCell)collectionView.DequeueReusableCell(_cellId, indexPath);
         if (indexPath.Section == HeaderSection)
         {
-            cell.Bind(_header, _headerTemplate, _mauiContext, collectionView);
+            cell.Bind(_header, _headerTemplate, _mauiContext, collectionView, Owner);
         }
         else if (indexPath.Section == FooterSection)
         {
-            cell.Bind(_footer, _footerTemplate, _mauiContext, collectionView);
+            cell.Bind(_footer, _footerTemplate, _mauiContext, collectionView, Owner);
         }
         else if ((uint)indexPath.Item < (uint)Items.Count)
         {
             var item = Items[(int)indexPath.Item];
-            cell.Bind(item, ResolveItemTemplate(item), _mauiContext, collectionView, ReportFirstMeasure);
+            cell.Bind(item, ResolveItemTemplate(item), _mauiContext, collectionView, Owner, ReportFirstMeasure);
         }
 
         return cell;

@@ -118,6 +118,7 @@ Internamente: `VirtualView?.RaiseImageLoaded()` / `VirtualView?.RaiseImageFailed
 - `PrefetchingEnabled = false` — desabilita criação antecipada de células fora da tela.
 - `CreateEstimated` deve usar `ItemHeightRequest` (default 350pt), não um valor pequeno. Com 44pt, o UIKit cria ~20 células visíveis estimadas × pool 2× = 40 MAUI views × ~12 MB = 480 MB.
 - MacCatalyst tem cópia idêntica do handler iOS em `Platforms/MacCatalyst/` (mesmo namespace `Agile.Maui.Platforms.iOS`).
+- O conteúdo do template da `VrMauiCell` é filho lógico da lista **só enquanto a célula está na janela** (`CellLogicalParent`, chamado no fim do `Bind`, no `MovedToWindow` e no `LiberarView`). Sem pai, o MAUI não acha a página a partir de um campo do card (`HideSoftInputOnTapped` não fechava o teclado); com pai permanente, o ciclo célula → lista → célula não é coletado e a lista vaza. Header/Footer passados como View ficam fora.
 
 ### VirtualizedCollectionView — Android (teardown)
 
